@@ -2,6 +2,8 @@ export type TaskActionKind = "complete_once" | "use_ticket" | "set_completed";
 export type TaskId =
   | "expedition"
   | "transcendence"
+  | "mini_game"
+  | "spirit_invasion"
   | "sanctum_box"
   | "daily_mission"
   | "weekly_order"
@@ -44,8 +46,13 @@ export interface ActivityState {
   transcendenceBossRemaining: number;
   sanctumRaidRemaining: number;
   sanctumBoxRemaining: number;
-  artifactAvailable: number;
-  artifactNextAt: string | null;
+  miniGameRemaining: number;
+  miniGameTicketBonus: number;
+  spiritInvasionRemaining: number;
+  corridorLowerAvailable: number;
+  corridorLowerNextAt: string | null;
+  corridorMiddleAvailable: number;
+  corridorMiddleNextAt: string | null;
 }
 
 export interface ProgressMeta {
@@ -63,14 +70,24 @@ export type ActivityCounterKey =
   | "transcendenceRemaining"
   | "transcendenceBossRemaining"
   | "sanctumRaidRemaining"
-  | "sanctumBoxRemaining";
+  | "sanctumBoxRemaining"
+  | "miniGameRemaining"
+  | "spiritInvasionRemaining";
 
 export type ActivityTicketKey =
   | "nightmareTicketBonus"
   | "awakeningTicketBonus"
   | "suppressionTicketBonus"
+  | "dailyDungeonTicketStored"
+  | "miniGameTicketBonus"
   | "expeditionTicketBonus"
   | "transcendenceTicketBonus";
+
+export interface AccountState {
+  id: string;
+  name: string;
+  regionTag?: string;
+}
 
 export interface WeeklyStats {
   cycleStartedAt: string;
@@ -80,6 +97,7 @@ export interface WeeklyStats {
 
 export interface CharacterState {
   id: string;
+  accountId: string;
   name: string;
   classTag?: string;
   avatarSeed: string;
@@ -93,13 +111,51 @@ export interface CharacterState {
 export interface AppSettings {
   expeditionGoldPerRun: number;
   transcendenceGoldPerRun: number;
+  expeditionRunCap: number | null;
+  transcendenceRunCap: number | null;
+  nightmareRunCap: number | null;
+  awakeningRunCap: number | null;
+  suppressionRunCap: number | null;
+  expeditionWarnThreshold: number;
+  transcendenceWarnThreshold: number;
+}
+
+export interface AppStateSnapshot {
+  selectedAccountId: string | null;
+  selectedCharacterId: string | null;
+  settings: AppSettings;
+  accounts: AccountState[];
+  characters: CharacterState[];
+}
+
+export interface OperationLogEntry {
+  id: string;
+  at: string;
+  action: string;
+  characterId: string | null;
+  description?: string;
+  before: AppStateSnapshot;
+}
+
+export interface ExportDataResult {
+  cancelled: boolean;
+  path: string | null;
+}
+
+export interface ImportDataResult {
+  cancelled: boolean;
+  path: string | null;
+  state: AppState | null;
 }
 
 export interface AppState {
   version: number;
+  selectedAccountId: string | null;
   selectedCharacterId: string | null;
   settings: AppSettings;
+  accounts: AccountState[];
   characters: CharacterState[];
+  history: OperationLogEntry[];
 }
 
 export interface TaskCounterTarget {
@@ -120,7 +176,7 @@ export interface TaskDefinition {
   category: "副本" | "使命" | "周常";
   energyCost: number;
   goldReward: number;
-  goldRewardSettingKey?: keyof AppSettings;
+  goldRewardSettingKey?: "expeditionGoldPerRun" | "transcendenceGoldPerRun";
   counterTargets: TaskCounterTarget[];
   allowComplete: boolean;
   allowUseTicket: boolean;

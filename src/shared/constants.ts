@@ -1,6 +1,6 @@
-import type { AppSettings, CharacterState, TaskDefinition } from "./types";
+import type { AccountState, AppSettings, CharacterState, TaskDefinition } from "./types";
 
-export const APP_STATE_VERSION = 2;
+export const APP_STATE_VERSION = 6;
 
 export const ENERGY_TICK_HOURS = 3;
 export const ENERGY_PER_TICK = 15;
@@ -13,23 +13,34 @@ export const DAILY_RESET_HOUR = 5;
 export const WEEKLY_RESET_DAY = 3;
 export const WEEKLY_RESET_HOUR = 5;
 
-export const EXPEDITION_SCHEDULE_HOURS = [4, 12, 20] as const;
-export const TRANSCENDENCE_SCHEDULE_HOURS = [3, 15] as const;
+export const EXPEDITION_SCHEDULE_HOURS = [5, 13, 21] as const;
+export const TRANSCENDENCE_SCHEDULE_HOURS = [5, 17] as const;
 
 export const EXPEDITION_REWARD_MAX = 21;
 export const EXPEDITION_BOSS_MAX = 35;
 export const TRANSCENDENCE_REWARD_MAX = 14;
 export const TRANSCENDENCE_BOSS_MAX = 28;
 export const NIGHTMARE_MAX = 14;
+export const MINI_GAME_MAX = 14;
+export const SPIRIT_INVASION_MAX = 7;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   expeditionGoldPerRun: 1_000_000,
   transcendenceGoldPerRun: 1_200_000,
+  expeditionRunCap: null,
+  transcendenceRunCap: null,
+  nightmareRunCap: null,
+  awakeningRunCap: null,
+  suppressionRunCap: null,
+  expeditionWarnThreshold: 84,
+  transcendenceWarnThreshold: 56,
 };
 
 export const TASK_IDS = [
   "expedition",
   "transcendence",
+  "mini_game",
+  "spirit_invasion",
   "sanctum_box",
   "sanctum_raid",
   "daily_mission",
@@ -80,6 +91,35 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
     ticketTarget: { key: "transcendenceTicketBonus", increment: 1 },
     baseCapDisplay: TRANSCENDENCE_REWARD_MAX,
     useBonusDisplay: true,
+  },
+  {
+    id: "mini_game",
+    title: "小游戏",
+    description: "每日新增 2 次，最多储存 14 次。",
+    category: "周常",
+    energyCost: 0,
+    goldReward: 0,
+    counterTargets: [{ scope: "activities", key: "miniGameRemaining" }],
+    allowComplete: true,
+    allowUseTicket: true,
+    allowSetCompleted: false,
+    ticketTarget: { key: "miniGameTicketBonus", increment: 1 },
+    baseCapDisplay: MINI_GAME_MAX,
+    useBonusDisplay: true,
+  },
+  {
+    id: "spirit_invasion",
+    title: "精灵入侵",
+    description: "每日新增 1 次，最多储存 7 次。",
+    category: "周常",
+    energyCost: 0,
+    goldReward: 0,
+    counterTargets: [{ scope: "activities", key: "spiritInvasionRemaining" }],
+    allowComplete: true,
+    allowUseTicket: false,
+    allowSetCompleted: false,
+    baseCapDisplay: SPIRIT_INVASION_MAX,
+    useBonusDisplay: false,
   },
   {
     id: "sanctum_box",
@@ -218,15 +258,16 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
     id: "daily_dungeon",
     title: "每日副本",
     description: "每周 7 次，补充券可额外储存。",
-    category: "副本",
+    category: "周常",
     energyCost: 0,
     goldReward: 0,
     counterTargets: [{ scope: "activities", key: "dailyDungeonRemaining" }],
     allowComplete: true,
-    allowUseTicket: false,
+    allowUseTicket: true,
     allowSetCompleted: false,
+    ticketTarget: { key: "dailyDungeonTicketStored", increment: 1 },
     baseCapDisplay: 7,
-    useBonusDisplay: false,
+    useBonusDisplay: true,
   },
 ];
 
@@ -248,9 +289,17 @@ export function createEmptyWeeklyStats(nowIso: string) {
   };
 }
 
-export function createDefaultCharacter(name: string, nowIso: string, id: string): CharacterState {
+export function createDefaultAccount(name: string, id: string): AccountState {
   return {
     id,
+    name,
+  };
+}
+
+export function createDefaultCharacter(name: string, nowIso: string, id: string, accountId: string): CharacterState {
+  return {
+    id,
+    accountId,
     name,
     avatarSeed: id.slice(0, 6),
     energy: {
@@ -282,8 +331,13 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string)
       transcendenceBossRemaining: TRANSCENDENCE_BOSS_MAX,
       sanctumRaidRemaining: 4,
       sanctumBoxRemaining: 2,
-      artifactAvailable: 0,
-      artifactNextAt: null,
+      miniGameRemaining: MINI_GAME_MAX,
+      miniGameTicketBonus: 0,
+      spiritInvasionRemaining: SPIRIT_INVASION_MAX,
+      corridorLowerAvailable: 0,
+      corridorLowerNextAt: null,
+      corridorMiddleAvailable: 0,
+      corridorMiddleNextAt: null,
     },
     stats: createEmptyWeeklyStats(nowIso),
     meta: {

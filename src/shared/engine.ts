@@ -7,6 +7,8 @@ import {
   EXPEDITION_REWARD_MAX,
   EXPEDITION_SCHEDULE_HOURS,
   NIGHTMARE_MAX,
+  MINI_GAME_MAX,
+  SPIRIT_INVASION_MAX,
   TASK_DEFINITIONS,
   TRANSCENDENCE_BOSS_MAX,
   TRANSCENDENCE_REWARD_MAX,
@@ -47,6 +49,28 @@ function getSettingGoldReward(settings: AppSettings, task: TaskDefinition): numb
     return settings[task.goldRewardSettingKey];
   }
   return task.goldReward;
+}
+
+function getTaskCapDisplay(task: TaskDefinition, settings?: AppSettings): number | string {
+  if (!settings) {
+    return task.baseCapDisplay ?? "-";
+  }
+  if (task.id === "expedition") {
+    return settings.expeditionRunCap ?? task.baseCapDisplay ?? "-";
+  }
+  if (task.id === "transcendence") {
+    return settings.transcendenceRunCap ?? task.baseCapDisplay ?? "-";
+  }
+  if (task.id === "nightmare") {
+    return settings.nightmareRunCap ?? task.baseCapDisplay ?? "-";
+  }
+  if (task.id === "awakening") {
+    return settings.awakeningRunCap ?? task.baseCapDisplay ?? "-";
+  }
+  if (task.id === "suppression") {
+    return settings.suppressionRunCap ?? task.baseCapDisplay ?? "-";
+  }
+  return task.baseCapDisplay ?? "-";
 }
 
 function getMissionCounter(character: CharacterState, key: MissionCounterKey): number {
@@ -185,26 +209,26 @@ export function getTaskRemaining(character: CharacterState, task: TaskDefinition
   return Math.min(stacked, ...secondaryValues, raw + getTaskBonusAvailable(character, task));
 }
 
-export function getTaskProgressText(character: CharacterState, task: TaskDefinition): string {
+export function getTaskProgressText(character: CharacterState, task: TaskDefinition, settings?: AppSettings): string {
   const remain = getTaskRemaining(character, task);
   if (remain === null) {
     return "-";
   }
 
   if (!task.useBonusDisplay) {
-    const cap = task.baseCapDisplay ?? "-";
+    const cap = getTaskCapDisplay(task, settings);
     return `${remain}/${cap}`;
   }
 
   const primaryKey = getPrimaryActivityKey(task);
   if (!primaryKey || !task.ticketTarget) {
-    const cap = task.baseCapDisplay ?? "-";
+    const cap = getTaskCapDisplay(task, settings);
     return `${remain}/${cap}`;
   }
 
   const base = getActivityCounter(character, primaryKey);
   const bonus = getActivityTicket(character, task.ticketTarget.key);
-  const cap = task.baseCapDisplay ?? "-";
+  const cap = getTaskCapDisplay(task, settings);
   return `${base}(+${bonus})/${cap}`;
 }
 
@@ -234,6 +258,12 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
       0,
       NIGHTMARE_MAX,
     );
+    next.activities.miniGameRemaining = clamp(next.activities.miniGameRemaining + dailyResetCount * 2, 0, MINI_GAME_MAX);
+    next.activities.spiritInvasionRemaining = clamp(
+      next.activities.spiritInvasionRemaining + dailyResetCount,
+      0,
+      SPIRIT_INVASION_MAX,
+    );
   }
 
   const weeklyResetCount = countWeeklyResets(previous, now);
@@ -244,7 +274,7 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
     next.activities.awakeningRemaining = 3;
     next.activities.awakeningTicketBonus = 0;
     next.activities.suppressionRemaining = 3;
-    next.activities.dailyDungeonRemaining = clamp(7 + next.activities.dailyDungeonTicketStored, 0, 37);
+    next.activities.dailyDungeonRemaining = 7;
     next.activities.sanctumRaidRemaining = 4;
     next.activities.sanctumBoxRemaining = 2;
     next.activities.expeditionBossRemaining = EXPEDITION_BOSS_MAX;
@@ -279,6 +309,8 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
   next.activities.nightmareTicketBonus = clamp(next.activities.nightmareTicketBonus, 0, 999);
   next.activities.awakeningTicketBonus = clamp(next.activities.awakeningTicketBonus, 0, 999);
   next.activities.suppressionTicketBonus = clamp(next.activities.suppressionTicketBonus, 0, 999);
+  next.activities.dailyDungeonTicketStored = clamp(next.activities.dailyDungeonTicketStored, 0, 30);
+  next.activities.miniGameTicketBonus = clamp(next.activities.miniGameTicketBonus, 0, 999);
   next.activities.expeditionTicketBonus = clamp(next.activities.expeditionTicketBonus, 0, 999);
   next.activities.transcendenceTicketBonus = clamp(next.activities.transcendenceTicketBonus, 0, 999);
 
@@ -309,7 +341,10 @@ export function buildCharacterSummary(character: CharacterState, settings: AppSe
   if (character.activities.awakeningRemaining + character.activities.awakeningTicketBonus > 0) pendingLabels.push("觉醒战可打");
   if (character.activities.suppressionRemaining + character.activities.suppressionTicketBonus > 0) pendingLabels.push("讨伐战可打");
   if (character.activities.nightmareRemaining + character.activities.nightmareTicketBonus > 0) pendingLabels.push("恶梦可打");
-  if (character.activities.artifactAvailable > 0) pendingLabels.push("深渊神器可刷");
+  if (character.activities.corridorLowerAvailable > 0) pendingLabels.push("下层回廊可打");
+  if (character.activities.corridorMiddleAvailable > 0) pendingLabels.push("中层回廊可打");
+  if (character.activities.miniGameRemaining + character.activities.miniGameTicketBonus > 0) pendingLabels.push("小游戏可打");
+  if (character.activities.spiritInvasionRemaining > 0) pendingLabels.push("精灵入侵可打");
 
   return {
     characterId: character.id,

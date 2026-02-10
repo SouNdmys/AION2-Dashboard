@@ -75,3 +75,39 @@ export function countScheduledTicks(from: Date, to: Date, hours: readonly number
   return count;
 }
 
+export function getNextDailyReset(from = new Date()): Date {
+  const next = new Date(from);
+  next.setHours(DAILY_RESET_HOUR, 0, 0, 0);
+  if (next <= from) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+export function getNextWeeklyReset(from = new Date()): Date {
+  const next = new Date(from);
+  next.setHours(WEEKLY_RESET_HOUR, 0, 0, 0);
+
+  const diffDays = (WEEKLY_RESET_DAY - next.getDay() + 7) % 7;
+  next.setDate(next.getDate() + diffDays);
+  if (next <= from) {
+    next.setDate(next.getDate() + 7);
+  }
+  return next;
+}
+
+export function getNextScheduledTick(from: Date, hours: readonly number[]): Date {
+  const sortedHours = [...hours].sort((a, b) => a - b);
+  for (const hour of sortedHours) {
+    const candidate = new Date(from);
+    candidate.setHours(hour, 0, 0, 0);
+    if (candidate > from) {
+      return candidate;
+    }
+  }
+
+  const nextDay = new Date(from);
+  nextDay.setDate(nextDay.getDate() + 1);
+  nextDay.setHours(sortedHours[0] ?? 0, 0, 0, 0);
+  return nextDay;
+}
