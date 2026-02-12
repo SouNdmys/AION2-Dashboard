@@ -9,7 +9,7 @@ import {
   getTotalEnergy,
 } from "../../shared/engine";
 import { getNextDailyReset, getNextScheduledTick, getNextWeeklyReset } from "../../shared/time";
-import type { AppSettings, AppState, TaskDefinition, TaskId } from "../../shared/types";
+import type { AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 type ViewMode = "dashboard" | "settings";
@@ -73,6 +73,20 @@ interface CorridorDraft {
 interface AccountEditorDraft {
   name: string;
   regionTag: string;
+}
+
+function getQuickActionsForTask(task: TaskDefinition): TaskActionKind[] {
+  if (task.allowSetCompleted) {
+    return ["set_completed"];
+  }
+  const actions: TaskActionKind[] = [];
+  if (task.allowComplete) {
+    actions.push("complete_once");
+  }
+  if (task.allowUseTicket) {
+    actions.push("use_ticket");
+  }
+  return actions;
 }
 
 function toGoldText(value: number): string {
@@ -240,6 +254,10 @@ export function App(): JSX.Element {
   const [overviewTaskFilter, setOverviewTaskFilter] = useState<OverviewTaskFilter>("all");
   const [overviewAccountFilter, setOverviewAccountFilter] = useState<string>("all");
   const [overviewRegionFilter, setOverviewRegionFilter] = useState<string>("all");
+  const [quickCharacterId, setQuickCharacterId] = useState("");
+  const [quickTaskId, setQuickTaskId] = useState<TaskId>("expedition");
+  const [quickAction, setQuickAction] = useState<TaskActionKind>("complete_once");
+  const [quickAmount, setQuickAmount] = useState("1");
 
   useEffect(() => {
     void (async () => {
@@ -302,6 +320,15 @@ export function App(): JSX.Element {
     if (!state) return;
     setSettingsDraft(buildSettingsDraft(state.settings));
   }, [state?.settings]);
+
+  useEffect(() => {
+    if (!state) return;
+    const fallback = selected?.id ?? state.characters[0]?.id ?? "";
+    const exists = quickCharacterId ? state.characters.some((item) => item.id === quickCharacterId) : false;
+    if (!exists) {
+      setQuickCharacterId(fallback);
+    }
+  }, [state, selected?.id, quickCharacterId]);
 
   useEffect(() => {
     if (!selected) return;
@@ -533,6 +560,21 @@ export function App(): JSX.Element {
     return new Map(TASK_DEFINITIONS.map((task) => [task.id, task]));
   }, []);
 
+  const quickTask = taskById.get(quickTaskId) ?? null;
+  const quickActionOptions = useMemo(() => {
+    if (!quickTask) return [] as TaskActionKind[];
+    return getQuickActionsForTask(quickTask);
+  }, [quickTask]);
+
+  useEffect(() => {
+    if (!quickTask) return;
+    if (!quickActionOptions.includes(quickAction)) {
+      const nextAction = quickActionOptions[0] ?? "complete_once";
+      setQuickAction(nextAction);
+      setQuickAmount(nextAction === "set_completed" ? "0" : "1");
+    }
+  }, [quickTask, quickActionOptions, quickAction]);
+
   const sanctumRaidTask = taskById.get("sanctum_raid");
   const sanctumBoxTask = taskById.get("sanctum_box");
 
@@ -577,6 +619,11 @@ export function App(): JSX.Element {
   const characterNameById = useMemo(() => {
     if (!state) return new Map<string, string>();
     return new Map(state.characters.map((item) => [item.id, item.name]));
+  }, [state]);
+
+  const accountNameById = useMemo(() => {
+    if (!state) return new Map<string, string>();
+    return new Map(state.accounts.map((item) => [item.id, item.name]));
   }, [state]);
 
   const countdownItems = useMemo(() => {
@@ -701,6 +748,56 @@ export function App(): JSX.Element {
 
   function onSwitchToOverview(): void {
     setDashboardMode("overview");
+  }
+
+  function onApplyQuickAction(): void {
+    if (!state) return;
+    const characterId = quickCharacterId || selected?.id;
+    if (!characterId) {
+      setError("请选择角色");
+      return;
+    }
+    const task = taskById.get(quickTaskId);
+    if (!task) {
+      setError("请选择有效内容");
+      return;
+    }
+    const allowedActions = getQuickActionsForTask(task);
+    if (!allowedActions.includes(quickAction)) {
+      setError("该内容不支持当前动作");
+      return;
+    }
+
+    const rawAmount = toInt(quickAmount);
+    if (rawAmount === null) {
+      setError("请输入有效次数");
+      return;
+    }
+
+    let amount = rawAmount;
+    if (quickAction === "set_completed") {
+      if (amount < 0) {
+        setError("已完成次数不能小于 0");
+        return;
+      }
+      if (task.setCompletedTotal) {
+        amount = Math.min(amount, task.setCompletedTotal);
+      }
+    } else if (amount <= 0) {
+      setError("次数必须大于 0");
+      return;
+    }
+
+    const characterName = characterNameById.get(characterId) ?? "角色";
+    void sync(
+      window.aionApi.applyTaskAction({
+        characterId,
+        taskId: task.id,
+        action: quickAction,
+        amount,
+      }),
+      `${characterName} ${task.title} 已录入`,
+    );
   }
 
   function openCompleteDialog(taskId: TaskId, title: string): void {
@@ -1505,7 +1602,65 @@ export function App(): JSX.Element {
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Role Overview</p>
                   <h3 className="mt-1 text-xl font-semibold">角色概览总览</h3>
                 </div>
-                <p className="text-xs text-slate-300">按优先级筛选后，直接进入角色或做快捷操作</p>
+                <p className="text-xs text-slate-300">按优先级筛选后可进入角色；也可先做一次快速录入</p>
+              </div>
+              <div className="mb-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs font-semibold tracking-wide text-slate-200">快速录入</p>
+                <div className="mt-2 grid grid-cols-[1.2fr_1fr_1fr_0.8fr_auto] gap-2">
+                  <select
+                    className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                    value={quickCharacterId}
+                    onChange={(event) => setQuickCharacterId(event.target.value)}
+                    disabled={busy}
+                  >
+                    {state.characters.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} ({accountNameById.get(item.accountId) ?? "账号"})
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                    value={quickTaskId}
+                    onChange={(event) => setQuickTaskId(event.target.value as TaskId)}
+                    disabled={busy}
+                  >
+                    {TASK_DEFINITIONS.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                    value={quickAction}
+                    onChange={(event) => setQuickAction(event.target.value as TaskActionKind)}
+                    disabled={busy || quickActionOptions.length === 0}
+                  >
+                    {quickActionOptions.map((action) => (
+                      <option key={action} value={action}>
+                        {action === "complete_once"
+                          ? "完成次数"
+                          : action === "use_ticket"
+                            ? "挑战券增加"
+                            : "输入已完成"}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                    value={quickAmount}
+                    onChange={(event) => setQuickAmount(event.target.value)}
+                    disabled={busy}
+                    placeholder={quickAction === "set_completed" ? "已完成" : "次数"}
+                  />
+                  <button className="task-btn px-4" onClick={onApplyQuickAction} disabled={busy || !quickCharacterId || !quickTask}>
+                    提交录入
+                  </button>
+                </div>
+                {quickTask?.setCompletedTotal && quickAction === "set_completed" ? (
+                  <p className="mt-2 text-xs text-slate-300">当前内容总量 {quickTask.setCompletedTotal}，输入超过将自动按上限处理。</p>
+                ) : null}
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <select
