@@ -1,6 +1,6 @@
 {
   "name": "aion2-dashboard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "AION 2 multi-character progress dashboard",
   "author": "SouNd",
@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "check:prepackage": "node scripts/prepackage-check.mjs"
+    "check:prepackage": "node scripts/prepackage-check.mjs",
+    "dist:win": "npm run check:prepackage && electron-builder --win nsis portable"
   },
   "dependencies": {
     "electron-store": "^10.0.1",
@@ -25,10 +26,46 @@
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
     "electron": "^33.2.1",
+    "electron-builder": "^26.0.12",
     "electron-vite": "^2.3.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.9.3",
     "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.sound.aion2dashboard",
+    "productName": "AION2 Dashboard",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
   }
 }
