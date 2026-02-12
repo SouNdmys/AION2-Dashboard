@@ -100,6 +100,23 @@
 ### 校验
 - 已执行 `npm run typecheck`，通过。
 
+### 2026-02-12（续：微风商店/变换逻辑修正）
+- 按最新规则修正：
+  - 微风商店：仅记录 `奥德购买`、`每日副本挑战券购买` 两项（每项角色 5，账号额外角色 +8）。
+  - 变换：仅记录 `奥德能量变换` 一项（角色 5，账号额外角色 +8）。
+  - 删除“变换-副本券”相关字段与 UI。
+- 角色操作页拆分为两个独立卡片：
+  - `微风商店记录`（两项输入 + 保存 + 额外资格开关）
+  - `变换记录`（仅奥德输入 + 保存）
+- 总览徽标同步为三项：
+  - `商店-奥德`、`商店-副本券`、`变换-奥德`。
+- 数据结构与接口同步裁剪：
+  - `aodePlan` 仅保留三项：`shopAodePurchaseUsed`、`shopDailyDungeonTicketPurchaseUsed`、`transformAodeUsed`。
+  - `character:update-aode-plan` payload 同步去掉 `transformDailyDungeonTicketUsed`。
+
+### 本次校验
+- 已执行 `npm run typecheck`，通过。
+
 ### 2026-02-12（续：需求定稿与修正）
 - 右侧倒计时展示修正：
   - “每周重置”从小时制改为天级展示：`X天X小时X分X秒`。
@@ -120,6 +137,32 @@
 - 状态版本说明修订：
   - 当前 `APP_STATE_VERSION = 7` 用于本次“奥德计划 + 回廊统一刷新”模型；
   - 先前日志中关于 `v7` 与“开始本轮/作战笔记”的描述已不再作为当前实现依据。
+
+### 本次校验
+- 已执行 `npm run typecheck`，通过。
+
+### 2026-02-12（续：倒计时样式与微风商店重构）
+- 倒计时展示统一：
+  - “每周重置”改回 `HH:MM:SS` 风格（与远征/超越一致）。
+  - “回廊刷新”同样使用 `HH:MM:SS` 风格。
+  - 文案从“回廊统一刷新”改为“回廊刷新”。
+- “同步深渊回廊”弹窗精简：
+  - 删除说明文案“刷新时间已统一为今晚21:00起每48小时自动推算”。
+- 奥德模块重构为“微风商店 + 变换”四项记录（保留每账号 1 个额外角色 +8 机制）：
+  - 微风商店：`奥德购买`、`每日副本挑战券购买`
+  - 变换：`奥德`、`每日副本挑战券`
+  - 四项均按“基础每角色 5 次，额外角色每项 +8 次”校验。
+  - 总览卡新增四个进度徽标：商店-奥德、商店-副本券、变换-奥德、变换-副本券。
+- 数据结构兼容升级：
+  - `aodePlan` 字段从两项扩展为四项：
+    - `shopAodePurchaseUsed`
+    - `shopDailyDungeonTicketPurchaseUsed`
+    - `transformAodeUsed`
+    - `transformDailyDungeonTicketUsed`
+  - 兼容旧存档：旧字段 `weeklyPurchaseUsed/weeklyConvertUsed` 自动迁移到新结构对应项。
+- IPC 与 store 更新：
+  - `character:update-aode-plan` payload 扩展为四项计数 + `assignExtra`。
+  - 周重置时清空四项周计数。
 
 ### 本次校验
 - 已执行 `npm run typecheck`，通过。

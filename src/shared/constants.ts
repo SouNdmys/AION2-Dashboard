@@ -316,8 +316,9 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string,
       bonusCap: ENERGY_BONUS_CAP,
     },
     aodePlan: {
-      weeklyPurchaseUsed: 0,
-      weeklyConvertUsed: 0,
+      shopAodePurchaseUsed: 0,
+      shopDailyDungeonTicketPurchaseUsed: 0,
+      transformAodeUsed: 0,
     },
     missions: {
       dailyRemaining: 5,

@@ -75,7 +75,12 @@ const api = {
   ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateWeeklyCompletions, { characterId, ...payload }),
   updateAodePlan: (
     characterId: string,
-    payload: { weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean },
+    payload: {
+      shopAodePurchaseUsed?: number;
+      shopDailyDungeonTicketPurchaseUsed?: number;
+      transformAodeUsed?: number;
+      assignExtra?: boolean;
+    },
   ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateAodePlan, { characterId, ...payload }),
 };
 

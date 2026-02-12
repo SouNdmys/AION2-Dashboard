@@ -91,8 +91,9 @@ export interface AccountState {
 }
 
 export interface AodeEnergyPlanState {
-  weeklyPurchaseUsed: number;
-  weeklyConvertUsed: number;
+  shopAodePurchaseUsed: number;
+  shopDailyDungeonTicketPurchaseUsed: number;
+  transformAodeUsed: number;
 }
 
 export interface WeeklyStats {

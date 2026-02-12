@@ -196,6 +196,10 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
   const statsRaw = entity.stats as Record<string, unknown> | undefined;
   const metaRaw = entity.meta as Record<string, unknown> | undefined;
   const aodePlanRaw = entity.aodePlan as Record<string, unknown> | undefined;
+  const legacyWeeklyPurchaseUsed =
+    typeof aodePlanRaw?.weeklyPurchaseUsed === "number" ? clamp(Math.floor(aodePlanRaw.weeklyPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD) : 0;
+  const legacyWeeklyConvertUsed =
+    typeof aodePlanRaw?.weeklyConvertUsed === "number" ? clamp(Math.floor(aodePlanRaw.weeklyConvertUsed), 0, SETTINGS_MAX_THRESHOLD) : 0;
   const suppressionRaw =
     typeof activitiesRaw?.suppressionRemaining === "number" ? Math.max(0, Math.floor(activitiesRaw.suppressionRemaining)) : 3;
   const suppressionBonusRaw =
@@ -218,14 +222,18 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
       bonusCap,
     },
     aodePlan: {
-      weeklyPurchaseUsed:
-        typeof aodePlanRaw?.weeklyPurchaseUsed === "number"
-          ? clamp(Math.floor(aodePlanRaw.weeklyPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
-          : base.aodePlan.weeklyPurchaseUsed,
-      weeklyConvertUsed:
-        typeof aodePlanRaw?.weeklyConvertUsed === "number"
-          ? clamp(Math.floor(aodePlanRaw.weeklyConvertUsed), 0, SETTINGS_MAX_THRESHOLD)
-          : base.aodePlan.weeklyConvertUsed,
+      shopAodePurchaseUsed:
+        typeof aodePlanRaw?.shopAodePurchaseUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopAodePurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : legacyWeeklyPurchaseUsed,
+      shopDailyDungeonTicketPurchaseUsed:
+        typeof aodePlanRaw?.shopDailyDungeonTicketPurchaseUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopDailyDungeonTicketPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.shopDailyDungeonTicketPurchaseUsed,
+      transformAodeUsed:
+        typeof aodePlanRaw?.transformAodeUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.transformAodeUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : legacyWeeklyConvertUsed,
     },
     missions: {
       dailyRemaining:
@@ -1115,10 +1123,15 @@ export function updateWeeklyCompletions(
 
 export function updateAodePlan(
   characterId: string,
-  payload: { weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean },
+  payload: {
+    shopAodePurchaseUsed?: number;
+    shopDailyDungeonTicketPurchaseUsed?: number;
+    transformAodeUsed?: number;
+    assignExtra?: boolean;
+  },
 ): AppState {
   return commitMutation(
-    { action: "更新奥德购买/变换记录", characterId },
+    { action: "更新微风商店/变换记录", characterId },
     (draft) => {
       const target = draft.characters.find((item) => item.id === characterId);
       if (!target) {
@@ -1145,19 +1158,24 @@ export function updateAodePlan(
           return item;
         }
         const limits = getAodeLimitsForCharacter(draft, item);
-        const nextPurchase =
-          item.id === characterId && typeof payload.weeklyPurchaseUsed === "number"
-            ? clamp(Math.floor(payload.weeklyPurchaseUsed), 0, limits.purchaseLimit)
-            : clamp(item.aodePlan.weeklyPurchaseUsed, 0, limits.purchaseLimit);
-        const nextConvert =
-          item.id === characterId && typeof payload.weeklyConvertUsed === "number"
-            ? clamp(Math.floor(payload.weeklyConvertUsed), 0, limits.convertLimit)
-            : clamp(item.aodePlan.weeklyConvertUsed, 0, limits.convertLimit);
+        const nextShopAodePurchaseUsed =
+          item.id === characterId && typeof payload.shopAodePurchaseUsed === "number"
+            ? clamp(Math.floor(payload.shopAodePurchaseUsed), 0, limits.purchaseLimit)
+            : clamp(item.aodePlan.shopAodePurchaseUsed, 0, limits.purchaseLimit);
+        const nextShopDailyDungeonTicketPurchaseUsed =
+          item.id === characterId && typeof payload.shopDailyDungeonTicketPurchaseUsed === "number"
+            ? clamp(Math.floor(payload.shopDailyDungeonTicketPurchaseUsed), 0, limits.purchaseLimit)
+            : clamp(item.aodePlan.shopDailyDungeonTicketPurchaseUsed, 0, limits.purchaseLimit);
+        const nextTransformAodeUsed =
+          item.id === characterId && typeof payload.transformAodeUsed === "number"
+            ? clamp(Math.floor(payload.transformAodeUsed), 0, limits.convertLimit)
+            : clamp(item.aodePlan.transformAodeUsed, 0, limits.convertLimit);
         return {
           ...item,
           aodePlan: {
-            weeklyPurchaseUsed: nextPurchase,
-            weeklyConvertUsed: nextConvert,
+            shopAodePurchaseUsed: nextShopAodePurchaseUsed,
+            shopDailyDungeonTicketPurchaseUsed: nextShopDailyDungeonTicketPurchaseUsed,
+            transformAodeUsed: nextTransformAodeUsed,
           },
         };
       });

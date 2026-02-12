@@ -152,18 +152,6 @@ function formatDuration(ms: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function formatDurationWithDays(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) {
-    return "0天0小时0分0秒";
-  }
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / (24 * 3600));
-  const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${days}天${hours}小时${minutes}分${seconds}秒`;
-}
-
 function getCharacterAodeLimits(state: AppState, characterId: string): { purchaseLimit: number; convertLimit: number } {
   const character = state.characters.find((item) => item.id === characterId);
   if (!character) {
@@ -246,8 +234,9 @@ export function App(): JSX.Element {
   const [quickAmount, setQuickAmount] = useState("1");
   const [weeklyExpeditionCompletedInput, setWeeklyExpeditionCompletedInput] = useState("0");
   const [weeklyTranscendenceCompletedInput, setWeeklyTranscendenceCompletedInput] = useState("0");
-  const [aodePurchaseUsedInput, setAodePurchaseUsedInput] = useState("0");
-  const [aodeConvertUsedInput, setAodeConvertUsedInput] = useState("0");
+  const [shopAodePurchaseUsedInput, setShopAodePurchaseUsedInput] = useState("0");
+  const [shopDailyDungeonTicketPurchaseUsedInput, setShopDailyDungeonTicketPurchaseUsedInput] = useState("0");
+  const [transformAodeUsedInput, setTransformAodeUsedInput] = useState("0");
 
   useEffect(() => {
     void (async () => {
@@ -353,9 +342,15 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!selected) return;
-    setAodePurchaseUsedInput(String(selected.aodePlan.weeklyPurchaseUsed));
-    setAodeConvertUsedInput(String(selected.aodePlan.weeklyConvertUsed));
-  }, [selected?.id, selected?.aodePlan.weeklyPurchaseUsed, selected?.aodePlan.weeklyConvertUsed]);
+    setShopAodePurchaseUsedInput(String(selected.aodePlan.shopAodePurchaseUsed));
+    setShopDailyDungeonTicketPurchaseUsedInput(String(selected.aodePlan.shopDailyDungeonTicketPurchaseUsed));
+    setTransformAodeUsedInput(String(selected.aodePlan.transformAodeUsed));
+  }, [
+    selected?.id,
+    selected?.aodePlan.shopAodePurchaseUsed,
+    selected?.aodePlan.shopDailyDungeonTicketPurchaseUsed,
+    selected?.aodePlan.transformAodeUsed,
+  ]);
 
   const summary = useMemo(() => {
     if (!state) return [];
@@ -421,10 +416,15 @@ export function App(): JSX.Element {
             const corridorMiddleCurrent = item.activities.corridorMiddleAvailable;
             const corridorMiddleTotal = 3;
             const aodeLimits = getCharacterAodeLimits(state, item.id);
-            const aodePurchaseUsed = item.aodePlan.weeklyPurchaseUsed;
-            const aodeConvertUsed = item.aodePlan.weeklyConvertUsed;
-            const aodePurchaseRemaining = Math.max(0, aodeLimits.purchaseLimit - aodePurchaseUsed);
-            const aodeConvertRemaining = Math.max(0, aodeLimits.convertLimit - aodeConvertUsed);
+            const aodeShopAodePurchaseUsed = item.aodePlan.shopAodePurchaseUsed;
+            const aodeShopDailyDungeonTicketPurchaseUsed = item.aodePlan.shopDailyDungeonTicketPurchaseUsed;
+            const aodeTransformAodeUsed = item.aodePlan.transformAodeUsed;
+            const aodeShopAodePurchaseRemaining = Math.max(0, aodeLimits.purchaseLimit - aodeShopAodePurchaseUsed);
+            const aodeShopDailyDungeonTicketPurchaseRemaining = Math.max(
+              0,
+              aodeLimits.purchaseLimit - aodeShopDailyDungeonTicketPurchaseUsed,
+            );
+            const aodeTransformAodeRemaining = Math.max(0, aodeLimits.convertLimit - aodeTransformAodeUsed);
             const dungeonReadyBuckets = [
               expeditionCurrent,
               transcendenceCurrent,
@@ -486,12 +486,14 @@ export function App(): JSX.Element {
               corridorLowerTotal,
               corridorMiddleCurrent,
               corridorMiddleTotal,
-              aodePurchaseUsed,
-              aodeConvertUsed,
-              aodePurchaseRemaining,
-              aodeConvertRemaining,
-              aodePurchaseLimit: aodeLimits.purchaseLimit,
-              aodeConvertLimit: aodeLimits.convertLimit,
+              aodeShopAodePurchaseUsed,
+              aodeShopDailyDungeonTicketPurchaseUsed,
+              aodeTransformAodeUsed,
+              aodeShopAodePurchaseRemaining,
+              aodeShopDailyDungeonTicketPurchaseRemaining,
+              aodeTransformAodeRemaining,
+              aodeShopPurchaseLimit: aodeLimits.purchaseLimit,
+              aodeTransformLimit: aodeLimits.convertLimit,
               dungeonReadyBuckets,
               weeklyReadyBuckets,
               missionReadyBuckets,
@@ -656,7 +658,7 @@ export function App(): JSX.Element {
       { key: "transcendence", title: "超越恢复", target: nextTranscendence },
       { key: "daily", title: "每日重置", target: nextDailyReset },
       { key: "weekly", title: "每周重置", target: nextWeeklyReset },
-      { key: "corridor_unified", title: "回廊统一刷新", target: nextCorridorUnified },
+      { key: "corridor_unified", title: "回廊刷新", target: nextCorridorUnified },
     ];
   }, [nowMs]);
 
@@ -674,11 +676,14 @@ export function App(): JSX.Element {
   const selectedAccountCharacterCount = accountCharacters.length;
   const canAddCharacterInSelectedAccount = selectedAccountCharacterCount < MAX_CHARACTERS_PER_ACCOUNT;
   const selectedIsAodeExtra = selectedAccount?.extraAodeCharacterId === selected?.id;
-  const selectedAodePurchaseRemaining = selected
-    ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.weeklyPurchaseUsed)
+  const selectedShopAodePurchaseRemaining = selected
+    ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.shopAodePurchaseUsed)
     : 0;
-  const selectedAodeConvertRemaining = selected
-    ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.weeklyConvertUsed)
+  const selectedShopDailyDungeonTicketPurchaseRemaining = selected
+    ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.shopDailyDungeonTicketPurchaseUsed)
+    : 0;
+  const selectedTransformAodeRemaining = selected
+    ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.transformAodeUsed)
     : 0;
 
   async function sync(action: Promise<AppState>, successMessage?: string): Promise<boolean> {
@@ -1013,26 +1018,51 @@ export function App(): JSX.Element {
     );
   }
 
-  function onSaveAodePlan(): void {
+  function onSaveShopPlan(): void {
     if (!selected || !state) return;
-    const purchaseUsed = toInt(aodePurchaseUsedInput);
-    const convertUsed = toInt(aodeConvertUsedInput);
-    if (purchaseUsed === null || convertUsed === null || purchaseUsed < 0 || convertUsed < 0) {
-      setError("奥德购买/变换次数必须是大于等于 0 的整数");
+    const shopAodePurchaseUsed = toInt(shopAodePurchaseUsedInput);
+    const shopDailyDungeonTicketPurchaseUsed = toInt(shopDailyDungeonTicketPurchaseUsedInput);
+    if (
+      shopAodePurchaseUsed === null ||
+      shopDailyDungeonTicketPurchaseUsed === null ||
+      shopAodePurchaseUsed < 0 ||
+      shopDailyDungeonTicketPurchaseUsed < 0
+    ) {
+      setError("微风商店次数必须是大于等于 0 的整数");
       return;
     }
-    if (purchaseUsed > selectedAodeLimits.purchaseLimit || convertUsed > selectedAodeLimits.convertLimit) {
-      setError(
-        `超出本角色上限：购买最多 ${selectedAodeLimits.purchaseLimit}，变换最多 ${selectedAodeLimits.convertLimit}`,
-      );
+    if (
+      shopAodePurchaseUsed > selectedAodeLimits.purchaseLimit ||
+      shopDailyDungeonTicketPurchaseUsed > selectedAodeLimits.purchaseLimit
+    ) {
+      setError(`超出本角色上限：微风商店每项最多 ${selectedAodeLimits.purchaseLimit}`);
       return;
     }
     void sync(
       window.aionApi.updateAodePlan(selected.id, {
-        weeklyPurchaseUsed: purchaseUsed,
-        weeklyConvertUsed: convertUsed,
+        shopAodePurchaseUsed,
+        shopDailyDungeonTicketPurchaseUsed,
       }),
-      "已保存奥德购买/变换记录",
+      "已保存微风商店记录",
+    );
+  }
+
+  function onSaveTransformPlan(): void {
+    if (!selected || !state) return;
+    const transformAodeUsed = toInt(transformAodeUsedInput);
+    if (transformAodeUsed === null || transformAodeUsed < 0) {
+      setError("变换次数必须是大于等于 0 的整数");
+      return;
+    }
+    if (transformAodeUsed > selectedAodeLimits.convertLimit) {
+      setError(`超出本角色上限：变换最多 ${selectedAodeLimits.convertLimit}`);
+      return;
+    }
+    void sync(
+      window.aionApi.updateAodePlan(selected.id, {
+        transformAodeUsed,
+      }),
+      "已保存变换记录",
     );
   }
 
@@ -1042,7 +1072,7 @@ export function App(): JSX.Element {
       window.aionApi.updateAodePlan(selected.id, {
         assignExtra,
       }),
-      assignExtra ? "已设为本账号奥德额外角色" : "已取消本角色额外资格",
+      assignExtra ? "已设为本账号微风商店额外角色" : "已取消本角色额外资格",
     );
   }
 
@@ -1807,19 +1837,27 @@ export function App(): JSX.Element {
                         <div className="flex flex-wrap gap-1.5">
                           <span
                             className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
-                              entry.aodePurchaseRemaining,
-                              entry.aodePurchaseLimit,
+                              entry.aodeShopAodePurchaseRemaining,
+                              entry.aodeShopPurchaseLimit,
                             )}`}
                           >
-                            奥德购买 {formatCounter(entry.aodePurchaseUsed, entry.aodePurchaseLimit)}
+                            商店-奥德 {formatCounter(entry.aodeShopAodePurchaseUsed, entry.aodeShopPurchaseLimit)}
                           </span>
                           <span
                             className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
-                              entry.aodeConvertRemaining,
-                              entry.aodeConvertLimit,
+                              entry.aodeShopDailyDungeonTicketPurchaseRemaining,
+                              entry.aodeShopPurchaseLimit,
                             )}`}
                           >
-                            奥德变换 {formatCounter(entry.aodeConvertUsed, entry.aodeConvertLimit)}
+                            商店-副本券 {formatCounter(entry.aodeShopDailyDungeonTicketPurchaseUsed, entry.aodeShopPurchaseLimit)}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                              entry.aodeTransformAodeRemaining,
+                              entry.aodeTransformLimit,
+                            )}`}
+                          >
+                            变换-奥德 {formatCounter(entry.aodeTransformAodeUsed, entry.aodeTransformLimit)}
                           </span>
                         </div>
                       </div>
@@ -1926,17 +1964,17 @@ export function App(): JSX.Element {
 
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold">奥德购买/变换记录</p>
+                <p className="text-sm font-semibold">微风商店记录</p>
                 <span className="text-xs text-slate-300">
                   {selectedIsAodeExtra ? "本角色: 额外+8资格" : "本角色: 基础资格"}
                 </span>
               </div>
               <p className="mt-1 text-xs text-slate-300">
-                购买 {selected.aodePlan.weeklyPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedAodePurchaseRemaining}） | 变换{" "}
-                {selected.aodePlan.weeklyConvertUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedAodeConvertRemaining}）
+                奥德购买 {selected.aodePlan.shopAodePurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopAodePurchaseRemaining}） | 每日副本券购买{" "}
+                {selected.aodePlan.shopDailyDungeonTicketPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}）
               </p>
               <p className="mt-1 text-xs text-slate-300">
-                单次按 {AODE_POINT_PER_OPERATION} 奥德计；基础每周购买/变换各 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色各 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。
+                基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。
               </p>
               {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
                 <p className="mt-1 text-xs text-amber-300">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
@@ -1944,19 +1982,19 @@ export function App(): JSX.Element {
               <div className="mt-2 grid grid-cols-[1fr_1fr_auto_auto] gap-2">
                 <input
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={aodePurchaseUsedInput}
-                  onChange={(event) => setAodePurchaseUsedInput(event.target.value)}
+                  value={shopAodePurchaseUsedInput}
+                  onChange={(event) => setShopAodePurchaseUsedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="购买已用"
+                  placeholder="商店-奥德购买已用"
                 />
                 <input
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={aodeConvertUsedInput}
-                  onChange={(event) => setAodeConvertUsedInput(event.target.value)}
+                  value={shopDailyDungeonTicketPurchaseUsedInput}
+                  onChange={(event) => setShopDailyDungeonTicketPurchaseUsedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="变换已用"
+                  placeholder="商店-副本券购买已用"
                 />
-                <button className="task-btn px-4" onClick={onSaveAodePlan} disabled={busy}>
+                <button className="task-btn px-4" onClick={onSaveShopPlan} disabled={busy}>
                   保存记录
                 </button>
                 <button
@@ -1965,6 +2003,28 @@ export function App(): JSX.Element {
                   disabled={busy}
                 >
                   {selectedIsAodeExtra ? "取消额外" : "设为额外"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-sm font-semibold">变换记录</p>
+              <p className="mt-1 text-xs text-slate-300">
+                奥德变换 {selected.aodePlan.transformAodeUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedTransformAodeRemaining}）
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                单次奥德按 {AODE_POINT_PER_OPERATION} 记录；基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次，额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次。
+              </p>
+              <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={transformAodeUsedInput}
+                  onChange={(event) => setTransformAodeUsedInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="变换-奥德已用"
+                />
+                <button className="task-btn px-4" onClick={onSaveTransformPlan} disabled={busy}>
+                  保存记录
                 </button>
               </div>
             </div>
@@ -2335,17 +2395,10 @@ export function App(): JSX.Element {
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 {countdownItems.map((item) => {
                   const remain = item.target ? Math.max(0, item.target.getTime() - nowMs) : null;
-                  const useDayFormat = item.key === "weekly" || item.key === "corridor_unified";
                   return (
                     <div key={item.key} className="data-pill">
                       <p className="text-xs text-slate-300">{item.title}</p>
-                      <p className="mt-1 text-sm font-semibold text-cyan-200">
-                        {remain === null
-                          ? "--:--:--"
-                          : useDayFormat
-                            ? formatDurationWithDays(remain)
-                            : formatDuration(remain)}
-                      </p>
+                      <p className="mt-1 text-sm font-semibold text-cyan-200">{remain === null ? "--:--:--" : formatDuration(remain)}</p>
                       <p className="mt-1 text-xs text-slate-400">
                         {item.target ? formatDateTime(item.target) : "未设置"}
                       </p>
@@ -2482,9 +2535,6 @@ export function App(): JSX.Element {
             {dialog.kind === "corridor_sync" ? (
               <>
                 <h4 className="text-base font-semibold">同步深渊回廊（当前账号）</h4>
-                <p className="mt-2 text-xs text-slate-300">
-                  请录入下层/中层当前可打数量。刷新时间已统一为今晚 21:00 起每 48 小时自动推算。
-                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="space-y-2">
                     <p className="text-xs text-slate-300">下层</p>

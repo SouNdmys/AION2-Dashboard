@@ -118,7 +118,16 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(
     IPC_CHANNELS.updateAodePlan,
-    (_event, payload: { characterId: string; weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean }) =>
+    (
+      _event,
+      payload: {
+        characterId: string;
+        shopAodePurchaseUsed?: number;
+        shopDailyDungeonTicketPurchaseUsed?: number;
+        transformAodeUsed?: number;
+        assignExtra?: boolean;
+      },
+    ) =>
       updateAodePlan(payload.characterId, payload),
   );
 }
