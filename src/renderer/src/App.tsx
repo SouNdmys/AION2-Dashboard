@@ -1384,7 +1384,7 @@ export function App(): JSX.Element {
 
   return (
     <main className="min-h-screen p-5 text-slate-100">
-      <div className="grid min-h-[calc(100vh-2.5rem)] grid-cols-[300px_1fr] gap-5">
+      <div className="grid min-h-[calc(100vh-2.5rem)] grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <aside className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
           <h1 className="mb-3 text-lg font-semibold tracking-wide">AION 2</h1>
           <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -1518,63 +1518,44 @@ export function App(): JSX.Element {
           </div>
         </aside>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5">
           <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-3 backdrop-blur-2xl backdrop-saturate-150">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <button
-                  className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "overview" ? "bg-white/20" : ""}`}
-                  onClick={() => {
-                    setViewMode("dashboard");
-                    setDashboardMode("overview");
-                  }}
-                  disabled={busy}
-                >
-                  角色总览
-                </button>
-                <button
-                  className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "character" ? "bg-white/20" : ""}`}
-                  onClick={() => {
-                    setViewMode("dashboard");
-                    setDashboardMode("character");
-                  }}
-                  disabled={busy}
-                >
-                  角色操作
-                </button>
-                <button
-                  className={`pill-btn ${viewMode === "settings" ? "bg-white/20" : ""}`}
-                  onClick={() => setViewMode("settings")}
-                  disabled={busy}
-                >
-                  设置页
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="pill-btn" onClick={onUndoSingleStep} disabled={busy || state.history.length === 0}>
-                  撤销一步
-                </button>
-                <input
-                  className="w-16 rounded-xl border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
-                  value={undoSteps}
-                  onChange={(event) => setUndoSteps(event.target.value)}
-                  disabled={busy || state.history.length === 0}
-                />
-                <button className="pill-btn" onClick={onUndoMultiStep} disabled={busy || state.history.length === 0}>
-                  撤销多步
-                </button>
-                <button className="pill-btn" onClick={onClearHistory} disabled={busy || state.history.length === 0}>
-                  清空历史
-                </button>
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "overview" ? "bg-white/20" : ""}`}
+                onClick={() => {
+                  setViewMode("dashboard");
+                  setDashboardMode("overview");
+                }}
+                disabled={busy}
+              >
+                角色总览
+              </button>
+              <button
+                className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "character" ? "bg-white/20" : ""}`}
+                onClick={() => {
+                  setViewMode("dashboard");
+                  setDashboardMode("character");
+                }}
+                disabled={busy}
+              >
+                角色操作
+              </button>
+              <button
+                className={`pill-btn ${viewMode === "settings" ? "bg-white/20" : ""}`}
+                onClick={() => setViewMode("settings")}
+                disabled={busy}
+              >
+                设置页
+              </button>
             </div>
-            <p className="mt-2 text-xs text-slate-300">历史记录 {state.history.length} 条，支持撤销一步/多步。</p>
+            <p className="mt-2 text-xs text-slate-300">中栏为核心操作流，右栏承载日志与辅助信息。</p>
             {infoMessage ? <p className="mt-2 text-xs text-emerald-300">{infoMessage}</p> : null}
             {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
           </article>
 
           {viewMode === "dashboard" ? (
-            <header className="grid grid-cols-4 gap-4">
+            <header className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
               <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
                 <p className="tile-k">可远征角色</p>
                 <p className="tile-v">{readyCharacters}</p>
@@ -1592,32 +1573,6 @@ export function App(): JSX.Element {
                 <p className="tile-v">{pendingWeekly} 角色</p>
               </article>
             </header>
-          ) : null}
-
-          {viewMode === "dashboard" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-            <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
-            <div className="mt-3 grid grid-cols-6 gap-3 text-sm">
-              {countdownItems.map((item) => {
-                const remain = item.target
-                  ? Math.max(0, Math.min(48 * 60 * 60 * 1000, item.target.getTime() - nowMs))
-                  : null;
-                return (
-                  <div key={item.key} className="data-pill">
-                    <p className="text-xs text-slate-300">{item.title}</p>
-                    <p className="mt-1 text-base font-semibold text-cyan-200">{remain === null ? "--:--:--" : formatDuration(remain)}</p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {item.key.startsWith("corridor")
-                        ? "上限 48 小时倒计时"
-                        : item.target
-                          ? formatDateTime(item.target)
-                          : "未设置"}
-                    </p>
-                  </div>
-                );
-                })}
-              </div>
-            </article>
           ) : null}
 
           {viewMode === "dashboard" && dashboardMode === "overview" ? (
@@ -1687,7 +1642,7 @@ export function App(): JSX.Element {
                   <p className="mt-2 text-xs text-slate-300">当前内容总量 {quickTask.setCompletedTotal}，输入超过将自动按上限处理。</p>
                 ) : null}
               </div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 2xl:grid-cols-4">
                 <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
                   value={overviewSortKey}
@@ -1738,7 +1693,7 @@ export function App(): JSX.Element {
                 </select>
               </div>
               <p className="mt-2 text-xs text-slate-300">当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页。</p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
                 {overviewRowsFiltered.map((entry) => {
                   const filteredReadyCount =
                     overviewTaskFilter === "dungeon"
@@ -1929,7 +1884,7 @@ export function App(): JSX.Element {
           {viewMode === "dashboard" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
             <h3 className="text-sm font-semibold tracking-wide">本周金币统计</h3>
-            <div className="mt-3 grid grid-cols-4 gap-3 text-sm">
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm 2xl:grid-cols-4">
               <div className="data-pill">全角色本周收益: {toGoldText(weeklyEarned)}</div>
               <div className="data-pill">全角色远征次数: {weeklyExpeditionRuns} (阈值 {expeditionWarnThreshold})</div>
               <div className="data-pill">全角色超越次数: {weeklyTransRuns} (阈值 {transcendenceWarnThreshold})</div>
@@ -1976,7 +1931,7 @@ export function App(): JSX.Element {
             ? (Object.keys(groupedTasks) as TaskDefinition["category"][]).map((category) => (
             <article key={category} className="space-y-3">
               <h3 className="px-1 text-sm font-semibold tracking-wide text-slate-200">{category}任务</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
                 {(groupedTasks[category] ?? []).map((task) => {
                   const canComplete = task.allowComplete && !task.allowSetCompleted;
                   const showSetCompletedOnly = task.allowSetCompleted;
@@ -2317,50 +2272,100 @@ export function App(): JSX.Element {
             </article>
           ) : null}
 
+        </section>
+
+        <aside className="space-y-5 xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-auto xl:pr-1">
+          <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+            <h3 className="text-sm font-semibold tracking-wide">操作中心</h3>
+            <p className="mt-2 text-xs text-slate-300">历史记录 {state.history.length} 条，支持撤销一步/多步。</p>
+            <div className="mt-3 flex items-center gap-2">
+              <button className="pill-btn" onClick={onUndoSingleStep} disabled={busy || state.history.length === 0}>
+                撤销一步
+              </button>
+              <input
+                className="w-16 rounded-xl border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
+                value={undoSteps}
+                onChange={(event) => setUndoSteps(event.target.value)}
+                disabled={busy || state.history.length === 0}
+              />
+              <button className="pill-btn" onClick={onUndoMultiStep} disabled={busy || state.history.length === 0}>
+                撤销多步
+              </button>
+              <button className="pill-btn" onClick={onClearHistory} disabled={busy || state.history.length === 0}>
+                清空历史
+              </button>
+            </div>
+          </article>
+
           {viewMode === "dashboard" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-            <h3 className="text-sm font-semibold tracking-wide">操作历史日志</h3>
-            <p className="mt-2 text-xs text-slate-300">显示最近 20 条（最新在前）。</p>
-            {historyRows.length === 0 ? (
-              <p className="mt-3 text-xs text-slate-400">暂无操作记录。</p>
-            ) : (
-              <div className="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
-                {historyRows.map((entry) => {
-                  const charName =
-                    entry.characterId === null
-                      ? "全局"
-                      : characterNameById.get(entry.characterId) ?? `角色(${entry.characterId.slice(0, 6)})`;
+              <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                {countdownItems.map((item) => {
+                  const remain = item.target
+                    ? Math.max(0, Math.min(48 * 60 * 60 * 1000, item.target.getTime() - nowMs))
+                    : null;
                   return (
-                    <div key={entry.id} className="data-pill">
-                      <p className="text-xs text-slate-400">{new Date(entry.at).toLocaleString()}</p>
-                      <p className="mt-1 text-sm">
-                        [{charName}] {entry.action}
+                    <div key={item.key} className="data-pill">
+                      <p className="text-xs text-slate-300">{item.title}</p>
+                      <p className="mt-1 text-sm font-semibold text-cyan-200">{remain === null ? "--:--:--" : formatDuration(remain)}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {item.key.startsWith("corridor")
+                          ? "上限 48 小时倒计时"
+                          : item.target
+                            ? formatDateTime(item.target)
+                            : "未设置"}
                       </p>
-                      {entry.description ? <p className="mt-1 text-xs text-slate-300">{entry.description}</p> : null}
                     </div>
                   );
                 })}
               </div>
-            )}
+            </article>
+          ) : null}
+
+          {viewMode === "dashboard" ? (
+            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+              <h3 className="text-sm font-semibold tracking-wide">操作历史日志</h3>
+              <p className="mt-2 text-xs text-slate-300">显示最近 20 条（最新在前）。</p>
+              {historyRows.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-400">暂无操作记录。</p>
+              ) : (
+                <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+                  {historyRows.map((entry) => {
+                    const charName =
+                      entry.characterId === null
+                        ? "全局"
+                        : characterNameById.get(entry.characterId) ?? `角色(${entry.characterId.slice(0, 6)})`;
+                    return (
+                      <div key={entry.id} className="data-pill">
+                        <p className="text-xs text-slate-400">{new Date(entry.at).toLocaleString()}</p>
+                        <p className="mt-1 text-sm">
+                          [{charName}] {entry.action}
+                        </p>
+                        {entry.description ? <p className="mt-1 text-xs text-slate-300">{entry.description}</p> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </article>
           ) : null}
 
           {viewMode === "dashboard" && dashboardMode === "character" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-            <h3 className="text-sm font-semibold tracking-wide">待办提醒</h3>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {summary
-                .find((item) => item.characterId === selected.id)
-                ?.pendingLabels.map((label) => (
-                  <span key={label} className="rounded-full border border-orange-200/25 bg-orange-100/10 px-3 py-1 text-xs">
-                    {label}
-                  </span>
-                ))}
-            </div>
-            {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
+              <h3 className="text-sm font-semibold tracking-wide">待办提醒</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {summary
+                  .find((item) => item.characterId === selected.id)
+                  ?.pendingLabels.map((label) => (
+                    <span key={label} className="rounded-full border border-orange-200/25 bg-orange-100/10 px-3 py-1 text-xs">
+                      {label}
+                    </span>
+                  ))}
+              </div>
             </article>
           ) : null}
-        </section>
+        </aside>
       </div>
 
       {dialog ? (
