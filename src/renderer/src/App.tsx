@@ -27,6 +27,7 @@ type OverviewSortKey = "ready" | "account" | "region";
 type OverviewTaskFilter = "all" | "dungeon" | "weekly" | "mission";
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const NO_REGION_FILTER = "__none__";
+const COUNT_SELECT_MAX = 100;
 
 type DialogState =
   | { kind: "complete"; taskId: TaskId; title: string; amount: string }
@@ -74,6 +75,17 @@ interface CorridorDraft {
 interface AccountEditorDraft {
   name: string;
   regionTag: string;
+}
+
+type PriorityTone = "high" | "medium" | "low";
+
+interface PriorityTodoItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  detail: string;
+  score: number;
+  tone: PriorityTone;
 }
 
 function getQuickActionsForTask(task: TaskDefinition): TaskActionKind[] {
@@ -202,6 +214,36 @@ function getBoardToneClass(current: number, total: number): string {
     return "border-cyan-300/45 bg-cyan-400/15 text-cyan-100";
   }
   return "border-amber-300/45 bg-amber-400/15 text-amber-100";
+}
+
+function getUrgentBoardToneClass(current: number, total: number, urgent: boolean): string {
+  if (urgent && current > 0) {
+    return "border-rose-300/55 bg-rose-500/20 text-rose-100";
+  }
+  return getBoardToneClass(current, total);
+}
+
+function getPriorityToneClass(tone: PriorityTone): string {
+  if (tone === "high") {
+    return "border-rose-300/45 bg-rose-400/15 text-rose-100";
+  }
+  if (tone === "medium") {
+    return "border-amber-300/45 bg-amber-400/15 text-amber-100";
+  }
+  return "border-cyan-300/45 bg-cyan-400/15 text-cyan-100";
+}
+
+function buildCountOptions(min: number, max: number, currentValue?: string): string[] {
+  let safeMin = Math.max(0, Math.floor(min));
+  let safeMax = Math.max(safeMin, Math.floor(max));
+  const current = currentValue === undefined ? null : toInt(currentValue);
+  if (current !== null && current > safeMax) {
+    safeMax = current;
+  }
+  if (current !== null && current < safeMin) {
+    safeMin = current;
+  }
+  return Array.from({ length: safeMax - safeMin + 1 }, (_, index) => String(safeMin + index));
 }
 
 export function App(): JSX.Element {
@@ -586,6 +628,13 @@ export function App(): JSX.Element {
     return getQuickActionsForTask(quickTask);
   }, [quickTask]);
 
+  const quickAmountOptions = useMemo(() => {
+    const min = quickAction === "set_completed" ? 0 : 1;
+    const setCompletedMax = quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX;
+    const max = quickAction === "set_completed" ? Math.min(COUNT_SELECT_MAX, setCompletedMax) : COUNT_SELECT_MAX;
+    return buildCountOptions(min, max, quickAmount);
+  }, [quickAction, quickTask?.setCompletedTotal, quickAmount]);
+
   useEffect(() => {
     if (!quickTask) return;
     if (!quickActionOptions.includes(quickAction)) {
@@ -660,6 +709,198 @@ export function App(): JSX.Element {
       { key: "weekly", title: "每周重置", target: nextWeeklyReset },
       { key: "corridor_unified", title: "回廊刷新", target: nextCorridorUnified },
     ];
+  }, [nowMs]);
+
+  const priorityTodoItems = useMemo(() => {
+    const now = new Date(nowMs);
+    const nextWeeklyReset = getNextWeeklyReset(now);
+    const weeklyRemainMs = Math.max(0, nextWeeklyReset.getTime() - now.getTime());
+    const weeklyCriticalWindow = weeklyRemainMs <= 48 * 60 * 60 * 1000;
+    const items: PriorityTodoItem[] = [];
+
+    const pushItem = (
+      entry: (typeof overviewRows)[number],
+      taskKey: string,
+      title: string,
+      score: number,
+      tone: PriorityTone,
+      detail: string,
+    ): void => {
+      items.push({
+        id: `${entry.character.id}-${taskKey}`,
+        title,
+        subtitle: `${entry.character.name} · ${entry.account.name}`,
+        detail,
+        score,
+        tone,
+      });
+    };
+
+    for (const entry of overviewRows) {
+      const sanctumPending = entry.sanctumRaidCurrent + entry.sanctumBoxCurrent;
+      if (sanctumPending > 0) {
+        pushItem(
+          entry,
+          "sanctum",
+          "圣域（周本）",
+          1000 + sanctumPending,
+          "high",
+          `挑战 ${entry.sanctumRaidCurrent}/4，开箱 ${entry.sanctumBoxCurrent}/2`,
+        );
+      }
+
+      const corridorPending = entry.corridorLowerCurrent + entry.corridorMiddleCurrent;
+      if (corridorPending > 0) {
+        pushItem(
+          entry,
+          "corridor",
+          "深渊回廊",
+          950 + corridorPending,
+          "high",
+          `下层 ${entry.corridorLowerCurrent}/3，中层 ${entry.corridorMiddleCurrent}/3`,
+        );
+      }
+
+      if (entry.dailyMissionCurrent > 0) {
+        pushItem(
+          entry,
+          "daily-mission",
+          "每日 5 个使命任务",
+          950 + entry.dailyMissionCurrent,
+          "high",
+          `剩余 ${formatCounter(entry.dailyMissionCurrent, entry.dailyMissionTotal)}`,
+        );
+      }
+
+      if (weeklyCriticalWindow && entry.awakeningCurrent > 0) {
+        pushItem(
+          entry,
+          "awakening-weekly-due",
+          "觉醒战（周刷新前）",
+          1000 + entry.awakeningCurrent,
+          "high",
+          `剩余 ${formatCounter(entry.awakeningCurrent, entry.awakeningTotal)}，48 小时内优先清理`,
+        );
+      }
+
+      if (weeklyCriticalWindow && entry.suppressionCurrent > 0) {
+        pushItem(
+          entry,
+          "suppression-weekly-due",
+          "讨伐战（周刷新前）",
+          995 + entry.suppressionCurrent,
+          "high",
+          `剩余 ${formatCounter(entry.suppressionCurrent, entry.suppressionTotal)}，48 小时内优先清理`,
+        );
+      }
+
+      if (entry.expeditionCurrent > 0) {
+        const nearCap = entry.expeditionCurrent >= Math.max(1, entry.expeditionTotal - 2);
+        pushItem(
+          entry,
+          "expedition",
+          nearCap ? "远征（接近满次）" : "远征（清体力收益）",
+          (nearCap ? 860 : 820) + entry.expeditionCurrent,
+          nearCap ? "high" : "medium",
+          `剩余 ${formatCounter(entry.expeditionCurrent, entry.expeditionTotal)}`,
+        );
+      }
+
+      if (entry.transcendenceCurrent > 0) {
+        const nearOverflow = entry.transcendenceCurrent >= Math.max(1, entry.transcendenceTotal - 1);
+        pushItem(
+          entry,
+          "transcendence",
+          nearOverflow ? "超越（溢出提醒）" : "超越",
+          (nearOverflow ? 790 : 760) + entry.transcendenceCurrent,
+          "medium",
+          `剩余 ${formatCounter(entry.transcendenceCurrent, entry.transcendenceTotal)}`,
+        );
+      }
+
+      if (entry.nightmareCurrent > 0) {
+        const nearOverflow = entry.nightmareCurrent >= Math.max(1, entry.nightmareTotal - 1);
+        if (nearOverflow) {
+          pushItem(
+            entry,
+            "nightmare-overflow",
+            "恶梦（溢出提醒）",
+            780 + entry.nightmareCurrent,
+            "medium",
+            `剩余 ${formatCounter(entry.nightmareCurrent, entry.nightmareTotal)}`,
+          );
+        }
+      }
+
+      if (weeklyCriticalWindow && entry.dailyDungeonCurrent > 0) {
+        pushItem(
+          entry,
+          "daily-dungeon-weekly-due",
+          "每日副本（周刷新前）",
+          990 + entry.dailyDungeonCurrent,
+          "high",
+          `剩余 ${formatCounter(entry.dailyDungeonCurrent, entry.dailyDungeonTotal)}，48 小时内优先清理`,
+        );
+      }
+
+      if (weeklyCriticalWindow && entry.weeklyMissionCurrent > 0) {
+        pushItem(
+          entry,
+          "weekly-order-due",
+          "每周指令（周刷新前）",
+          985 + entry.weeklyMissionCurrent,
+          "high",
+          `剩余 ${formatCounter(entry.weeklyMissionCurrent, entry.weeklyMissionTotal)}，48 小时内优先完成`,
+        );
+      }
+
+      if (weeklyCriticalWindow && entry.aodeShopAodePurchaseRemaining > 0) {
+        pushItem(
+          entry,
+          "shop-aode-weekly-due",
+          "商店-奥德（周刷新前）",
+          980 + entry.aodeShopAodePurchaseRemaining,
+          "high",
+          `剩余可用 ${formatCounter(entry.aodeShopAodePurchaseRemaining, entry.aodeShopPurchaseLimit)}`,
+        );
+      }
+      if (weeklyCriticalWindow && entry.aodeShopDailyDungeonTicketPurchaseRemaining > 0) {
+        pushItem(
+          entry,
+          "shop-ticket-weekly-due",
+          "商店-副本券（周刷新前）",
+          978 + entry.aodeShopDailyDungeonTicketPurchaseRemaining,
+          "high",
+          `剩余可用 ${formatCounter(entry.aodeShopDailyDungeonTicketPurchaseRemaining, entry.aodeShopPurchaseLimit)}`,
+        );
+      }
+      if (weeklyCriticalWindow && entry.aodeTransformAodeRemaining > 0) {
+        pushItem(
+          entry,
+          "transform-aode-weekly-due",
+          "变换-奥德（周刷新前）",
+          976 + entry.aodeTransformAodeRemaining,
+          "high",
+          `剩余可用 ${formatCounter(entry.aodeTransformAodeRemaining, entry.aodeTransformLimit)}`,
+        );
+      }
+
+      if (entry.miniGameCurrent > 0) {
+        pushItem(entry, "mini-game", "小游戏（低优先）", 240 + entry.miniGameCurrent, "low", `剩余 ${formatCounter(entry.miniGameCurrent, entry.miniGameTotal)}`);
+      }
+      if (entry.spiritCurrent > 0) {
+        pushItem(entry, "spirit-invasion", "精灵入侵（低优先）", 220 + entry.spiritCurrent, "low", `剩余 ${formatCounter(entry.spiritCurrent, entry.spiritTotal)}`);
+      }
+    }
+
+    return items.sort((left, right) => right.score - left.score).slice(0, 8);
+  }, [overviewRows, nowMs]);
+
+  const isWeeklyCriticalWindow = useMemo(() => {
+    const now = new Date(nowMs);
+    const nextWeeklyReset = getNextWeeklyReset(now);
+    const weeklyRemainMs = Math.max(0, nextWeeklyReset.getTime() - now.getTime());
+    return weeklyRemainMs <= 48 * 60 * 60 * 1000;
   }, [nowMs]);
 
   const readyCharacters = summary.filter((item) => item.canRunExpedition).length;
@@ -1684,13 +1925,18 @@ export function App(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                  <input
+                  <select
                     className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
                     value={quickAmount}
                     onChange={(event) => setQuickAmount(event.target.value)}
                     disabled={busy}
-                    placeholder={quickAction === "set_completed" ? "已完成" : "次数"}
-                  />
+                  >
+                    {quickAmountOptions.map((value) => (
+                      <option key={`quick-amount-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
                   <button className="task-btn px-4" onClick={onApplyQuickAction} disabled={busy || !quickCharacterId || !quickTask}>
                     提交录入
                   </button>
@@ -1787,14 +2033,14 @@ export function App(): JSX.Element {
                       <div className="mt-2 space-y-2">
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            { label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal },
-                            { label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal },
-                            { label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal },
-                            { label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal },
+                            { label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
+                            { label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal, urgent: false },
+                            { label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
+                            { label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
                           ].map((metric) => (
                             <span
                               key={`dungeon-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
@@ -1802,16 +2048,16 @@ export function App(): JSX.Element {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            { label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal },
-                            { label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal },
-                            { label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal },
-                            { label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal },
-                            { label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal },
-                            { label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal },
+                            { label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
+                            { label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
+                            { label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },
+                            { label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal, urgent: isWeeklyCriticalWindow },
+                            { label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal, urgent: false },
+                            { label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal, urgent: false },
                           ].map((metric) => (
                             <span
                               key={`weekly-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
@@ -1819,16 +2065,16 @@ export function App(): JSX.Element {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {[
-                            { label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal },
-                            { label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal },
-                            { label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal },
-                            { label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal },
-                            { label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal },
-                            { label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal },
+                            { label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal, urgent: true },
+                            { label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal, urgent: isWeeklyCriticalWindow },
+                            { label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal, urgent: false },
+                            { label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal, urgent: false },
+                            { label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal, urgent: true },
+                            { label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal, urgent: true },
                           ].map((metric) => (
                             <span
                               key={`mission-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
@@ -1836,25 +2082,28 @@ export function App(): JSX.Element {
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           <span
-                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
                               entry.aodeShopAodePurchaseRemaining,
                               entry.aodeShopPurchaseLimit,
+                              isWeeklyCriticalWindow,
                             )}`}
                           >
                             商店-奥德 {formatCounter(entry.aodeShopAodePurchaseUsed, entry.aodeShopPurchaseLimit)}
                           </span>
                           <span
-                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
                               entry.aodeShopDailyDungeonTicketPurchaseRemaining,
                               entry.aodeShopPurchaseLimit,
+                              isWeeklyCriticalWindow,
                             )}`}
                           >
                             商店-副本券 {formatCounter(entry.aodeShopDailyDungeonTicketPurchaseUsed, entry.aodeShopPurchaseLimit)}
                           </span>
                           <span
-                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
                               entry.aodeTransformAodeRemaining,
                               entry.aodeTransformLimit,
+                              isWeeklyCriticalWindow,
                             )}`}
                           >
                             变换-奥德 {formatCounter(entry.aodeTransformAodeUsed, entry.aodeTransformLimit)}
@@ -1980,20 +2229,30 @@ export function App(): JSX.Element {
                 <p className="mt-1 text-xs text-amber-300">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
               ) : null}
               <div className="mt-2 grid grid-cols-[1fr_1fr_auto_auto] gap-2">
-                <input
+                <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={shopAodePurchaseUsedInput}
                   onChange={(event) => setShopAodePurchaseUsedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="商店-奥德购买已用"
-                />
-                <input
+                >
+                  {buildCountOptions(0, selectedAodeLimits.purchaseLimit, shopAodePurchaseUsedInput).map((value) => (
+                    <option key={`shop-aode-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={shopDailyDungeonTicketPurchaseUsedInput}
                   onChange={(event) => setShopDailyDungeonTicketPurchaseUsedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="商店-副本券购买已用"
-                />
+                >
+                  {buildCountOptions(0, selectedAodeLimits.purchaseLimit, shopDailyDungeonTicketPurchaseUsedInput).map((value) => (
+                    <option key={`shop-ticket-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
                 <button className="task-btn px-4" onClick={onSaveShopPlan} disabled={busy}>
                   保存记录
                 </button>
@@ -2016,13 +2275,18 @@ export function App(): JSX.Element {
                 单次奥德按 {AODE_POINT_PER_OPERATION} 记录；基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次，额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次。
               </p>
               <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-                <input
+                <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={transformAodeUsedInput}
                   onChange={(event) => setTransformAodeUsedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="变换-奥德已用"
-                />
+                >
+                  {buildCountOptions(0, selectedAodeLimits.convertLimit, transformAodeUsedInput).map((value) => (
+                    <option key={`transform-aode-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
                 <button className="task-btn px-4" onClick={onSaveTransformPlan} disabled={busy}>
                   保存记录
                 </button>
@@ -2045,20 +2309,30 @@ export function App(): JSX.Element {
               <p className="text-xs font-semibold tracking-wide text-slate-200">当前角色周次数校准（远征/超越）</p>
               <p className="mt-1 text-xs text-slate-300">用于误清空后回填游戏内真实已完成次数。</p>
               <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
-                <input
+                <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={weeklyExpeditionCompletedInput}
                   onChange={(event) => setWeeklyExpeditionCompletedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="远征已完成次数"
-                />
-                <input
+                >
+                  {buildCountOptions(0, COUNT_SELECT_MAX, weeklyExpeditionCompletedInput).map((value) => (
+                    <option key={`weekly-expedition-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <select
                   className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={weeklyTranscendenceCompletedInput}
                   onChange={(event) => setWeeklyTranscendenceCompletedInput(event.target.value)}
                   disabled={busy}
-                  placeholder="超越已完成次数"
-                />
+                >
+                  {buildCountOptions(0, COUNT_SELECT_MAX, weeklyTranscendenceCompletedInput).map((value) => (
+                    <option key={`weekly-transcendence-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
                 <button className="task-btn px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
                   保存校准
                 </button>
@@ -2347,12 +2621,18 @@ export function App(): JSX.Element {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-slate-300">当前角色完成次数</p>
-                  <input
+                  <select
                     className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                     value={corridorDraft.completeAmount}
                     onChange={(event) => setCorridorDraft({ ...corridorDraft, completeAmount: event.target.value })}
                     disabled={busy}
-                  />
+                  >
+                    {buildCountOptions(1, COUNT_SELECT_MAX, corridorDraft.completeAmount).map((value) => (
+                      <option key={`corridor-complete-amount-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex items-end col-span-2">
                   <button className="task-btn w-full" onClick={onApplyCorridorCompletionFromSettings} disabled={busy}>
@@ -2406,6 +2686,33 @@ export function App(): JSX.Element {
                   );
                 })}
               </div>
+            </article>
+          ) : null}
+
+          {viewMode === "dashboard" ? (
+            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+              <h3 className="text-sm font-semibold tracking-wide">优先级待办</h3>
+              <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新临近提醒综合排序（Top 8）。</p>
+              {priorityTodoItems.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-400">当前没有待处理高优先任务。</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {priorityTodoItems.map((item) => (
+                    <div key={item.id} className="data-pill">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{item.title}</p>
+                          <p className="mt-1 text-xs text-slate-300">{item.subtitle}</p>
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${getPriorityToneClass(item.tone)}`}>
+                          {item.tone === "high" ? "高" : item.tone === "medium" ? "中" : "低"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-300">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </article>
           ) : null}
 
@@ -2471,12 +2778,18 @@ export function App(): JSX.Element {
                     return `当前最多可完成 ${max} 次`;
                   })()}
                 </p>
-                <input
+                <select
                   className="mt-3 w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={dialog.amount}
                   onChange={(event) => setDialog({ ...dialog, amount: event.target.value })}
                   disabled={busy}
-                />
+                >
+                  {buildCountOptions(1, COUNT_SELECT_MAX, dialog.amount).map((value) => (
+                    <option key={`dialog-complete-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
               </>
             ) : null}
 
@@ -2484,12 +2797,18 @@ export function App(): JSX.Element {
               <>
                 <h4 className="text-base font-semibold">挑战券增加次数 - {dialog.title}</h4>
                 <p className="mt-2 text-xs text-slate-300">填写本次挑战券增加数量（支持大于 1 的批量录入）。</p>
-                <input
+                <select
                   className="mt-3 w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={dialog.amount}
                   onChange={(event) => setDialog({ ...dialog, amount: event.target.value })}
                   disabled={busy}
-                />
+                >
+                  {buildCountOptions(1, COUNT_SELECT_MAX, dialog.amount).map((value) => (
+                    <option key={`dialog-ticket-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
               </>
             ) : null}
 
@@ -2498,12 +2817,20 @@ export function App(): JSX.Element {
                 <h4 className="text-base font-semibold">
                   输入已完成次数 - {dialog.task.title} (0-{dialog.task.setCompletedTotal})
                 </h4>
-                <input
+                <select
                   className="mt-3 w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                   value={dialog.amount}
                   onChange={(event) => setDialog({ ...dialog, amount: event.target.value })}
                   disabled={busy}
-                />
+                >
+                  {buildCountOptions(0, Math.min(COUNT_SELECT_MAX, dialog.task.setCompletedTotal ?? COUNT_SELECT_MAX), dialog.amount).map(
+                    (value) => (
+                      <option key={`dialog-set-completed-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ),
+                  )}
+                </select>
               </>
             ) : null}
 
@@ -2587,12 +2914,18 @@ export function App(): JSX.Element {
                     <option value="lower">下层</option>
                     <option value="middle">中层</option>
                   </select>
-                  <input
+                  <select
                     className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                     value={dialog.amount}
                     onChange={(event) => setDialog({ ...dialog, amount: event.target.value })}
                     disabled={busy}
-                  />
+                  >
+                    {buildCountOptions(1, COUNT_SELECT_MAX, dialog.amount).map((value) => (
+                      <option key={`dialog-corridor-complete-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </>
             ) : null}
@@ -2607,34 +2940,49 @@ export function App(): JSX.Element {
                 <div className={`mt-3 grid gap-2 ${dialog.boss !== undefined ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div className="space-y-1">
                     <p className="text-xs text-slate-300">{dialog.remainingLabel}</p>
-                    <input
+                    <select
                       className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                       value={dialog.remaining}
                       onChange={(event) => setDialog({ ...dialog, remaining: event.target.value })}
                       disabled={busy}
-                      placeholder={dialog.remainingLabel}
-                    />
+                    >
+                      {buildCountOptions(0, COUNT_SELECT_MAX, dialog.remaining).map((value) => (
+                        <option key={`dialog-task-edit-remaining-${value}`} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs text-slate-300">{dialog.bonusLabel}</p>
-                    <input
+                    <select
                       className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                       value={dialog.bonus}
                       onChange={(event) => setDialog({ ...dialog, bonus: event.target.value })}
                       disabled={busy}
-                      placeholder={dialog.bonusLabel}
-                    />
+                    >
+                      {buildCountOptions(0, COUNT_SELECT_MAX, dialog.bonus).map((value) => (
+                        <option key={`dialog-task-edit-bonus-${value}`} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   {dialog.boss !== undefined ? (
                     <div className="space-y-1">
                       <p className="text-xs text-slate-300">{dialog.bossLabel}</p>
-                      <input
+                      <select
                         className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                         value={dialog.boss}
                         onChange={(event) => setDialog({ ...dialog, boss: event.target.value })}
                         disabled={busy}
-                        placeholder={dialog.bossLabel}
-                      />
+                      >
+                        {buildCountOptions(0, COUNT_SELECT_MAX, dialog.boss).map((value) => (
+                          <option key={`dialog-task-edit-boss-${value}`} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   ) : null}
                 </div>
@@ -2648,20 +2996,30 @@ export function App(): JSX.Element {
                   说明: 挑战剩余 = 本周还能打几次圣域挑战（上限 4）；开箱剩余 = 本周还能开几次奖励箱（上限 2）。
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <input
+                  <select
                     className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                     value={dialog.raidRemaining}
                     onChange={(event) => setDialog({ ...dialog, raidRemaining: event.target.value })}
                     disabled={busy}
-                    placeholder="挑战剩余"
-                  />
-                  <input
+                  >
+                    {buildCountOptions(0, 4, dialog.raidRemaining).map((value) => (
+                      <option key={`dialog-sanctum-raid-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
                     className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
                     value={dialog.boxRemaining}
                     onChange={(event) => setDialog({ ...dialog, boxRemaining: event.target.value })}
                     disabled={busy}
-                    placeholder="开箱剩余"
-                  />
+                  >
+                    {buildCountOptions(0, 2, dialog.boxRemaining).map((value) => (
+                      <option key={`dialog-sanctum-box-${value}`} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </>
             ) : null}

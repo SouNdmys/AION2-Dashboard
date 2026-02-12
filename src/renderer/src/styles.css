@@ -120,6 +120,16 @@ body {
   cursor: not-allowed;
 }
 
+select {
+  background-color: rgba(10, 10, 10, 0.9);
+  color: #f1f5f9;
+}
+
+select option {
+  background-color: #0a0a0a;
+  color: #f1f5f9;
+}
+
 @media (min-width: 1900px) {
   html {
     font-size: 17px;
