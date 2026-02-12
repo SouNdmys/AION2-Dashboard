@@ -1,9 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC_CHANNELS } from "../shared/ipc";
-import type { AppSettings, AppState, ApplyTaskActionInput, ExportDataResult, ImportDataResult } from "../shared/types";
+import type { AppBuildInfo, AppSettings, AppState, ApplyTaskActionInput, ExportDataResult, ImportDataResult } from "../shared/types";
 
 const api = {
   getState: (): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.getState),
+  getBuildInfo: (): Promise<AppBuildInfo> => ipcRenderer.invoke(IPC_CHANNELS.getBuildInfo),
   resetWeeklyStats: (): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.resetWeeklyStats),
   undoOperations: (steps = 1): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.undoOperations, { steps }),
   clearHistory: (): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.clearHistory),

@@ -156,6 +156,12 @@ export interface ImportDataResult {
   state: AppState | null;
 }
 
+export interface AppBuildInfo {
+  version: string;
+  buildTime: string;
+  author: string;
+}
+
 export interface AppState {
   version: number;
   selectedAccountId: string | null;

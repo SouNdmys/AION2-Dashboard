@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 import { IPC_CHANNELS } from "../shared/ipc";
+import { APP_BUILD_INFO } from "../shared/build-meta";
 import type { AppSettings, ApplyTaskActionInput } from "../shared/types";
 import {
   addAccount,
@@ -28,6 +29,7 @@ import {
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.getState, () => getAppState());
+  ipcMain.handle(IPC_CHANNELS.getBuildInfo, () => APP_BUILD_INFO);
   ipcMain.handle(IPC_CHANNELS.resetWeeklyStats, () => resetWeeklyStats());
   ipcMain.handle(IPC_CHANNELS.undoOperations, (_event, payload: { steps?: number }) => undoOperations(payload.steps ?? 1));
   ipcMain.handle(IPC_CHANNELS.clearHistory, () => clearHistory());

@@ -18,7 +18,7 @@ import {
   getTotalEnergy,
 } from "../../shared/engine";
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
-import type { AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
+import type { AppBuildInfo, AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 type ViewMode = "dashboard" | "settings";
@@ -115,6 +115,13 @@ async function loadState(): Promise<AppState> {
   return window.aionApi.getState();
 }
 
+async function loadBuildInfo(): Promise<AppBuildInfo> {
+  if (!window.aionApi) {
+    throw new Error("Preload API unavailable: window.aionApi is undefined");
+  }
+  return window.aionApi.getBuildInfo();
+}
+
 function toInt(raw: string): number | null {
   const n = Math.floor(Number(raw));
   if (!Number.isFinite(n)) return null;
@@ -190,6 +197,14 @@ function formatDateTime(date: Date): string {
   });
 }
 
+function formatBuildTime(raw: string): string {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return raw;
+  }
+  return date.toLocaleString("zh-CN");
+}
+
 function buildCorridorDraft(lowerAvailable: number, middleAvailable: number): CorridorDraft {
   return {
     lowerAvailable: String(lowerAvailable),
@@ -248,6 +263,7 @@ function buildCountOptions(min: number, max: number, currentValue?: string): str
 
 export function App(): JSX.Element {
   const [state, setState] = useState<AppState | null>(null);
+  const [buildInfo, setBuildInfo] = useState<AppBuildInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
@@ -283,8 +299,9 @@ export function App(): JSX.Element {
   useEffect(() => {
     void (async () => {
       try {
-        const next = await loadState();
+        const [next, buildMeta] = await Promise.all([loadState(), loadBuildInfo()]);
         setState(next);
+        setBuildInfo(buildMeta);
       } catch (err) {
         setError(err instanceof Error ? err.message : "初始化失败");
       }
@@ -2560,6 +2577,15 @@ export function App(): JSX.Element {
               <button className="task-btn" onClick={() => void onImportData()} disabled={busy}>
                 导入 JSON
               </button>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              <h4 className="text-sm font-semibold">构建信息</h4>
+              <div className="mt-2 grid grid-cols-1 gap-2 text-xs md:grid-cols-3">
+                <div className="data-pill">版本: {buildInfo?.version ? `v${buildInfo.version}` : "--"}</div>
+                <div className="data-pill">构建时间: {buildInfo?.buildTime ? formatBuildTime(buildInfo.buildTime) : "--"}</div>
+                <div className="data-pill">作者: {buildInfo?.author ?? "--"}</div>
+              </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">

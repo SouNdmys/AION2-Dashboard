@@ -100,6 +100,26 @@
 ### 校验
 - 已执行 `npm run typecheck`，通过。
 
+### 今日追加（开源 README 整理）
+- 作者标识更新为 `SouNd`（用于设置页构建信息展示）。
+- 重写 `README.md`，补全以下开源发布必需信息：
+  - 项目定位与核心功能总览
+  - 关键规则（重置/恢复/回廊刷新）
+  - 开发启动、构建与打包前自检命令
+  - 数据持久化与自动备份说明
+  - 目录结构与常用命令
+  - 开源发布前许可证占位说明
+
+### 今日追加（构建信息 + 打包前自检）
+- 设置页新增“构建信息”区块：显示 `版本 / 构建时间 / 作者`，便于发布包追踪。
+- 新增主进程构建元信息注入链路：
+  - `electron.vite.config.ts` 注入 `__APP_VERSION__ / __BUILD_TIME__ / __APP_AUTHOR__`。
+  - 新增 `src/shared/build-meta.ts` 统一导出构建元信息。
+  - 新增 IPC 通道 `app:get-build-info`，renderer 可直接读取。
+- 新增打包前自检脚本：`npm run check:prepackage`
+  - 依次执行 `typecheck -> build -> 产物存在性检查`。
+  - 校验文件：`out/main/index.js`、`out/preload/index.mjs`、`out/renderer/index.html`。
+
 ### 2026-02-12（续：优先级规则与紧急高亮修订）
 - 下拉录入视觉优化：
   - `select/option` 统一改为深色底（黑色系）与浅色文字，降低灰底刺眼问题。
