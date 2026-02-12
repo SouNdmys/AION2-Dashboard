@@ -699,30 +699,6 @@ export function App(): JSX.Element {
     void sync(window.aionApi.selectCharacter(characterId));
   }
 
-  function onOverviewQuickUseTicket(characterId: string, taskId: TaskId, title: string): void {
-    void sync(
-      window.aionApi.applyTaskAction({
-        characterId,
-        taskId,
-        action: "use_ticket",
-        amount: 1,
-      }),
-      `${title} +1 券`,
-    );
-  }
-
-  function onOverviewQuickComplete(characterId: string, taskId: TaskId, title: string): void {
-    void sync(
-      window.aionApi.applyTaskAction({
-        characterId,
-        taskId,
-        action: "complete_once",
-        amount: 1,
-      }),
-      `${title} -1 次`,
-    );
-  }
-
   function onSwitchToOverview(): void {
     setDashboardMode("overview");
   }
@@ -1581,9 +1557,7 @@ export function App(): JSX.Element {
                   ))}
                 </select>
               </div>
-              <p className="mt-2 text-xs text-slate-300">
-                当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页并做高频动作。
-              </p>
+              <p className="mt-2 text-xs text-slate-300">当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页。</p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 {overviewRowsFiltered.map((entry) => {
                   const filteredReadyCount =
@@ -1672,36 +1646,6 @@ export function App(): JSX.Element {
                       <div className="mt-3 grid grid-cols-1 gap-2">
                         <button className="task-btn" onClick={() => onSelectCharacter(entry.character.id)} disabled={busy}>
                           进入角色
-                        </button>
-                      </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <button
-                          className="task-btn"
-                          onClick={() => onOverviewQuickUseTicket(entry.character.id, "expedition", "远征")}
-                          disabled={busy}
-                        >
-                          +远征券
-                        </button>
-                        <button
-                          className="task-btn"
-                          onClick={() => onOverviewQuickComplete(entry.character.id, "expedition", "远征")}
-                          disabled={busy}
-                        >
-                          远征-1
-                        </button>
-                        <button
-                          className="task-btn"
-                          onClick={() => onOverviewQuickUseTicket(entry.character.id, "transcendence", "超越")}
-                          disabled={busy}
-                        >
-                          +超越券
-                        </button>
-                        <button
-                          className="task-btn"
-                          onClick={() => onOverviewQuickComplete(entry.character.id, "transcendence", "超越")}
-                          disabled={busy}
-                        >
-                          超越-1
                         </button>
                       </div>
                     </article>
