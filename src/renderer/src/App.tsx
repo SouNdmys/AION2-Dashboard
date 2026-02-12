@@ -14,7 +14,10 @@ import type { AppSettings, AppState, TaskDefinition, TaskId } from "../../shared
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 type ViewMode = "dashboard" | "settings";
 type DashboardMode = "overview" | "character";
+type OverviewSortKey = "ready" | "account" | "region";
+type OverviewTaskFilter = "all" | "dungeon" | "weekly" | "mission";
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
+const NO_REGION_FILTER = "__none__";
 
 type DialogState =
   | { kind: "complete"; taskId: TaskId; title: string; amount: string }
@@ -233,6 +236,10 @@ export function App(): JSX.Element {
     buildCorridorDraft(0, null, 0, null),
   );
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [overviewSortKey, setOverviewSortKey] = useState<OverviewSortKey>("ready");
+  const [overviewTaskFilter, setOverviewTaskFilter] = useState<OverviewTaskFilter>("all");
+  const [overviewAccountFilter, setOverviewAccountFilter] = useState<string>("all");
+  const [overviewRegionFilter, setOverviewRegionFilter] = useState<string>("all");
 
   useEffect(() => {
     void (async () => {
@@ -379,17 +386,21 @@ export function App(): JSX.Element {
             const corridorLowerTotal = 3;
             const corridorMiddleCurrent = item.activities.corridorMiddleAvailable;
             const corridorMiddleTotal = 3;
-            const readyBuckets = [
+            const dungeonReadyBuckets = [
               expeditionCurrent,
               transcendenceCurrent,
               sanctumRaidCurrent,
               sanctumBoxCurrent,
+            ].filter((value) => value > 0).length;
+            const weeklyReadyBuckets = [
               dailyDungeonCurrent,
               nightmareCurrent,
               awakeningCurrent,
               suppressionCurrent,
               miniGameCurrent,
               spiritCurrent,
+            ].filter((value) => value > 0).length;
+            const missionReadyBuckets = [
               dailyMissionCurrent,
               weeklyMissionCurrent,
               abyssLowerCurrent,
@@ -397,6 +408,7 @@ export function App(): JSX.Element {
               corridorLowerCurrent,
               corridorMiddleCurrent,
             ].filter((value) => value > 0).length;
+            const readyBuckets = dungeonReadyBuckets + weeklyReadyBuckets + missionReadyBuckets;
             return {
               character: item,
               expeditionCurrent,
@@ -435,6 +447,9 @@ export function App(): JSX.Element {
               corridorLowerTotal,
               corridorMiddleCurrent,
               corridorMiddleTotal,
+              dungeonReadyBuckets,
+              weeklyReadyBuckets,
+              missionReadyBuckets,
               readyBuckets,
             };
           });
@@ -445,6 +460,74 @@ export function App(): JSX.Element {
       })
       .filter((group) => group.characters.length > 0);
   }, [state]);
+
+  const overviewRows = useMemo(
+    () => overviewByAccount.flatMap((group) => group.characters.map((entry) => ({ ...entry, account: group.account }))),
+    [overviewByAccount],
+  );
+
+  const overviewRegionOptions = useMemo(() => {
+    if (!state) return [];
+    const set = new Set<string>();
+    for (const account of state.accounts) {
+      const value = account.regionTag?.trim();
+      if (value) {
+        set.add(value);
+      }
+    }
+    return [...set].sort((left, right) => left.localeCompare(right, "zh-CN"));
+  }, [state]);
+
+  const overviewRowsFiltered = useMemo(() => {
+    const getReadyCountByTaskFilter = (entry: (typeof overviewRows)[number]): number => {
+      if (overviewTaskFilter === "dungeon") return entry.dungeonReadyBuckets;
+      if (overviewTaskFilter === "weekly") return entry.weeklyReadyBuckets;
+      if (overviewTaskFilter === "mission") return entry.missionReadyBuckets;
+      return entry.readyBuckets;
+    };
+
+    const next = overviewRows.filter((entry) => {
+      if (overviewAccountFilter !== "all" && entry.account.id !== overviewAccountFilter) {
+        return false;
+      }
+      const region = entry.account.regionTag?.trim() ?? "";
+      if (overviewRegionFilter === NO_REGION_FILTER && region) {
+        return false;
+      }
+      if (overviewRegionFilter !== "all" && overviewRegionFilter !== NO_REGION_FILTER && region !== overviewRegionFilter) {
+        return false;
+      }
+      if (overviewTaskFilter !== "all" && getReadyCountByTaskFilter(entry) <= 0) {
+        return false;
+      }
+      return true;
+    });
+
+    return next.sort((left, right) => {
+      if (overviewSortKey === "ready") {
+        const diff = getReadyCountByTaskFilter(right) - getReadyCountByTaskFilter(left);
+        if (diff !== 0) return diff;
+        return left.character.name.localeCompare(right.character.name, "zh-CN");
+      }
+      if (overviewSortKey === "account") {
+        const accountDiff = left.account.name.localeCompare(right.account.name, "zh-CN");
+        if (accountDiff !== 0) return accountDiff;
+        const countDiff = getReadyCountByTaskFilter(right) - getReadyCountByTaskFilter(left);
+        if (countDiff !== 0) return countDiff;
+        return left.character.name.localeCompare(right.character.name, "zh-CN");
+      }
+      const leftRegion = left.account.regionTag?.trim() ?? "";
+      const rightRegion = right.account.regionTag?.trim() ?? "";
+      if (leftRegion !== rightRegion) {
+        if (!leftRegion) return 1;
+        if (!rightRegion) return -1;
+        return leftRegion.localeCompare(rightRegion, "zh-CN");
+      }
+      const countDiff = getReadyCountByTaskFilter(right) - getReadyCountByTaskFilter(left);
+      if (countDiff !== 0) return countDiff;
+      return left.character.name.localeCompare(right.character.name, "zh-CN");
+    });
+  }, [overviewRows, overviewTaskFilter, overviewAccountFilter, overviewRegionFilter, overviewSortKey]);
 
   const taskById = useMemo(() => {
     return new Map(TASK_DEFINITIONS.map((task) => [task.id, task]));
@@ -614,6 +697,30 @@ export function App(): JSX.Element {
   function onSelectCharacter(characterId: string): void {
     setDashboardMode("character");
     void sync(window.aionApi.selectCharacter(characterId));
+  }
+
+  function onOverviewQuickUseTicket(characterId: string, taskId: TaskId, title: string): void {
+    void sync(
+      window.aionApi.applyTaskAction({
+        characterId,
+        taskId,
+        action: "use_ticket",
+        amount: 1,
+      }),
+      `${title} +1 券`,
+    );
+  }
+
+  function onOverviewQuickComplete(characterId: string, taskId: TaskId, title: string): void {
+    void sync(
+      window.aionApi.applyTaskAction({
+        characterId,
+        taskId,
+        action: "complete_once",
+        amount: 1,
+      }),
+      `${title} -1 次`,
+    );
   }
 
   function onSwitchToOverview(): void {
@@ -1318,11 +1425,24 @@ export function App(): JSX.Element {
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
-                  className={`pill-btn ${viewMode === "dashboard" ? "bg-white/20" : ""}`}
-                  onClick={() => setViewMode("dashboard")}
+                  className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "overview" ? "bg-white/20" : ""}`}
+                  onClick={() => {
+                    setViewMode("dashboard");
+                    setDashboardMode("overview");
+                  }}
                   disabled={busy}
                 >
-                  仪表盘
+                  角色总览
+                </button>
+                <button
+                  className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "character" ? "bg-white/20" : ""}`}
+                  onClick={() => {
+                    setViewMode("dashboard");
+                    setDashboardMode("character");
+                  }}
+                  disabled={busy}
+                >
+                  角色操作
                 </button>
                 <button
                   className={`pill-btn ${viewMode === "settings" ? "bg-white/20" : ""}`}
@@ -1331,24 +1451,6 @@ export function App(): JSX.Element {
                 >
                   设置页
                 </button>
-                {viewMode === "dashboard" ? (
-                  <>
-                    <button
-                      className={`pill-btn ${dashboardMode === "overview" ? "bg-white/20" : ""}`}
-                      onClick={onSwitchToOverview}
-                      disabled={busy}
-                    >
-                      角色总览
-                    </button>
-                    <button
-                      className={`pill-btn ${dashboardMode === "character" ? "bg-white/20" : ""}`}
-                      onClick={() => setDashboardMode("character")}
-                      disabled={busy}
-                    >
-                      角色操作
-                    </button>
-                  </>
-                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <button className="pill-btn" onClick={onUndoSingleStep} disabled={busy || state.history.length === 0}>
@@ -1422,88 +1524,194 @@ export function App(): JSX.Element {
 
           {viewMode === "dashboard" && dashboardMode === "overview" ? (
             <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
-              <div className="mb-3 flex items-end justify-between">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Role Overview</p>
                   <h3 className="mt-1 text-xl font-semibold">角色概览总览</h3>
                 </div>
-                <p className="text-xs text-slate-300">点击角色卡片可进入沉浸式记录模式</p>
+                <p className="text-xs text-slate-300">按优先级筛选后，直接进入角色或做快捷操作</p>
               </div>
-              <div className="space-y-4">
-                {overviewByAccount.map((group) => (
-                  <div key={group.account.id} className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                    <p className="text-sm font-semibold">
-                      {group.account.name}
-                      {group.account.regionTag ? ` (${group.account.regionTag})` : ""}
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      {group.characters.map((entry) => (
+              <div className="grid grid-cols-4 gap-2">
+                <select
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                  value={overviewSortKey}
+                  onChange={(event) => setOverviewSortKey(event.target.value as OverviewSortKey)}
+                  disabled={busy}
+                >
+                  <option value="ready">按可执行项排序</option>
+                  <option value="account">按账号排序</option>
+                  <option value="region">按大区排序</option>
+                </select>
+                <select
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                  value={overviewTaskFilter}
+                  onChange={(event) => setOverviewTaskFilter(event.target.value as OverviewTaskFilter)}
+                  disabled={busy}
+                >
+                  <option value="all">任务类型: 全部</option>
+                  <option value="dungeon">任务类型: 副本</option>
+                  <option value="weekly">任务类型: 周常</option>
+                  <option value="mission">任务类型: 使命</option>
+                </select>
+                <select
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                  value={overviewAccountFilter}
+                  onChange={(event) => setOverviewAccountFilter(event.target.value)}
+                  disabled={busy}
+                >
+                  <option value="all">账号: 全部</option>
+                  {state.accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                  value={overviewRegionFilter}
+                  onChange={(event) => setOverviewRegionFilter(event.target.value)}
+                  disabled={busy}
+                >
+                  <option value="all">大区: 全部</option>
+                  <option value={NO_REGION_FILTER}>大区: 未设置</option>
+                  {overviewRegionOptions.map((region) => (
+                    <option key={region} value={region}>
+                      大区: {region}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-2 text-xs text-slate-300">
+                当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页并做高频动作。
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {overviewRowsFiltered.map((entry) => {
+                  const filteredReadyCount =
+                    overviewTaskFilter === "dungeon"
+                      ? entry.dungeonReadyBuckets
+                      : overviewTaskFilter === "weekly"
+                        ? entry.weeklyReadyBuckets
+                        : overviewTaskFilter === "mission"
+                          ? entry.missionReadyBuckets
+                          : entry.readyBuckets;
+                  return (
+                    <article
+                      key={entry.character.id}
+                      className="rounded-2xl border border-white/15 bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{entry.character.name}</p>
+                          <p className="text-xs text-slate-300">
+                            {entry.account.name}
+                            {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
+                          </p>
+                        </div>
+                        <span className="text-xs text-cyan-200">
+                          可执行项 {filteredReadyCount}
+                          {overviewTaskFilter === "all"
+                            ? ""
+                            : overviewTaskFilter === "dungeon"
+                              ? " / 副本"
+                              : overviewTaskFilter === "weekly"
+                                ? " / 周常"
+                                : " / 使命"}
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal },
+                            { label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal },
+                            { label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal },
+                            { label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal },
+                          ].map((metric) => (
+                            <span
+                              key={`dungeon-${entry.character.id}-${metric.label}`}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                            >
+                              {metric.label} {formatCounter(metric.current, metric.total)}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal },
+                            { label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal },
+                            { label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal },
+                            { label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal },
+                            { label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal },
+                            { label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal },
+                          ].map((metric) => (
+                            <span
+                              key={`weekly-${entry.character.id}-${metric.label}`}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                            >
+                              {metric.label} {formatCounter(metric.current, metric.total)}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal },
+                            { label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal },
+                            { label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal },
+                            { label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal },
+                            { label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal },
+                            { label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal },
+                          ].map((metric) => (
+                            <span
+                              key={`mission-${entry.character.id}-${metric.label}`}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                            >
+                              {metric.label} {formatCounter(metric.current, metric.total)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-2">
+                        <button className="task-btn" onClick={() => onSelectCharacter(entry.character.id)} disabled={busy}>
+                          进入角色
+                        </button>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <button
-                          key={entry.character.id}
-                          className="rounded-2xl border border-white/15 bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10"
-                          onClick={() => onSelectCharacter(entry.character.id)}
+                          className="task-btn"
+                          onClick={() => onOverviewQuickUseTicket(entry.character.id, "expedition", "远征")}
                           disabled={busy}
                         >
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold">{entry.character.name}</p>
-                            <span className="text-xs text-cyan-200">可执行项 {entry.readyBuckets}</span>
-                          </div>
-                          <div className="mt-2 space-y-2">
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal },
-                                { label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal },
-                                { label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal },
-                                { label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal },
-                              ].map((metric) => (
-                                <span
-                                  key={`dungeon-${metric.label}`}
-                                  className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
-                                >
-                                  {metric.label} {formatCounter(metric.current, metric.total)}
-                                </span>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal },
-                                { label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal },
-                                { label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal },
-                                { label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal },
-                                { label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal },
-                                { label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal },
-                              ].map((metric) => (
-                                <span
-                                  key={`weekly-${metric.label}`}
-                                  className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
-                                >
-                                  {metric.label} {formatCounter(metric.current, metric.total)}
-                                </span>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal },
-                                { label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal },
-                                { label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal },
-                                { label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal },
-                                { label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal },
-                                { label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal },
-                              ].map((metric) => (
-                                <span
-                                  key={`mission-${metric.label}`}
-                                  className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
-                                >
-                                  {metric.label} {formatCounter(metric.current, metric.total)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
+                          +远征券
                         </button>
-                      ))}
-                    </div>
+                        <button
+                          className="task-btn"
+                          onClick={() => onOverviewQuickComplete(entry.character.id, "expedition", "远征")}
+                          disabled={busy}
+                        >
+                          远征-1
+                        </button>
+                        <button
+                          className="task-btn"
+                          onClick={() => onOverviewQuickUseTicket(entry.character.id, "transcendence", "超越")}
+                          disabled={busy}
+                        >
+                          +超越券
+                        </button>
+                        <button
+                          className="task-btn"
+                          onClick={() => onOverviewQuickComplete(entry.character.id, "transcendence", "超越")}
+                          disabled={busy}
+                        >
+                          超越-1
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+                {overviewRowsFiltered.length === 0 ? (
+                  <div className="col-span-2 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                    当前筛选条件下没有可显示角色。
                   </div>
-                ))}
+                ) : null}
               </div>
             </article>
           ) : null}

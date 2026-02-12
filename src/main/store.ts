@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { app, dialog } from "electron";
@@ -36,6 +37,8 @@ const SETTINGS_MAX_CAP = 9999;
 const SETTINGS_MAX_THRESHOLD = 999999;
 const IMPORT_EXPORT_SCHEMA_VERSION = 1;
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
+const AUTO_BACKUP_META_KEY = "lastAutoBackupDate";
+const AUTO_BACKUP_FOLDER_NAME = "aion2-dashboard-auto-backups";
 
 const nowIso = new Date().toISOString();
 const firstAccount = createDefaultAccount("账号 1", randomUUID());
@@ -52,6 +55,14 @@ const store = new Store<Record<string, unknown>>({
     accounts: [firstAccount],
     characters: [firstCharacter],
     history: [],
+  },
+});
+
+const metaStore = new Store<Record<string, unknown>>({
+  name: "aion2-dashboard-meta",
+  clearInvalidConfig: true,
+  defaults: {
+    [AUTO_BACKUP_META_KEY]: "",
   },
 });
 
@@ -558,13 +569,42 @@ function buildDefaultExportPath(): string {
   return join(app.getPath("documents"), `aion2-dashboard-backup-${timestamp}.json`);
 }
 
+function getLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function maybeCreateDailyAutoBackup(state: AppState): void {
+  const now = new Date();
+  const todayKey = getLocalDateKey(now);
+  const lastBackupDate = metaStore.get(AUTO_BACKUP_META_KEY);
+  if (typeof lastBackupDate === "string" && lastBackupDate === todayKey) {
+    return;
+  }
+
+  try {
+    const backupDir = join(app.getPath("documents"), AUTO_BACKUP_FOLDER_NAME);
+    mkdirSync(backupDir, { recursive: true });
+    const timestamp = now.toISOString().replace(/[:.]/g, "-");
+    const backupPath = join(backupDir, `aion2-dashboard-auto-${timestamp}.json`);
+    writeFileSync(backupPath, JSON.stringify(buildExportPayload(state), null, 2), "utf-8");
+    metaStore.set(AUTO_BACKUP_META_KEY, todayKey);
+  } catch (error) {
+    console.error("[aion2-dashboard] auto backup failed", error);
+  }
+}
+
 export function getAppState(): AppState {
   const current = normalizeState(store.store);
   const refreshed = {
     ...current,
     characters: refreshAllCharacters(current.characters, current.settings),
   };
-  return persistState(refreshed);
+  const persisted = persistState(refreshed);
+  maybeCreateDailyAutoBackup(persisted);
+  return persisted;
 }
 
 export function addAccount(name: string, regionTag?: string): AppState {
