@@ -1686,12 +1686,44 @@ export function App(): JSX.Element {
     })();
   }
 
-  if (!state || !selected || !settingsDraft) {
+  if (!state || !settingsDraft) {
     return (
       <main className="min-h-screen p-8 text-white">
         <div className="glass-panel mx-auto mt-20 max-w-md rounded-2xl p-6 text-center">
           <p className="text-sm text-slate-200">正在加载 AION 2 Dashboard...</p>
           {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
+        </div>
+      </main>
+    );
+  }
+
+  if (!selected) {
+    return (
+      <main className="min-h-screen p-8 text-slate-100">
+        <div className="glass-panel mx-auto mt-16 max-w-xl rounded-3xl bg-[rgba(20,20,20,0.58)] p-6 backdrop-blur-2xl backdrop-saturate-150">
+          <h1 className="text-xl font-semibold">AION 2 Dashboard</h1>
+          <p className="mt-2 text-sm text-slate-300">当前没有任何账号或角色数据。请先创建你的第一个账号。</p>
+          <div className="mt-4 space-y-2">
+            <input
+              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              placeholder="新账号名称"
+              value={newAccountName}
+              onChange={(event) => setNewAccountName(event.target.value)}
+              disabled={busy}
+            />
+            <input
+              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              placeholder="大区(可选)"
+              value={newAccountRegion}
+              onChange={(event) => setNewAccountRegion(event.target.value)}
+              disabled={busy}
+            />
+            <button className="task-btn w-full" onClick={onAddAccount} disabled={busy || !newAccountName.trim()}>
+              创建第一个账号
+            </button>
+          </div>
+          {infoMessage ? <p className="mt-3 text-xs text-emerald-300">{infoMessage}</p> : null}
+          {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
         </div>
       </main>
     );

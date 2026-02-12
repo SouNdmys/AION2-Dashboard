@@ -100,6 +100,23 @@
 ### 校验
 - 已执行 `npm run typecheck`，通过。
 
+### 今日追加（品牌图标 + 首启空状态 + 菜单栏精简）
+- 图标接入：
+  - 使用仓库根目录 `icon.png` 作为应用图标来源。
+  - 新增 `scripts/generate-icon.ps1`，打包前自动生成 `build/icon.ico`。
+  - `dist:win` 流程调整为先执行 `prepare:icon`，再 `check:prepackage + electron-builder`。
+  - `electron-builder` 配置接入 `build/icon.ico`（安装包/卸载器/可执行文件图标）。
+  - 主进程窗口增加 `icon` 路径解析（开发/生产均可加载）。
+- 首启数据策略改造：
+  - `store` 默认数据从“预置账号+角色”改为“空账号/空角色”。
+  - renderer 增加“空状态引导页”，首开时引导先创建第一个账号。
+  - 确保最终发给用户时不包含任何预录入角色信息。
+- 顶部 Electron 菜单栏：
+  - 生产环境下隐藏默认菜单（保留开发环境菜单便于调试）。
+  - 非 macOS 平台在生产环境执行 `Menu.setApplicationMenu(null)` 并隐藏菜单栏。
+- 打包验证：
+  - 已执行 `npm run dist:win`，通过。
+
 ### 今日追加（开源 README 整理）
 - 作者标识更新为 `SouNd`（用于设置页构建信息展示）。
 - 重写 `README.md`，补全以下开源发布必需信息：

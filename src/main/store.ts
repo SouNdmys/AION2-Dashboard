@@ -44,20 +44,16 @@ const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const AUTO_BACKUP_META_KEY = "lastAutoBackupDate";
 const AUTO_BACKUP_FOLDER_NAME = "aion2-dashboard-auto-backups";
 
-const nowIso = new Date().toISOString();
-const firstAccount = createDefaultAccount("账号 1", randomUUID());
-const firstCharacter = createDefaultCharacter("Character 1", nowIso, randomUUID(), firstAccount.id);
-
 const store = new Store<Record<string, unknown>>({
   name: "aion2-dashboard",
   clearInvalidConfig: true,
   defaults: {
     version: APP_STATE_VERSION,
-    selectedAccountId: firstAccount.id,
-    selectedCharacterId: firstCharacter.id,
+    selectedAccountId: null,
+    selectedCharacterId: null,
     settings: DEFAULT_SETTINGS,
-    accounts: [firstAccount],
-    characters: [firstCharacter],
+    accounts: [],
+    characters: [],
     history: [],
   },
 });
@@ -403,25 +399,25 @@ function alignAccountExtraAodeCharacter(accounts: AccountState[], characters: Ch
 
 function normalizeSnapshot(raw: unknown): AppStateSnapshot {
   const entity = (raw ?? {}) as Record<string, unknown>;
-  const now = new Date().toISOString();
   const settings = normalizeSettings(entity.settings);
   const rawAccounts = Array.isArray(entity.accounts) ? entity.accounts : [];
-  const accounts =
-    rawAccounts.length > 0
-      ? rawAccounts.map((item, index) => normalizeAccount(item, index))
-      : [createDefaultAccount("账号 1", randomUUID())];
-  const fallbackAccountId = accounts[0].id;
+  let accounts = rawAccounts.length > 0 ? rawAccounts.map((item, index) => normalizeAccount(item, index)) : [];
   const rawCharacters = Array.isArray(entity.characters) ? entity.characters : [];
+  if (accounts.length === 0 && rawCharacters.length > 0) {
+    accounts = [createDefaultAccount("账号 1", randomUUID())];
+  }
+  const fallbackAccountId = accounts[0]?.id ?? null;
   const charactersRaw =
-    rawCharacters.length > 0
+    rawCharacters.length > 0 && fallbackAccountId
       ? rawCharacters.map((item, index) =>
           applyConfiguredActivityCaps(normalizeCharacter(item, `Character ${index + 1}`, fallbackAccountId), settings),
         )
-      : [createDefaultCharacter("Character 1", now, randomUUID(), fallbackAccountId)];
+      : [];
   const accountIds = new Set(accounts.map((item) => item.id));
+  const safeFallbackAccountId = fallbackAccountId ?? "";
   const characters = charactersRaw.map((item) => ({
     ...item,
-    accountId: accountIds.has(item.accountId) ? item.accountId : fallbackAccountId,
+    accountId: accountIds.has(item.accountId) ? item.accountId : safeFallbackAccountId,
   }));
   const accountsAligned = alignAccountExtraAodeCharacter(accounts, characters);
   const selectedCharacterIdRaw = entity.selectedCharacterId;
@@ -480,26 +476,26 @@ function normalizeHistory(raw: unknown): OperationLogEntry[] {
 
 function normalizeState(raw: unknown): AppState {
   const entity = (raw ?? {}) as Record<string, unknown>;
-  const now = new Date().toISOString();
   const sourceVersion = typeof entity.version === "number" ? Math.floor(entity.version) : 0;
   const settings = normalizeSettings(entity.settings);
   const rawAccounts = Array.isArray(entity.accounts) ? entity.accounts : [];
-  const accounts =
-    rawAccounts.length > 0
-      ? rawAccounts.map((item, index) => normalizeAccount(item, index))
-      : [createDefaultAccount("账号 1", randomUUID())];
-  const fallbackAccountId = accounts[0].id;
-  const accountIds = new Set(accounts.map((item) => item.id));
+  let accounts = rawAccounts.length > 0 ? rawAccounts.map((item, index) => normalizeAccount(item, index)) : [];
   const rawCharacters = Array.isArray(entity.characters) ? entity.characters : [];
+  if (accounts.length === 0 && rawCharacters.length > 0) {
+    accounts = [createDefaultAccount("账号 1", randomUUID())];
+  }
+  const fallbackAccountId = accounts[0]?.id ?? null;
+  const accountIds = new Set(accounts.map((item) => item.id));
   let charactersRaw =
-    rawCharacters.length > 0
+    rawCharacters.length > 0 && fallbackAccountId
       ? rawCharacters.map((item, index) =>
           applyConfiguredActivityCaps(normalizeCharacter(item, `Character ${index + 1}`, fallbackAccountId), settings),
         )
-      : [createDefaultCharacter("Character 1", now, randomUUID(), fallbackAccountId)];
+      : [];
+  const safeFallbackAccountId = fallbackAccountId ?? "";
   let characters = charactersRaw.map((item) => ({
     ...item,
-    accountId: accountIds.has(item.accountId) ? item.accountId : fallbackAccountId,
+    accountId: accountIds.has(item.accountId) ? item.accountId : safeFallbackAccountId,
   }));
 
   if (sourceVersion < 4) {
@@ -511,7 +507,7 @@ function normalizeState(raw: unknown): AppState {
   const selectedCharacterId =
     typeof selectedCharacterIdRaw === "string" && characters.some((item) => item.id === selectedCharacterIdRaw)
       ? selectedCharacterIdRaw
-      : characters[0].id;
+      : characters[0]?.id ?? null;
   const selectedCharacter = characters.find((item) => item.id === selectedCharacterId) ?? characters[0];
   const selectedAccountIdRaw = entity.selectedAccountId;
   const selectedAccountId =
@@ -746,6 +742,9 @@ export function addCharacter(name: string, accountId?: string): AppState {
   return commitMutation(
     { action: "新增角色", description: nextName || "未命名角色" },
     (draft) => {
+      if (draft.accounts.length === 0) {
+        throw new Error("请先新增账号");
+      }
       const targetAccountId =
         accountId && draft.accounts.some((item) => item.id === accountId)
           ? accountId

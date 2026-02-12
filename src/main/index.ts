@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
@@ -21,12 +21,15 @@ function resolvePreloadPath(): string {
 }
 
 function createWindow(): void {
+  const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
   const mainWindow = new BrowserWindow({
     width: 1420,
     height: 920,
     minWidth: 1180,
     minHeight: 760,
+    autoHideMenuBar: !isDev,
     backgroundColor: "#0A0A0A00",
+    icon: resolveAppIconPath(),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     vibrancy: process.platform === "darwin" ? "under-window" : undefined,
     webPreferences: {
@@ -42,6 +45,20 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
+
+  if (!isDev && process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    mainWindow.setMenuBarVisibility(false);
+  }
+}
+
+function resolveAppIconPath(): string | undefined {
+  const candidates = [
+    join(process.cwd(), "icon.png"),
+    join(process.resourcesPath, "icon.png"),
+    join(__dirname, "../../icon.png"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate));
 }
 
 app.whenReady().then(() => {

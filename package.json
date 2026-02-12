@@ -12,7 +12,8 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "check:prepackage": "node scripts/prepackage-check.mjs",
-    "dist:win": "npm run check:prepackage && electron-builder --win nsis portable"
+    "prepare:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1",
+    "dist:win": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable"
   },
   "dependencies": {
     "electron-store": "^10.0.1",
@@ -42,11 +43,19 @@
     "files": [
       "out/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "icon.png",
+        "to": "icon.png"
+      }
     ],
     "asar": true,
     "win": {
       "signAndEditExecutable": false,
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -65,7 +74,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   }
 }
