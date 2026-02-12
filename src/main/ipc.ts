@@ -22,6 +22,7 @@ import {
   updateArtifactStatus,
   updateEnergySegments,
   updateRaidCounts,
+  updateWeeklyCompletions,
 } from "./store";
 
 export function registerIpcHandlers(): void {
@@ -108,5 +109,10 @@ export function registerIpcHandlers(): void {
       },
     ) =>
       updateRaidCounts(payload.characterId, payload),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.updateWeeklyCompletions,
+    (_event, payload: { characterId: string; expeditionCompleted?: number; transcendenceCompleted?: number }) =>
+      updateWeeklyCompletions(payload.characterId, payload),
   );
 }

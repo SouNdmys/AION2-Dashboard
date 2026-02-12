@@ -19,4 +19,5 @@ export const IPC_CHANNELS = {
   applyCorridorCompletion: "character:apply-corridor-completion",
   updateEnergySegments: "character:update-energy-segments",
   updateRaidCounts: "character:update-raid-counts",
+  updateWeeklyCompletions: "character:update-weekly-completions",
 } as const;

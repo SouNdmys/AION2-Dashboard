@@ -258,6 +258,8 @@ export function App(): JSX.Element {
   const [quickTaskId, setQuickTaskId] = useState<TaskId>("expedition");
   const [quickAction, setQuickAction] = useState<TaskActionKind>("complete_once");
   const [quickAmount, setQuickAmount] = useState("1");
+  const [weeklyExpeditionCompletedInput, setWeeklyExpeditionCompletedInput] = useState("0");
+  const [weeklyTranscendenceCompletedInput, setWeeklyTranscendenceCompletedInput] = useState("0");
 
   useEffect(() => {
     void (async () => {
@@ -349,6 +351,12 @@ export function App(): JSX.Element {
     selected?.activities.corridorMiddleAvailable,
     selected?.activities.corridorMiddleNextAt,
   ]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setWeeklyExpeditionCompletedInput(String(selected.stats.completions.expedition));
+    setWeeklyTranscendenceCompletedInput(String(selected.stats.completions.transcendence));
+  }, [selected?.id, selected?.stats.completions.expedition, selected?.stats.completions.transcendence]);
 
   const summary = useMemo(() => {
     if (!state) return [];
@@ -983,6 +991,23 @@ export function App(): JSX.Element {
     const ok = window.confirm("确认重置本周收益统计？仅重置统计，不影响任务进度。");
     if (!ok) return;
     void sync(window.aionApi.resetWeeklyStats());
+  }
+
+  function onSaveWeeklyCompletions(): void {
+    if (!selected) return;
+    const expeditionCompleted = toInt(weeklyExpeditionCompletedInput);
+    const transcendenceCompleted = toInt(weeklyTranscendenceCompletedInput);
+    if (expeditionCompleted === null || transcendenceCompleted === null || expeditionCompleted < 0 || transcendenceCompleted < 0) {
+      setError("周统计次数必须是大于等于 0 的整数");
+      return;
+    }
+    void sync(
+      window.aionApi.updateWeeklyCompletions(selected.id, {
+        expeditionCompleted,
+        transcendenceCompleted,
+      }),
+      "已校准当前角色周统计次数",
+    );
   }
 
   function onUndoSingleStep(): void {
@@ -1911,6 +1936,29 @@ export function App(): JSX.Element {
               <div className="data-pill">本轮统计起点: {new Date(selected.stats.cycleStartedAt).toLocaleString()}</div>
             </div>
             <p className="mt-2 text-xs text-slate-300">周收益统计会在每周三 05:00 自动重置，也可手动重置。</p>
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs font-semibold tracking-wide text-slate-200">当前角色周次数校准（远征/超越）</p>
+              <p className="mt-1 text-xs text-slate-300">用于误清空后回填游戏内真实已完成次数。</p>
+              <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
+                <input
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={weeklyExpeditionCompletedInput}
+                  onChange={(event) => setWeeklyExpeditionCompletedInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="远征已完成次数"
+                />
+                <input
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={weeklyTranscendenceCompletedInput}
+                  onChange={(event) => setWeeklyTranscendenceCompletedInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="超越已完成次数"
+                />
+                <button className="task-btn px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
+                  保存校准
+                </button>
+              </div>
+            </div>
             {expeditionOverRewardThreshold ? (
               <p className="mt-3 text-xs text-amber-300">
                 警示: 远征已超过阈值 {expeditionWarnThreshold}，后续副本奖励将进入折扣区间（金币收益会下降）。

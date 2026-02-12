@@ -1030,6 +1030,40 @@ export function updateRaidCounts(
   );
 }
 
+export function updateWeeklyCompletions(
+  characterId: string,
+  payload: { expeditionCompleted?: number; transcendenceCompleted?: number },
+): AppState {
+  return commitMutation(
+    { action: "校准周统计次数", characterId },
+    (draft) => {
+      draft.characters = draft.characters.map((item) => {
+        if (item.id !== characterId) {
+          return item;
+        }
+        return {
+          ...item,
+          stats: {
+            ...item.stats,
+            completions: {
+              ...item.stats.completions,
+              expedition:
+                typeof payload.expeditionCompleted === "number"
+                  ? clamp(payload.expeditionCompleted, 0, SETTINGS_MAX_THRESHOLD)
+                  : item.stats.completions.expedition,
+              transcendence:
+                typeof payload.transcendenceCompleted === "number"
+                  ? clamp(payload.transcendenceCompleted, 0, SETTINGS_MAX_THRESHOLD)
+                  : item.stats.completions.transcendence,
+            },
+          },
+        };
+      });
+      return draft;
+    },
+  );
+}
+
 export function resetWeeklyStats(): AppState {
   return commitMutation(
     { action: "重置周收益统计" },

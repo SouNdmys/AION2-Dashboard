@@ -69,6 +69,10 @@ const api = {
       sanctumBoxRemaining?: number;
     },
   ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateRaidCounts, { characterId, ...payload }),
+  updateWeeklyCompletions: (
+    characterId: string,
+    payload: { expeditionCompleted?: number; transcendenceCompleted?: number },
+  ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateWeeklyCompletions, { characterId, ...payload }),
 };
 
 contextBridge.exposeInMainWorld("aionApi", api);
