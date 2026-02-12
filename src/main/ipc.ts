@@ -20,6 +20,7 @@ import {
   undoOperations,
   updateSettings,
   updateArtifactStatus,
+  updateAodePlan,
   updateEnergySegments,
   updateRaidCounts,
   updateWeeklyCompletions,
@@ -114,5 +115,10 @@ export function registerIpcHandlers(): void {
     IPC_CHANNELS.updateWeeklyCompletions,
     (_event, payload: { characterId: string; expeditionCompleted?: number; transcendenceCompleted?: number }) =>
       updateWeeklyCompletions(payload.characterId, payload),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.updateAodePlan,
+    (_event, payload: { characterId: string; weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean }) =>
+      updateAodePlan(payload.characterId, payload),
   );
 }

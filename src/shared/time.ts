@@ -1,4 +1,5 @@
 import { DAILY_RESET_HOUR, WEEKLY_RESET_DAY, WEEKLY_RESET_HOUR } from "./constants";
+import { CORRIDOR_UNIFIED_INTERVAL_HOURS, CORRIDOR_UNIFIED_REFRESH_HOUR } from "./constants";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -110,4 +111,16 @@ export function getNextScheduledTick(from: Date, hours: readonly number[]): Date
   nextDay.setDate(nextDay.getDate() + 1);
   nextDay.setHours(sortedHours[0] ?? 0, 0, 0, 0);
   return nextDay;
+}
+
+export function getNextUnifiedCorridorRefresh(from = new Date()): Date {
+  const base = new Date(from);
+  base.setHours(CORRIDOR_UNIFIED_REFRESH_HOUR, 0, 0, 0);
+  if (from <= base) {
+    return base;
+  }
+  const intervalMs = CORRIDOR_UNIFIED_INTERVAL_HOURS * 60 * 60 * 1000;
+  const diffMs = from.getTime() - base.getTime();
+  const steps = Math.ceil(diffMs / intervalMs);
+  return new Date(base.getTime() + steps * intervalMs);
 }

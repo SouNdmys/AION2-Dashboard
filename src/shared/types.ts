@@ -87,6 +87,12 @@ export interface AccountState {
   id: string;
   name: string;
   regionTag?: string;
+  extraAodeCharacterId?: string;
+}
+
+export interface AodeEnergyPlanState {
+  weeklyPurchaseUsed: number;
+  weeklyConvertUsed: number;
 }
 
 export interface WeeklyStats {
@@ -102,6 +108,7 @@ export interface CharacterState {
   classTag?: string;
   avatarSeed: string;
   energy: EnergyState;
+  aodePlan: AodeEnergyPlanState;
   missions: MissionState;
   activities: ActivityState;
   stats: WeeklyStats;

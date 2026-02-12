@@ -120,3 +120,14 @@ body {
   cursor: not-allowed;
 }
 
+@media (min-width: 1900px) {
+  html {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 2500px) {
+  html {
+    font-size: 18px;
+  }
+}

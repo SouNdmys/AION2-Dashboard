@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { EXPEDITION_SCHEDULE_HOURS, TASK_DEFINITIONS, TRANSCENDENCE_SCHEDULE_HOURS } from "../../shared/constants";
+import {
+  AODE_POINT_PER_OPERATION,
+  AODE_WEEKLY_BASE_CONVERT_MAX,
+  AODE_WEEKLY_BASE_PURCHASE_MAX,
+  AODE_WEEKLY_EXTRA_CONVERT_MAX,
+  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
+  EXPEDITION_SCHEDULE_HOURS,
+  TASK_DEFINITIONS,
+  TRANSCENDENCE_SCHEDULE_HOURS,
+} from "../../shared/constants";
 import {
   buildCharacterSummary,
   estimateCharacterGold,
@@ -8,7 +17,7 @@ import {
   getTaskRemaining,
   getTotalEnergy,
 } from "../../shared/engine";
-import { getNextDailyReset, getNextScheduledTick, getNextWeeklyReset } from "../../shared/time";
+import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
@@ -27,11 +36,7 @@ type DialogState =
   | {
       kind: "corridor_sync";
       lowerAvailable: string;
-      lowerHours: string;
-      lowerMinutes: string;
       middleAvailable: string;
-      middleHours: string;
-      middleMinutes: string;
     }
   | { kind: "corridor_complete"; lane: "lower" | "middle"; amount: string }
   | {
@@ -61,11 +66,7 @@ interface SettingsDraft {
 
 interface CorridorDraft {
   lowerAvailable: string;
-  lowerHours: string;
-  lowerMinutes: string;
   middleAvailable: string;
-  middleHours: string;
-  middleMinutes: string;
   completeLane: "lower" | "middle";
   completeAmount: string;
 }
@@ -151,6 +152,34 @@ function formatDuration(ms: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatDurationWithDays(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return "0天0小时0分0秒";
+  }
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / (24 * 3600));
+  const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${days}天${hours}小时${minutes}分${seconds}秒`;
+}
+
+function getCharacterAodeLimits(state: AppState, characterId: string): { purchaseLimit: number; convertLimit: number } {
+  const character = state.characters.find((item) => item.id === characterId);
+  if (!character) {
+    return {
+      purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX,
+      convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX,
+    };
+  }
+  const account = state.accounts.find((item) => item.id === character.accountId);
+  const isExtra = account?.extraAodeCharacterId === character.id;
+  return {
+    purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX + (isExtra ? AODE_WEEKLY_EXTRA_PURCHASE_MAX : 0),
+    convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX + (isExtra ? AODE_WEEKLY_EXTRA_CONVERT_MAX : 0),
+  };
+}
+
 function formatDateTime(date: Date): string {
   return date.toLocaleString("zh-CN", {
     month: "2-digit",
@@ -161,56 +190,13 @@ function formatDateTime(date: Date): string {
   });
 }
 
-function getRemainingParts(nextAt: string | null): { hours: number; minutes: number } {
-  if (!nextAt) {
-    return { hours: 48, minutes: 0 };
-  }
-  const targetMs = new Date(nextAt).getTime();
-  if (Number.isNaN(targetMs)) {
-    return { hours: 48, minutes: 0 };
-  }
-  const maxMs = 48 * 60 * 60 * 1000;
-  const remainMs = Math.max(0, Math.min(maxMs, targetMs - Date.now()));
-  const totalMinutes = Math.floor(remainMs / (60 * 1000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return { hours, minutes };
-}
-
-function buildCorridorDraft(
-  lowerAvailable: number,
-  lowerNextAt: string | null,
-  middleAvailable: number,
-  middleNextAt: string | null,
-): CorridorDraft {
-  const lower = getRemainingParts(lowerNextAt);
-  const middle = getRemainingParts(middleNextAt);
+function buildCorridorDraft(lowerAvailable: number, middleAvailable: number): CorridorDraft {
   return {
     lowerAvailable: String(lowerAvailable),
-    lowerHours: String(lower.hours),
-    lowerMinutes: String(lower.minutes),
     middleAvailable: String(middleAvailable),
-    middleHours: String(middle.hours),
-    middleMinutes: String(middle.minutes),
     completeLane: "lower",
     completeAmount: "1",
   };
-}
-
-function buildNextAtFromCountdown(hoursRaw: string, minutesRaw: string): string | null {
-  const hours = toInt(hoursRaw);
-  const minutes = toInt(minutesRaw);
-  if (hours === null || minutes === null) {
-    return null;
-  }
-  if (hours < 0 || hours > 48 || minutes < 0 || minutes > 60) {
-    return null;
-  }
-  if (hours * 60 + minutes > 48 * 60) {
-    return null;
-  }
-  const totalMs = (hours * 60 + minutes) * 60 * 1000;
-  return new Date(Date.now() + totalMs).toISOString();
 }
 
 function formatCounter(current: number, total: number): string {
@@ -247,7 +233,7 @@ export function App(): JSX.Element {
   const [undoSteps, setUndoSteps] = useState("2");
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft | null>(null);
   const [corridorDraft, setCorridorDraft] = useState<CorridorDraft>(
-    buildCorridorDraft(0, null, 0, null),
+    buildCorridorDraft(0, 0),
   );
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [overviewSortKey, setOverviewSortKey] = useState<OverviewSortKey>("ready");
@@ -260,6 +246,8 @@ export function App(): JSX.Element {
   const [quickAmount, setQuickAmount] = useState("1");
   const [weeklyExpeditionCompletedInput, setWeeklyExpeditionCompletedInput] = useState("0");
   const [weeklyTranscendenceCompletedInput, setWeeklyTranscendenceCompletedInput] = useState("0");
+  const [aodePurchaseUsedInput, setAodePurchaseUsedInput] = useState("0");
+  const [aodeConvertUsedInput, setAodeConvertUsedInput] = useState("0");
 
   useEffect(() => {
     void (async () => {
@@ -307,6 +295,18 @@ export function App(): JSX.Element {
     return state.characters.filter((item) => item.accountId === selectedAccount.id);
   }, [state, selectedAccount]);
 
+  const selectedAodeLimits = useMemo(() => {
+    if (!state || !selected) {
+      return { purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX, convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX };
+    }
+    return getCharacterAodeLimits(state, selected.id);
+  }, [state, selected?.id]);
+
+  const selectedAccountExtraCharacterName = useMemo(() => {
+    if (!state || !selectedAccount?.extraAodeCharacterId) return null;
+    return state.characters.find((item) => item.id === selectedAccount.extraAodeCharacterId)?.name ?? null;
+  }, [state, selectedAccount?.extraAodeCharacterId]);
+
   useEffect(() => {
     setRenameName(selected?.name ?? "");
   }, [selected?.id, selected?.name]);
@@ -336,20 +336,13 @@ export function App(): JSX.Element {
     if (!selected) return;
     setCorridorDraft((prev) => ({
       ...prev,
-      ...buildCorridorDraft(
-        selected.activities.corridorLowerAvailable,
-        selected.activities.corridorLowerNextAt,
-        selected.activities.corridorMiddleAvailable,
-        selected.activities.corridorMiddleNextAt,
-      ),
+      ...buildCorridorDraft(selected.activities.corridorLowerAvailable, selected.activities.corridorMiddleAvailable),
       completeAmount: prev.completeAmount,
     }));
   }, [
     selected?.id,
     selected?.activities.corridorLowerAvailable,
-    selected?.activities.corridorLowerNextAt,
     selected?.activities.corridorMiddleAvailable,
-    selected?.activities.corridorMiddleNextAt,
   ]);
 
   useEffect(() => {
@@ -357,6 +350,12 @@ export function App(): JSX.Element {
     setWeeklyExpeditionCompletedInput(String(selected.stats.completions.expedition));
     setWeeklyTranscendenceCompletedInput(String(selected.stats.completions.transcendence));
   }, [selected?.id, selected?.stats.completions.expedition, selected?.stats.completions.transcendence]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setAodePurchaseUsedInput(String(selected.aodePlan.weeklyPurchaseUsed));
+    setAodeConvertUsedInput(String(selected.aodePlan.weeklyConvertUsed));
+  }, [selected?.id, selected?.aodePlan.weeklyPurchaseUsed, selected?.aodePlan.weeklyConvertUsed]);
 
   const summary = useMemo(() => {
     if (!state) return [];
@@ -421,6 +420,11 @@ export function App(): JSX.Element {
             const corridorLowerTotal = 3;
             const corridorMiddleCurrent = item.activities.corridorMiddleAvailable;
             const corridorMiddleTotal = 3;
+            const aodeLimits = getCharacterAodeLimits(state, item.id);
+            const aodePurchaseUsed = item.aodePlan.weeklyPurchaseUsed;
+            const aodeConvertUsed = item.aodePlan.weeklyConvertUsed;
+            const aodePurchaseRemaining = Math.max(0, aodeLimits.purchaseLimit - aodePurchaseUsed);
+            const aodeConvertRemaining = Math.max(0, aodeLimits.convertLimit - aodeConvertUsed);
             const dungeonReadyBuckets = [
               expeditionCurrent,
               transcendenceCurrent,
@@ -482,6 +486,12 @@ export function App(): JSX.Element {
               corridorLowerTotal,
               corridorMiddleCurrent,
               corridorMiddleTotal,
+              aodePurchaseUsed,
+              aodeConvertUsed,
+              aodePurchaseRemaining,
+              aodeConvertRemaining,
+              aodePurchaseLimit: aodeLimits.purchaseLimit,
+              aodeConvertLimit: aodeLimits.convertLimit,
               dungeonReadyBuckets,
               weeklyReadyBuckets,
               missionReadyBuckets,
@@ -640,20 +650,15 @@ export function App(): JSX.Element {
     const nextTranscendence = getNextScheduledTick(now, TRANSCENDENCE_SCHEDULE_HOURS);
     const nextDailyReset = getNextDailyReset(now);
     const nextWeeklyReset = getNextWeeklyReset(now);
-    const lowerNextAt = selected?.activities.corridorLowerNextAt;
-    const middleNextAt = selected?.activities.corridorMiddleNextAt;
-    const lowerTarget = lowerNextAt && !Number.isNaN(new Date(lowerNextAt).getTime()) ? new Date(lowerNextAt) : null;
-    const middleTarget =
-      middleNextAt && !Number.isNaN(new Date(middleNextAt).getTime()) ? new Date(middleNextAt) : null;
+    const nextCorridorUnified = getNextUnifiedCorridorRefresh(now);
     return [
       { key: "expedition", title: "远征恢复", target: nextExpedition },
       { key: "transcendence", title: "超越恢复", target: nextTranscendence },
       { key: "daily", title: "每日重置", target: nextDailyReset },
       { key: "weekly", title: "每周重置", target: nextWeeklyReset },
-      { key: "corridor_lower", title: "下层回廊刷新", target: lowerTarget },
-      { key: "corridor_middle", title: "中层回廊刷新", target: middleTarget },
+      { key: "corridor_unified", title: "回廊统一刷新", target: nextCorridorUnified },
     ];
-  }, [nowMs, selected?.activities.corridorLowerNextAt, selected?.activities.corridorMiddleNextAt]);
+  }, [nowMs]);
 
   const readyCharacters = summary.filter((item) => item.canRunExpedition).length;
   const weeklyGold = summary.reduce((acc, item) => acc + item.estimatedGoldIfClearEnergy, 0);
@@ -668,6 +673,13 @@ export function App(): JSX.Element {
   const transcendenceOverThreshold = weeklyTransRuns > transcendenceWarnThreshold;
   const selectedAccountCharacterCount = accountCharacters.length;
   const canAddCharacterInSelectedAccount = selectedAccountCharacterCount < MAX_CHARACTERS_PER_ACCOUNT;
+  const selectedIsAodeExtra = selectedAccount?.extraAodeCharacterId === selected?.id;
+  const selectedAodePurchaseRemaining = selected
+    ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.weeklyPurchaseUsed)
+    : 0;
+  const selectedAodeConvertRemaining = selected
+    ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.weeklyConvertUsed)
+    : 0;
 
   async function sync(action: Promise<AppState>, successMessage?: string): Promise<boolean> {
     setBusy(true);
@@ -941,11 +953,7 @@ export function App(): JSX.Element {
     setDialog({
       kind: "corridor_sync",
       lowerAvailable: corridorDraft.lowerAvailable,
-      lowerHours: corridorDraft.lowerHours,
-      lowerMinutes: corridorDraft.lowerMinutes,
       middleAvailable: corridorDraft.middleAvailable,
-      middleHours: corridorDraft.middleHours,
-      middleMinutes: corridorDraft.middleMinutes,
     });
   }
 
@@ -962,14 +970,9 @@ export function App(): JSX.Element {
       setError("回廊数量必须是 0-3");
       return;
     }
-    const lowerNextAt = buildNextAtFromCountdown(corridorDraft.lowerHours, corridorDraft.lowerMinutes);
-    const middleNextAt = buildNextAtFromCountdown(corridorDraft.middleHours, corridorDraft.middleMinutes);
-    if (!lowerNextAt || !middleNextAt) {
-      setError("回廊倒计时无效，请使用 0-48 小时、0-60 分钟，且总时长不超过 48 小时");
-      return;
-    }
+    const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
     void sync(
-      window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, lowerNextAt, middleCount, middleNextAt),
+      window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
       "已同步深渊回廊到当前账号角色",
     );
   }
@@ -1007,6 +1010,39 @@ export function App(): JSX.Element {
         transcendenceCompleted,
       }),
       "已校准当前角色周统计次数",
+    );
+  }
+
+  function onSaveAodePlan(): void {
+    if (!selected || !state) return;
+    const purchaseUsed = toInt(aodePurchaseUsedInput);
+    const convertUsed = toInt(aodeConvertUsedInput);
+    if (purchaseUsed === null || convertUsed === null || purchaseUsed < 0 || convertUsed < 0) {
+      setError("奥德购买/变换次数必须是大于等于 0 的整数");
+      return;
+    }
+    if (purchaseUsed > selectedAodeLimits.purchaseLimit || convertUsed > selectedAodeLimits.convertLimit) {
+      setError(
+        `超出本角色上限：购买最多 ${selectedAodeLimits.purchaseLimit}，变换最多 ${selectedAodeLimits.convertLimit}`,
+      );
+      return;
+    }
+    void sync(
+      window.aionApi.updateAodePlan(selected.id, {
+        weeklyPurchaseUsed: purchaseUsed,
+        weeklyConvertUsed: convertUsed,
+      }),
+      "已保存奥德购买/变换记录",
+    );
+  }
+
+  function onAssignExtraAodeCharacter(assignExtra: boolean): void {
+    if (!selected) return;
+    void sync(
+      window.aionApi.updateAodePlan(selected.id, {
+        assignExtra,
+      }),
+      assignExtra ? "已设为本账号奥德额外角色" : "已取消本角色额外资格",
     );
   }
 
@@ -1232,14 +1268,9 @@ export function App(): JSX.Element {
           setDialogError("回廊数量必须是 0-3");
           return;
         }
-        const lowerNextAt = buildNextAtFromCountdown(dialog.lowerHours, dialog.lowerMinutes);
-        const middleNextAt = buildNextAtFromCountdown(dialog.middleHours, dialog.middleMinutes);
-        if (!lowerNextAt || !middleNextAt) {
-          setDialogError("回廊倒计时无效，请使用 0-48 小时、0-60 分钟，且总时长不超过 48 小时");
-          return;
-        }
+        const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
         const ok = await sync(
-          window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, lowerNextAt, middleCount, middleNextAt),
+          window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
           "已同步深渊回廊到当前账号角色",
         );
         if (ok) {
@@ -1247,10 +1278,6 @@ export function App(): JSX.Element {
             ...prev,
             lowerAvailable: String(lowerCount),
             middleAvailable: String(middleCount),
-            lowerHours: dialog.lowerHours,
-            lowerMinutes: dialog.lowerMinutes,
-            middleHours: dialog.middleHours,
-            middleMinutes: dialog.middleMinutes,
           }));
           setDialog(null);
           setDialogError(null);
@@ -1384,7 +1411,7 @@ export function App(): JSX.Element {
 
   return (
     <main className="min-h-screen p-5 text-slate-100">
-      <div className="grid min-h-[calc(100vh-2.5rem)] grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+      <div className="grid min-h-[calc(100vh-2.5rem)] w-full grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-5">
         <aside className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
           <h1 className="mb-3 text-lg font-semibold tracking-wide">AION 2</h1>
           <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
@@ -1518,7 +1545,7 @@ export function App(): JSX.Element {
           </div>
         </aside>
 
-        <section className="min-w-0 space-y-5">
+        <section className="min-w-0 w-full space-y-5">
           <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-3 backdrop-blur-2xl backdrop-saturate-150">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1737,7 +1764,7 @@ export function App(): JSX.Element {
                           ].map((metric) => (
                             <span
                               key={`dungeon-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
@@ -1754,7 +1781,7 @@ export function App(): JSX.Element {
                           ].map((metric) => (
                             <span
                               key={`weekly-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
@@ -1771,11 +1798,29 @@ export function App(): JSX.Element {
                           ].map((metric) => (
                             <span
                               key={`mission-${entry.character.id}-${metric.label}`}
-                              className={`rounded-full border px-2 py-0.5 text-[11px] ${getBoardToneClass(metric.current, metric.total)}`}
+                              className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(metric.current, metric.total)}`}
                             >
                               {metric.label} {formatCounter(metric.current, metric.total)}
                             </span>
                           ))}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                              entry.aodePurchaseRemaining,
+                              entry.aodePurchaseLimit,
+                            )}`}
+                          >
+                            奥德购买 {formatCounter(entry.aodePurchaseUsed, entry.aodePurchaseLimit)}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs ${getBoardToneClass(
+                              entry.aodeConvertRemaining,
+                              entry.aodeConvertLimit,
+                            )}`}
+                          >
+                            奥德变换 {formatCounter(entry.aodeConvertUsed, entry.aodeConvertLimit)}
+                          </span>
                         </div>
                       </div>
                       <div className="mt-3 grid grid-cols-1 gap-2">
@@ -1877,6 +1922,51 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <p className="mt-2 text-xs text-slate-400">基础能量优先扣除，补充能量用于兜底。</p>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">奥德购买/变换记录</p>
+                <span className="text-xs text-slate-300">
+                  {selectedIsAodeExtra ? "本角色: 额外+8资格" : "本角色: 基础资格"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-slate-300">
+                购买 {selected.aodePlan.weeklyPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedAodePurchaseRemaining}） | 变换{" "}
+                {selected.aodePlan.weeklyConvertUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedAodeConvertRemaining}）
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                单次按 {AODE_POINT_PER_OPERATION} 奥德计；基础每周购买/变换各 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色各 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。
+              </p>
+              {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
+                <p className="mt-1 text-xs text-amber-300">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
+              ) : null}
+              <div className="mt-2 grid grid-cols-[1fr_1fr_auto_auto] gap-2">
+                <input
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={aodePurchaseUsedInput}
+                  onChange={(event) => setAodePurchaseUsedInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="购买已用"
+                />
+                <input
+                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={aodeConvertUsedInput}
+                  onChange={(event) => setAodeConvertUsedInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="变换已用"
+                />
+                <button className="task-btn px-4" onClick={onSaveAodePlan} disabled={busy}>
+                  保存记录
+                </button>
+                <button
+                  className="task-btn px-4"
+                  onClick={() => onAssignExtraAodeCharacter(!selectedIsAodeExtra)}
+                  disabled={busy}
+                >
+                  {selectedIsAodeExtra ? "取消额外" : "设为额外"}
+                </button>
+              </div>
             </div>
             </article>
           ) : null}
@@ -2141,9 +2231,9 @@ export function App(): JSX.Element {
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <h4 className="text-sm font-semibold">深渊回廊参数（当前账号同步）</h4>
               <p className="mt-1 text-xs text-slate-300">
-                规则: 中层/下层回廊独立刷新。时间用倒计时托选（0-48 小时，0-60 分钟），设置后只同步当前账号角色。
+                规则: 上层/下层按统一刷新节奏运行（今晚 21:00 起每 48 小时），这里只需录入当前可打数量并同步到当前账号。
               </p>
-              <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <p className="text-xs text-slate-300">下层数量</p>
                   <select
@@ -2160,35 +2250,6 @@ export function App(): JSX.Element {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs text-slate-300">下层倒计时</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    <select
-                      className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                      value={corridorDraft.lowerHours}
-                      onChange={(event) => setCorridorDraft({ ...corridorDraft, lowerHours: event.target.value })}
-                      disabled={busy}
-                    >
-                      {Array.from({ length: 49 }, (_, i) => (
-                        <option key={`lower-hour-${i}`} value={String(i)}>
-                          {i}h
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                      value={corridorDraft.lowerMinutes}
-                      onChange={(event) => setCorridorDraft({ ...corridorDraft, lowerMinutes: event.target.value })}
-                      disabled={busy}
-                    >
-                      {Array.from({ length: 61 }, (_, i) => (
-                        <option key={`lower-minute-${i}`} value={String(i)}>
-                          {i}m
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-1">
                   <p className="text-xs text-slate-300">中层数量</p>
                   <select
                     className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -2202,35 +2263,6 @@ export function App(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-300">中层倒计时</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    <select
-                      className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                      value={corridorDraft.middleHours}
-                      onChange={(event) => setCorridorDraft({ ...corridorDraft, middleHours: event.target.value })}
-                      disabled={busy}
-                    >
-                      {Array.from({ length: 49 }, (_, i) => (
-                        <option key={`middle-hour-${i}`} value={String(i)}>
-                          {i}h
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                      value={corridorDraft.middleMinutes}
-                      onChange={(event) => setCorridorDraft({ ...corridorDraft, middleMinutes: event.target.value })}
-                      disabled={busy}
-                    >
-                      {Array.from({ length: 61 }, (_, i) => (
-                        <option key={`middle-minute-${i}`} value={String(i)}>
-                          {i}m
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               </div>
               <div className="mt-3">
@@ -2302,19 +2334,20 @@ export function App(): JSX.Element {
               <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
               <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                 {countdownItems.map((item) => {
-                  const remain = item.target
-                    ? Math.max(0, Math.min(48 * 60 * 60 * 1000, item.target.getTime() - nowMs))
-                    : null;
+                  const remain = item.target ? Math.max(0, item.target.getTime() - nowMs) : null;
+                  const useDayFormat = item.key === "weekly" || item.key === "corridor_unified";
                   return (
                     <div key={item.key} className="data-pill">
                       <p className="text-xs text-slate-300">{item.title}</p>
-                      <p className="mt-1 text-sm font-semibold text-cyan-200">{remain === null ? "--:--:--" : formatDuration(remain)}</p>
+                      <p className="mt-1 text-sm font-semibold text-cyan-200">
+                        {remain === null
+                          ? "--:--:--"
+                          : useDayFormat
+                            ? formatDurationWithDays(remain)
+                            : formatDuration(remain)}
+                      </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        {item.key.startsWith("corridor")
-                          ? "上限 48 小时倒计时"
-                          : item.target
-                            ? formatDateTime(item.target)
-                            : "未设置"}
+                        {item.target ? formatDateTime(item.target) : "未设置"}
                       </p>
                     </div>
                   );
@@ -2449,11 +2482,13 @@ export function App(): JSX.Element {
             {dialog.kind === "corridor_sync" ? (
               <>
                 <h4 className="text-base font-semibold">同步深渊回廊（当前账号）</h4>
-                <p className="mt-2 text-xs text-slate-300">请分别选择下层/中层数量与倒计时（0-48 小时，0-60 分钟）。</p>
+                <p className="mt-2 text-xs text-slate-300">
+                  请录入下层/中层当前可打数量。刷新时间已统一为今晚 21:00 起每 48 小时自动推算。
+                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="space-y-2">
                     <p className="text-xs text-slate-300">下层</p>
-                    <div className="grid grid-cols-3 gap-1">
+                    <div className="grid grid-cols-1 gap-1">
                       <select
                         className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
                         value={dialog.lowerAvailable}
@@ -2466,35 +2501,11 @@ export function App(): JSX.Element {
                           </option>
                         ))}
                       </select>
-                      <select
-                        className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                        value={dialog.lowerHours}
-                        onChange={(event) => setDialog({ ...dialog, lowerHours: event.target.value })}
-                        disabled={busy}
-                      >
-                        {Array.from({ length: 49 }, (_, i) => (
-                          <option key={`d-lower-hour-${i}`} value={String(i)}>
-                            {i}h
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                        value={dialog.lowerMinutes}
-                        onChange={(event) => setDialog({ ...dialog, lowerMinutes: event.target.value })}
-                        disabled={busy}
-                      >
-                        {Array.from({ length: 61 }, (_, i) => (
-                          <option key={`d-lower-minute-${i}`} value={String(i)}>
-                            {i}m
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs text-slate-300">中层</p>
-                    <div className="grid grid-cols-3 gap-1">
+                    <div className="grid grid-cols-1 gap-1">
                       <select
                         className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
                         value={dialog.middleAvailable}
@@ -2504,30 +2515,6 @@ export function App(): JSX.Element {
                         {Array.from({ length: 4 }, (_, i) => (
                           <option key={`d-middle-count-${i}`} value={String(i)}>
                             {i}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                        value={dialog.middleHours}
-                        onChange={(event) => setDialog({ ...dialog, middleHours: event.target.value })}
-                        disabled={busy}
-                      >
-                        {Array.from({ length: 49 }, (_, i) => (
-                          <option key={`d-middle-hour-${i}`} value={String(i)}>
-                            {i}h
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
-                        value={dialog.middleMinutes}
-                        onChange={(event) => setDialog({ ...dialog, middleMinutes: event.target.value })}
-                        disabled={busy}
-                      >
-                        {Array.from({ length: 61 }, (_, i) => (
-                          <option key={`d-middle-minute-${i}`} value={String(i)}>
-                            {i}m
                           </option>
                         ))}
                       </select>

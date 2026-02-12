@@ -279,6 +279,8 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
     next.activities.sanctumBoxRemaining = 2;
     next.activities.expeditionBossRemaining = EXPEDITION_BOSS_MAX;
     next.activities.transcendenceBossRemaining = TRANSCENDENCE_BOSS_MAX;
+    next.aodePlan.weeklyPurchaseUsed = 0;
+    next.aodePlan.weeklyConvertUsed = 0;
     next.stats = createEmptyWeeklyStats(now.toISOString());
   }
 

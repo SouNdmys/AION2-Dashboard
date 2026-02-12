@@ -20,4 +20,5 @@ export const IPC_CHANNELS = {
   updateEnergySegments: "character:update-energy-segments",
   updateRaidCounts: "character:update-raid-counts",
   updateWeeklyCompletions: "character:update-weekly-completions",
+  updateAodePlan: "character:update-aode-plan",
 } as const;

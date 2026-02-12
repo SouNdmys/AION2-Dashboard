@@ -1,6 +1,6 @@
 import type { AccountState, AppSettings, CharacterState, TaskDefinition } from "./types";
 
-export const APP_STATE_VERSION = 6;
+export const APP_STATE_VERSION = 7;
 
 export const ENERGY_TICK_HOURS = 3;
 export const ENERGY_PER_TICK = 15;
@@ -15,6 +15,8 @@ export const WEEKLY_RESET_HOUR = 5;
 
 export const EXPEDITION_SCHEDULE_HOURS = [5, 13, 21] as const;
 export const TRANSCENDENCE_SCHEDULE_HOURS = [5, 17] as const;
+export const CORRIDOR_UNIFIED_REFRESH_HOUR = 21;
+export const CORRIDOR_UNIFIED_INTERVAL_HOURS = 48;
 
 export const EXPEDITION_REWARD_MAX = 21;
 export const EXPEDITION_BOSS_MAX = 35;
@@ -23,6 +25,11 @@ export const TRANSCENDENCE_BOSS_MAX = 28;
 export const NIGHTMARE_MAX = 14;
 export const MINI_GAME_MAX = 14;
 export const SPIRIT_INVASION_MAX = 7;
+export const AODE_WEEKLY_BASE_PURCHASE_MAX = 5;
+export const AODE_WEEKLY_BASE_CONVERT_MAX = 5;
+export const AODE_WEEKLY_EXTRA_PURCHASE_MAX = 8;
+export const AODE_WEEKLY_EXTRA_CONVERT_MAX = 8;
+export const AODE_POINT_PER_OPERATION = 40;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   expeditionGoldPerRun: 1_000_000,
@@ -307,6 +314,10 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string,
       bonusCurrent: ENERGY_DEFAULT_BONUS_START,
       baseCap: ENERGY_BASE_CAP,
       bonusCap: ENERGY_BONUS_CAP,
+    },
+    aodePlan: {
+      weeklyPurchaseUsed: 0,
+      weeklyConvertUsed: 0,
     },
     missions: {
       dailyRemaining: 5,

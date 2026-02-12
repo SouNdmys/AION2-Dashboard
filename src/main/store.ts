@@ -5,6 +5,10 @@ import { basename, join } from "node:path";
 import { app, dialog } from "electron";
 import Store from "electron-store";
 import {
+  AODE_WEEKLY_BASE_CONVERT_MAX,
+  AODE_WEEKLY_BASE_PURCHASE_MAX,
+  AODE_WEEKLY_EXTRA_CONVERT_MAX,
+  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
   APP_STATE_VERSION,
   DEFAULT_SETTINGS,
   ENERGY_BASE_CAP,
@@ -191,6 +195,7 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
   const activitiesRaw = entity.activities as Record<string, unknown> | undefined;
   const statsRaw = entity.stats as Record<string, unknown> | undefined;
   const metaRaw = entity.meta as Record<string, unknown> | undefined;
+  const aodePlanRaw = entity.aodePlan as Record<string, unknown> | undefined;
   const suppressionRaw =
     typeof activitiesRaw?.suppressionRemaining === "number" ? Math.max(0, Math.floor(activitiesRaw.suppressionRemaining)) : 3;
   const suppressionBonusRaw =
@@ -211,6 +216,16 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
       bonusCurrent,
       baseCap,
       bonusCap,
+    },
+    aodePlan: {
+      weeklyPurchaseUsed:
+        typeof aodePlanRaw?.weeklyPurchaseUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.weeklyPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.weeklyPurchaseUsed,
+      weeklyConvertUsed:
+        typeof aodePlanRaw?.weeklyConvertUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.weeklyConvertUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.weeklyConvertUsed,
     },
     missions: {
       dailyRemaining:
@@ -358,7 +373,24 @@ function normalizeAccount(raw: unknown, index: number): AccountState {
     id,
     name,
     regionTag: typeof entity?.regionTag === "string" && entity.regionTag.trim() ? entity.regionTag.trim() : undefined,
+    extraAodeCharacterId:
+      typeof entity?.extraAodeCharacterId === "string" && entity.extraAodeCharacterId.trim()
+        ? entity.extraAodeCharacterId.trim()
+        : undefined,
   };
+}
+
+function alignAccountExtraAodeCharacter(accounts: AccountState[], characters: CharacterState[]): AccountState[] {
+  return accounts.map((account) => {
+    if (!account.extraAodeCharacterId) {
+      return account;
+    }
+    const valid = characters.some((character) => character.id === account.extraAodeCharacterId && character.accountId === account.id);
+    if (valid) {
+      return account;
+    }
+    return { ...account, extraAodeCharacterId: undefined };
+  });
 }
 
 function normalizeSnapshot(raw: unknown): AppStateSnapshot {
@@ -383,6 +415,7 @@ function normalizeSnapshot(raw: unknown): AppStateSnapshot {
     ...item,
     accountId: accountIds.has(item.accountId) ? item.accountId : fallbackAccountId,
   }));
+  const accountsAligned = alignAccountExtraAodeCharacter(accounts, characters);
   const selectedCharacterIdRaw = entity.selectedCharacterId;
   const selectedCharacterId =
     typeof selectedCharacterIdRaw === "string" && characters.some((item) => item.id === selectedCharacterIdRaw)
@@ -399,7 +432,7 @@ function normalizeSnapshot(raw: unknown): AppStateSnapshot {
     selectedAccountId,
     selectedCharacterId,
     settings,
-    accounts,
+    accounts: accountsAligned,
     characters,
   };
 }
@@ -464,6 +497,7 @@ function normalizeState(raw: unknown): AppState {
   if (sourceVersion < 4) {
     characters = characters.map((item) => migrateDailyDungeonLegacy(item));
   }
+  const accountsAligned = alignAccountExtraAodeCharacter(accounts, characters);
 
   const selectedCharacterIdRaw = entity.selectedCharacterId;
   const selectedCharacterId =
@@ -482,7 +516,7 @@ function normalizeState(raw: unknown): AppState {
     selectedAccountId,
     selectedCharacterId,
     settings,
-    accounts,
+    accounts: accountsAligned,
     characters,
     history: normalizeHistory(entity.history),
   };
@@ -546,6 +580,15 @@ function mergeSettings(current: AppSettings, payload: Partial<AppSettings>): App
     ...current,
     ...payload,
   });
+}
+
+function getAodeLimitsForCharacter(state: AppState, character: CharacterState): { purchaseLimit: number; convertLimit: number } {
+  const account = state.accounts.find((item) => item.id === character.accountId);
+  const isExtra = account?.extraAodeCharacterId === character.id;
+  return {
+    purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX + (isExtra ? AODE_WEEKLY_EXTRA_PURCHASE_MAX : 0),
+    convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX + (isExtra ? AODE_WEEKLY_EXTRA_CONVERT_MAX : 0),
+  };
 }
 
 function buildExportPayload(state: AppState): Record<string, unknown> {
@@ -772,6 +815,12 @@ export function deleteCharacter(characterId: string): AppState {
       if (nextSelectedCharacter) {
         draft.selectedAccountId = nextSelectedCharacter.accountId;
       }
+      draft.accounts = draft.accounts.map((account) => {
+        if (account.extraAodeCharacterId !== characterId) {
+          return account;
+        }
+        return { ...account, extraAodeCharacterId: undefined };
+      });
       draft.characters = nextCharacters;
       return draft;
     },
@@ -1059,6 +1108,60 @@ export function updateWeeklyCompletions(
           },
         };
       });
+      return draft;
+    },
+  );
+}
+
+export function updateAodePlan(
+  characterId: string,
+  payload: { weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean },
+): AppState {
+  return commitMutation(
+    { action: "更新奥德购买/变换记录", characterId },
+    (draft) => {
+      const target = draft.characters.find((item) => item.id === characterId);
+      if (!target) {
+        throw new Error("角色不存在");
+      }
+
+      if (typeof payload.assignExtra === "boolean") {
+        draft.accounts = draft.accounts.map((account) => {
+          if (account.id !== target.accountId) {
+            return account;
+          }
+          if (payload.assignExtra) {
+            return { ...account, extraAodeCharacterId: characterId };
+          }
+          if (account.extraAodeCharacterId === characterId) {
+            return { ...account, extraAodeCharacterId: undefined };
+          }
+          return account;
+        });
+      }
+
+      draft.characters = draft.characters.map((item) => {
+        if (item.accountId !== target.accountId) {
+          return item;
+        }
+        const limits = getAodeLimitsForCharacter(draft, item);
+        const nextPurchase =
+          item.id === characterId && typeof payload.weeklyPurchaseUsed === "number"
+            ? clamp(Math.floor(payload.weeklyPurchaseUsed), 0, limits.purchaseLimit)
+            : clamp(item.aodePlan.weeklyPurchaseUsed, 0, limits.purchaseLimit);
+        const nextConvert =
+          item.id === characterId && typeof payload.weeklyConvertUsed === "number"
+            ? clamp(Math.floor(payload.weeklyConvertUsed), 0, limits.convertLimit)
+            : clamp(item.aodePlan.weeklyConvertUsed, 0, limits.convertLimit);
+        return {
+          ...item,
+          aodePlan: {
+            weeklyPurchaseUsed: nextPurchase,
+            weeklyConvertUsed: nextConvert,
+          },
+        };
+      });
+
       return draft;
     },
   );

@@ -73,6 +73,10 @@ const api = {
     characterId: string,
     payload: { expeditionCompleted?: number; transcendenceCompleted?: number },
   ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateWeeklyCompletions, { characterId, ...payload }),
+  updateAodePlan: (
+    characterId: string,
+    payload: { weeklyPurchaseUsed?: number; weeklyConvertUsed?: number; assignExtra?: boolean },
+  ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateAodePlan, { characterId, ...payload }),
 };
 
 contextBridge.exposeInMainWorld("aionApi", api);
