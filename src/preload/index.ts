@@ -1,6 +1,21 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC_CHANNELS } from "../shared/ipc";
-import type { AppBuildInfo, AppSettings, AppState, ApplyTaskActionInput, ExportDataResult, ImportDataResult } from "../shared/types";
+import type {
+  AddWorkshopPriceSnapshotInput,
+  AppBuildInfo,
+  AppSettings,
+  AppState,
+  ApplyTaskActionInput,
+  ExportDataResult,
+  ImportDataResult,
+  UpsertWorkshopInventoryInput,
+  UpsertWorkshopItemInput,
+  UpsertWorkshopRecipeInput,
+  WorkshopCraftOption,
+  WorkshopCraftSimulationInput,
+  WorkshopCraftSimulationResult,
+  WorkshopState,
+} from "../shared/types";
 
 const api = {
   getState: (): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.getState),
@@ -83,6 +98,23 @@ const api = {
       assignExtra?: boolean;
     },
   ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateAodePlan, { characterId, ...payload }),
+  getWorkshopState: (): Promise<WorkshopState> => ipcRenderer.invoke(IPC_CHANNELS.getWorkshopState),
+  upsertWorkshopItem: (payload: UpsertWorkshopItemInput): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.upsertWorkshopItem, payload),
+  deleteWorkshopItem: (itemId: string): Promise<WorkshopState> => ipcRenderer.invoke(IPC_CHANNELS.deleteWorkshopItem, { itemId }),
+  upsertWorkshopRecipe: (payload: UpsertWorkshopRecipeInput): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.upsertWorkshopRecipe, payload),
+  deleteWorkshopRecipe: (recipeId: string): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.deleteWorkshopRecipe, { recipeId }),
+  addWorkshopPriceSnapshot: (payload: AddWorkshopPriceSnapshotInput): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.addWorkshopPriceSnapshot, payload),
+  upsertWorkshopInventory: (payload: UpsertWorkshopInventoryInput): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.upsertWorkshopInventory, payload),
+  simulateWorkshopCraft: (payload: WorkshopCraftSimulationInput): Promise<WorkshopCraftSimulationResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.simulateWorkshopCraft, payload),
+  getWorkshopCraftOptions: (payload?: { taxRate?: number }): Promise<WorkshopCraftOption[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getWorkshopCraftOptions, payload ?? {}),
+  seedWorkshopSampleData: (): Promise<WorkshopState> => ipcRenderer.invoke(IPC_CHANNELS.seedWorkshopSampleData),
 };
 
 contextBridge.exposeInMainWorld("aionApi", api);

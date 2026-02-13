@@ -100,6 +100,70 @@
 ### 校验
 - 已执行 `npm run typecheck`，通过。
 
+## 2026-02-13
+
+### 工坊模块启动（Phase 1）
+- 新增工坊框架备忘文件：`WORKSHOP_FRAMEWORK.md`。
+- 新增独立工坊业务域：`src/main/workshop-store.ts`。
+  - 本地持久化：`aion2-dashboard-workshop`。
+  - 支持物品/配方/价格快照/库存管理。
+  - 支持套娃配方递归展开、循环检测、税后利润计算、库存缺口计算。
+  - 支持背包逆向推导（可制作次数与收益排序）。
+- 新增 IPC 与 preload 工坊 API：
+  - `workshop:get-state`
+  - `workshop:upsert-item`
+  - `workshop:delete-item`
+  - `workshop:upsert-recipe`
+  - `workshop:delete-recipe`
+  - `workshop:add-price-snapshot`
+  - `workshop:upsert-inventory`
+  - `workshop:simulate-craft`
+  - `workshop:get-craft-options`
+- 新增 UI 面板：`src/renderer/src/WorkshopView.tsx`。
+  - 物品/价格/库存录入
+  - 配方录入
+  - 制作模拟器（税后利润、材料缺口）
+  - 背包可制作推荐
+- `src/renderer/src/App.tsx` 新增“工坊”页签入口。
+
+### 工坊验证增强（Phase 1.1）
+- 新增样例数据导入能力（幂等导入，避免重复脏数据）:
+  - IPC 通道: `workshop:seed-sample-data`
+  - 主进程: `seedWorkshopSampleData()`
+  - preload: `seedWorkshopSampleData()`
+  - UI: 工坊页新增“一键导入样例”按钮
+- 样例内容采用 `样例-*` 命名前缀，避免和真实物品重名冲突，覆盖链路包括:
+  - 样例物品
+  - 套娃配方（基础材料 -> 中间件 -> 成品装备）
+  - 样例价格快照
+  - 样例库存
+- 目的: 点击一次即可直接验证 Phase 1 全流程计算（成本、税后利润、缺口、可制作推荐）。
+- 运行时兼容兜底:
+  - 若用户在旧 preload 实例中点击“一键导入样例”，前端不再抛 `is not a function` 异常；
+  - 改为明确提示“完全退出并重启应用后重试”。
+
+### 校验
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+### 工坊布局修复 + Phase 1.2（补差预算建议）
+- 修复工坊页在非最大化窗口时的布局溢出问题：
+  - 将固定列模板改为响应式网格（小窗口自动折行）。
+  - 输入/下拉统一补充 `min-w-0`，避免内容撑爆卡片。
+  - 涉及区域：物品录入、配方录入、模拟器参数区、背包推导头部。
+- 新增 Phase 1.2：
+  - 新增“差一点可做（补差预算）”模块。
+  - 用户输入预算后，输出：
+    - 单次补差成本
+    - 预算内可补差次数
+    - 单次利润
+    - 预算内潜在利润
+  - 支持材料缺价提示（无法完整估算时标注）。
+
+### 再次校验
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
 ## 2026-02-13（v1.1.0）
 
 ### 本次更新

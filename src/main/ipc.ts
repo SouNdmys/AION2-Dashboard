@@ -1,7 +1,15 @@
 import { ipcMain } from "electron";
 import { IPC_CHANNELS } from "../shared/ipc";
 import { APP_BUILD_INFO } from "../shared/build-meta";
-import type { AppSettings, ApplyTaskActionInput } from "../shared/types";
+import type {
+  AddWorkshopPriceSnapshotInput,
+  AppSettings,
+  ApplyTaskActionInput,
+  UpsertWorkshopInventoryInput,
+  UpsertWorkshopItemInput,
+  UpsertWorkshopRecipeInput,
+  WorkshopCraftSimulationInput,
+} from "../shared/types";
 import {
   addAccount,
   addCharacter,
@@ -26,6 +34,18 @@ import {
   updateRaidCounts,
   updateWeeklyCompletions,
 } from "./store";
+import {
+  addWorkshopPriceSnapshot,
+  deleteWorkshopItem,
+  deleteWorkshopRecipe,
+  getWorkshopCraftOptions,
+  getWorkshopState,
+  seedWorkshopSampleData,
+  simulateWorkshopCraft,
+  upsertWorkshopInventory,
+  upsertWorkshopItem,
+  upsertWorkshopRecipe,
+} from "./workshop-store";
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.getState, () => getAppState());
@@ -132,4 +152,26 @@ export function registerIpcHandlers(): void {
     ) =>
       updateAodePlan(payload.characterId, payload),
   );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopState, () => getWorkshopState());
+  ipcMain.handle(IPC_CHANNELS.upsertWorkshopItem, (_event, payload: UpsertWorkshopItemInput) => upsertWorkshopItem(payload));
+  ipcMain.handle(IPC_CHANNELS.deleteWorkshopItem, (_event, payload: { itemId: string }) => deleteWorkshopItem(payload.itemId));
+  ipcMain.handle(IPC_CHANNELS.upsertWorkshopRecipe, (_event, payload: UpsertWorkshopRecipeInput) =>
+    upsertWorkshopRecipe(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.deleteWorkshopRecipe, (_event, payload: { recipeId: string }) =>
+    deleteWorkshopRecipe(payload.recipeId),
+  );
+  ipcMain.handle(IPC_CHANNELS.addWorkshopPriceSnapshot, (_event, payload: AddWorkshopPriceSnapshotInput) =>
+    addWorkshopPriceSnapshot(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.upsertWorkshopInventory, (_event, payload: UpsertWorkshopInventoryInput) =>
+    upsertWorkshopInventory(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.simulateWorkshopCraft, (_event, payload: WorkshopCraftSimulationInput) =>
+    simulateWorkshopCraft(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopCraftOptions, (_event, payload?: { taxRate?: number }) =>
+    getWorkshopCraftOptions(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.seedWorkshopSampleData, () => seedWorkshopSampleData());
 }

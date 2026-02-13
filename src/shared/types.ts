@@ -162,6 +162,138 @@ export interface AppBuildInfo {
   author: string;
 }
 
+export type WorkshopItemCategory = "material" | "equipment" | "component" | "other";
+export type WorkshopPriceSource = "manual" | "import";
+
+export interface WorkshopItem {
+  id: string;
+  name: string;
+  category: WorkshopItemCategory;
+  icon?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkshopRecipeInput {
+  itemId: string;
+  quantity: number;
+}
+
+export interface WorkshopRecipe {
+  id: string;
+  outputItemId: string;
+  outputQuantity: number;
+  inputs: WorkshopRecipeInput[];
+  updatedAt: string;
+}
+
+export interface WorkshopPriceSnapshot {
+  id: string;
+  itemId: string;
+  unitPrice: number;
+  capturedAt: string;
+  source: WorkshopPriceSource;
+  note?: string;
+}
+
+export interface WorkshopInventoryItem {
+  itemId: string;
+  quantity: number;
+  updatedAt: string;
+}
+
+export interface WorkshopState {
+  version: number;
+  items: WorkshopItem[];
+  recipes: WorkshopRecipe[];
+  prices: WorkshopPriceSnapshot[];
+  inventory: WorkshopInventoryItem[];
+}
+
+export interface UpsertWorkshopItemInput {
+  id?: string;
+  name: string;
+  category?: WorkshopItemCategory;
+  icon?: string;
+  notes?: string;
+}
+
+export interface UpsertWorkshopRecipeInput {
+  id?: string;
+  outputItemId: string;
+  outputQuantity: number;
+  inputs: WorkshopRecipeInput[];
+}
+
+export interface AddWorkshopPriceSnapshotInput {
+  itemId: string;
+  unitPrice: number;
+  capturedAt?: string;
+  source?: WorkshopPriceSource;
+  note?: string;
+}
+
+export interface UpsertWorkshopInventoryInput {
+  itemId: string;
+  quantity: number;
+}
+
+export interface WorkshopSimulationMaterialRow {
+  itemId: string;
+  itemName: string;
+  required: number;
+  owned: number;
+  missing: number;
+  latestUnitPrice: number | null;
+  requiredCost: number | null;
+  missingCost: number | null;
+}
+
+export interface WorkshopSimulationCraftStep {
+  itemId: string;
+  itemName: string;
+  runs: number;
+}
+
+export interface WorkshopCraftSimulationInput {
+  recipeId: string;
+  runs: number;
+  taxRate?: number;
+}
+
+export interface WorkshopCraftSimulationResult {
+  recipeId: string;
+  outputItemId: string;
+  outputItemName: string;
+  outputQuantity: number;
+  runs: number;
+  totalOutputQuantity: number;
+  taxRate: number;
+  materialRows: WorkshopSimulationMaterialRow[];
+  craftSteps: WorkshopSimulationCraftStep[];
+  craftableNow: boolean;
+  unknownPriceItemIds: string[];
+  requiredMaterialCost: number | null;
+  missingPurchaseCost: number | null;
+  outputUnitPrice: number | null;
+  grossRevenue: number | null;
+  netRevenueAfterTax: number | null;
+  estimatedProfit: number | null;
+  estimatedProfitRate: number | null;
+}
+
+export interface WorkshopCraftOption {
+  recipeId: string;
+  outputItemId: string;
+  outputItemName: string;
+  craftableCount: number;
+  requiredMaterialCostPerRun: number | null;
+  estimatedProfitPerRun: number | null;
+  unknownPriceItemIds: string[];
+  missingRowsForOneRun: WorkshopSimulationMaterialRow[];
+}
+
 export interface AppState {
   version: number;
   selectedAccountId: string | null;

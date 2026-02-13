@@ -20,9 +20,10 @@ import {
 } from "../../shared/engine";
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
+import { WorkshopView } from "./WorkshopView";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
-type ViewMode = "dashboard" | "settings";
+type ViewMode = "dashboard" | "settings" | "workshop";
 type DashboardMode = "overview" | "character";
 type OverviewSortKey = "ready" | "account" | "region";
 type OverviewTaskFilter = "all" | "dungeon" | "weekly" | "mission";
@@ -1915,6 +1916,13 @@ export function App(): JSX.Element {
               >
                 设置页
               </button>
+              <button
+                className={`pill-btn ${viewMode === "workshop" ? "bg-white/20" : ""}`}
+                onClick={() => setViewMode("workshop")}
+                disabled={busy}
+              >
+                工坊
+              </button>
             </div>
             <p className="mt-2 text-xs text-slate-300">中栏为核心操作流，右栏承载日志与辅助信息。</p>
             {infoMessage ? <p className="mt-2 text-xs text-emerald-300">{infoMessage}</p> : null}
@@ -2550,6 +2558,8 @@ export function App(): JSX.Element {
             </article>
               ))
             : null}
+
+          {viewMode === "workshop" ? <WorkshopView /> : null}
 
           {viewMode === "settings" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">

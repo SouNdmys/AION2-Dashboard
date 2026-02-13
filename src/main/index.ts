@@ -1,8 +1,11 @@
 import { app, BrowserWindow, Menu, dialog } from "electron";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
-import { autoUpdater } from "electron-updater";
 import { registerIpcHandlers } from "./ipc";
+
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
 
 function resolvePreloadPath(): string {
   const envPath = process.env.ELECTRON_PRELOAD_URL;
