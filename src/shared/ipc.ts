@@ -31,5 +31,6 @@ export const IPC_CHANNELS = {
   upsertWorkshopInventory: "workshop:upsert-inventory",
   simulateWorkshopCraft: "workshop:simulate-craft",
   getWorkshopCraftOptions: "workshop:get-craft-options",
+  getWorkshopPriceHistory: "workshop:get-price-history",
   seedWorkshopSampleData: "workshop:seed-sample-data",
 } as const;

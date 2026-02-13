@@ -14,6 +14,8 @@ import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationInput,
   WorkshopCraftSimulationResult,
+  WorkshopPriceHistoryQuery,
+  WorkshopPriceHistoryResult,
   WorkshopState,
 } from "../shared/types";
 
@@ -114,6 +116,8 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.simulateWorkshopCraft, payload),
   getWorkshopCraftOptions: (payload?: { taxRate?: number }): Promise<WorkshopCraftOption[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.getWorkshopCraftOptions, payload ?? {}),
+  getWorkshopPriceHistory: (payload: WorkshopPriceHistoryQuery): Promise<WorkshopPriceHistoryResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getWorkshopPriceHistory, payload),
   seedWorkshopSampleData: (): Promise<WorkshopState> => ipcRenderer.invoke(IPC_CHANNELS.seedWorkshopSampleData),
 };
 

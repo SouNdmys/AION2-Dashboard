@@ -9,6 +9,7 @@ import type {
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
   WorkshopCraftSimulationInput,
+  WorkshopPriceHistoryQuery,
 } from "../shared/types";
 import {
   addAccount,
@@ -39,6 +40,7 @@ import {
   deleteWorkshopItem,
   deleteWorkshopRecipe,
   getWorkshopCraftOptions,
+  getWorkshopPriceHistory,
   getWorkshopState,
   seedWorkshopSampleData,
   simulateWorkshopCraft,
@@ -172,6 +174,9 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(IPC_CHANNELS.getWorkshopCraftOptions, (_event, payload?: { taxRate?: number }) =>
     getWorkshopCraftOptions(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopPriceHistory, (_event, payload: WorkshopPriceHistoryQuery) =>
+    getWorkshopPriceHistory(payload),
   );
   ipcMain.handle(IPC_CHANNELS.seedWorkshopSampleData, () => seedWorkshopSampleData());
 }

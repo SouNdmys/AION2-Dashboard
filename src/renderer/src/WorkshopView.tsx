@@ -3,6 +3,7 @@ import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationResult,
   WorkshopItemCategory,
+  WorkshopPriceHistoryResult,
   WorkshopRecipeInput,
   WorkshopState,
 } from "../../shared/types";
@@ -38,6 +39,16 @@ function categoryLabel(category: WorkshopItemCategory): string {
   return "其他";
 }
 
+function weekdayLabel(weekday: number): string {
+  if (weekday === 0) return "周日";
+  if (weekday === 1) return "周一";
+  if (weekday === 2) return "周二";
+  if (weekday === 3) return "周三";
+  if (weekday === 4) return "周四";
+  if (weekday === 5) return "周五";
+  return "周六";
+}
+
 export function WorkshopView(): JSX.Element {
   const [state, setState] = useState<WorkshopState | null>(null);
   const [craftOptions, setCraftOptions] = useState<WorkshopCraftOption[]>([]);
@@ -63,6 +74,9 @@ export function WorkshopView(): JSX.Element {
   const [taxMode, setTaxMode] = useState<"0.1" | "0.2">("0.1");
   const [nearCraftBudgetInput, setNearCraftBudgetInput] = useState("50000");
   const [nearCraftSortMode, setNearCraftSortMode] = useState<"max_budget_profit" | "min_gap_cost">("max_budget_profit");
+  const [historyItemId, setHistoryItemId] = useState("");
+  const [historyDaysInput, setHistoryDaysInput] = useState("30");
+  const [historyResult, setHistoryResult] = useState<WorkshopPriceHistoryResult | null>(null);
 
   const taxRate = Number(taxMode);
 
@@ -221,6 +235,16 @@ export function WorkshopView(): JSX.Element {
       setSelectedItemId(fallback);
     }
   }, [state, selectedItemId]);
+
+  useEffect(() => {
+    if (!state) return;
+    const exists = historyItemId && state.items.some((item) => item.id === historyItemId);
+    if (!exists) {
+      const fallback = state.items[0]?.id ?? "";
+      setHistoryItemId(fallback);
+      setHistoryResult(null);
+    }
+  }, [state, historyItemId]);
 
   useEffect(() => {
     if (!state) return;
@@ -415,6 +439,33 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
+  async function onLoadPriceHistory(): Promise<void> {
+    if (!historyItemId) {
+      setError("请先选择要查询的物品。");
+      return;
+    }
+    const days = toInt(historyDaysInput);
+    if (days === null || days <= 0) {
+      setError("查询天数必须是正整数。");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await window.aionApi.getWorkshopPriceHistory({
+        itemId: historyItemId,
+        days,
+      });
+      setHistoryResult(result);
+      setMessage("价格历史已刷新");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "价格历史查询失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!state) {
     return (
       <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
@@ -534,6 +585,56 @@ export function WorkshopView(): JSX.Element {
             </tbody>
           </table>
         </div>
+      </article>
+
+      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+        <h4 className="text-sm font-semibold">Phase 2.1 数据验证: 价格历史与指标</h4>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto]">
+          <select
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={historyItemId}
+            onChange={(event) => setHistoryItemId(event.target.value)}
+            disabled={busy || state.items.length === 0}
+          >
+            {state.items.map((item) => (
+              <option key={`history-item-${item.id}`} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={historyDaysInput}
+            onChange={(event) => setHistoryDaysInput(event.target.value)}
+            disabled={busy}
+            placeholder="查询天数（如 30）"
+          />
+          <button className="task-btn px-4" onClick={() => void onLoadPriceHistory()} disabled={busy || !historyItemId}>
+            查询历史
+          </button>
+        </div>
+        {historyResult ? (
+          <div className="mt-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+              <div className="data-pill">样本数: {historyResult.sampleCount}</div>
+              <div className="data-pill">最新价: {formatGold(historyResult.latestPrice)}</div>
+              <div className="data-pill">区间均价: {formatGold(historyResult.averagePrice)}</div>
+              <div className="data-pill">MA7(最新): {formatGold(historyResult.ma7Latest)}</div>
+              <div className="data-pill">
+                最新时间: {historyResult.latestCapturedAt ? new Date(historyResult.latestCapturedAt).toLocaleString() : "--"}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-7">
+              {historyResult.weekdayAverages.map((entry) => (
+                <div key={`weekday-avg-${entry.weekday}`} className="data-pill">
+                  {weekdayLabel(entry.weekday)}: {formatGold(entry.averagePrice)} ({entry.sampleCount})
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-slate-300">还没有查询结果。先选物品和天数后点击“查询历史”。</p>
+        )}
       </article>
 
       <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">

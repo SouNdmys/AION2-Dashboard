@@ -174,6 +174,33 @@
 - 已执行 `npm run typecheck`，通过。
 - 已执行 `npm run build`，通过。
 
+### Phase 2.1 开工（价格历史查询 + 基础指标）
+- 新增价格历史查询能力（按物品 + 时间范围）:
+  - 新增类型（`src/shared/types.ts`）:
+    - `WorkshopPriceHistoryQuery`
+    - `WorkshopPriceHistoryResult`
+    - `WorkshopPriceHistoryPoint`
+    - `WorkshopWeekdayAverage`
+  - 新增 IPC（`src/shared/ipc.ts`）:
+    - `workshop:get-price-history`
+  - 新增 preload API（`src/preload/index.ts`）:
+    - `getWorkshopPriceHistory(payload)`
+  - 主进程注册（`src/main/ipc.ts`）:
+    - `IPC_CHANNELS.getWorkshopPriceHistory`
+- 后端实现（`src/main/workshop-store.ts`）:
+  - 新增 `getWorkshopPriceHistory(payload)`：
+    - 支持 `days` 回看查询；
+    - 支持 `fromAt/toAt` 显式区间查询；
+    - 结果包含 `MA7`、区间均价、按星期几均价、最新价与样本数。
+- 前端验证入口（`src/renderer/src/WorkshopView.tsx`）:
+  - 新增“Phase 2.1 数据验证: 价格历史与指标”面板；
+  - 可选物品、输入查询天数并拉取历史；
+  - 展示样本数、最新价、区间均价、MA7(最新)、星期均价。
+
+### 校验（Phase 2.1）
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
 ## 2026-02-13（v1.1.0）
 
 ### 本次更新

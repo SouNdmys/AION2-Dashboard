@@ -197,6 +197,41 @@ export interface WorkshopPriceSnapshot {
   note?: string;
 }
 
+export interface WorkshopPriceHistoryQuery {
+  itemId: string;
+  fromAt?: string;
+  toAt?: string;
+  days?: number;
+}
+
+export interface WorkshopPriceHistoryPoint {
+  id: string;
+  itemId: string;
+  unitPrice: number;
+  capturedAt: string;
+  weekday: number;
+  ma7: number | null;
+}
+
+export interface WorkshopWeekdayAverage {
+  weekday: number;
+  averagePrice: number | null;
+  sampleCount: number;
+}
+
+export interface WorkshopPriceHistoryResult {
+  itemId: string;
+  fromAt: string;
+  toAt: string;
+  sampleCount: number;
+  latestPrice: number | null;
+  latestCapturedAt: string | null;
+  averagePrice: number | null;
+  ma7Latest: number | null;
+  points: WorkshopPriceHistoryPoint[];
+  weekdayAverages: WorkshopWeekdayAverage[];
+}
+
 export interface WorkshopInventoryItem {
   itemId: string;
   quantity: number;

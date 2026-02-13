@@ -58,8 +58,14 @@
     - 最高预算利润优先
     - 最低补差成本优先
 - Phase 2:
-  - 价格历史曲线（按物品）。
-  - 周期性波动提示（按星期）。
+  - Phase 2.1（已开工）:
+    - 价格历史查询接口（按物品 + 时间范围/天数）。
+    - 基础指标：MA7、按星期几均价。
+    - 工坊页新增数据验证面板（无图表，先验证数据正确性）。
+  - Phase 2.2:
+    - 价格历史曲线（按物品）。
+  - Phase 2.3:
+    - 周期性波动提示（按星期）。
 - Phase 3:
   - 自动/半自动抓价管线（OCR 导入优先）。
   - 图标映射与缓存机制。
@@ -79,3 +85,16 @@
   - 前端模块基于现有 `getWorkshopCraftOptions` 二次计算“近可制作”清单。
   - 支持预算内潜在利润排序，辅助“补一点材料后制作出售”决策。
   - 新增排序策略切换控件，适配不同决策风格（收益优先/低门槛优先）。
+- 新增 Phase 2.1 价格历史数据基础:
+  - 新增类型:
+    - `WorkshopPriceHistoryQuery`
+    - `WorkshopPriceHistoryResult`
+    - `WorkshopPriceHistoryPoint`
+    - `WorkshopWeekdayAverage`
+  - 新增 IPC:
+    - `workshop:get-price-history`
+  - 后端:
+    - `getWorkshopPriceHistory()` 支持按 `days` 或 `fromAt/toAt` 查询。
+    - 返回 MA7、区间均价、按星期几均价、最新价等指标。
+  - 前端:
+    - 工坊页新增“Phase 2.1 数据验证”面板用于即时校验结果。

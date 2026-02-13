@@ -11,14 +11,20 @@ import type {
   WorkshopInventoryItem,
   WorkshopItem,
   WorkshopItemCategory,
+  WorkshopPriceHistoryPoint,
+  WorkshopPriceHistoryQuery,
+  WorkshopPriceHistoryResult,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopRecipeInput,
   WorkshopState,
+  WorkshopWeekdayAverage,
 } from "../shared/types";
 
 const WORKSHOP_STATE_VERSION = 1;
 const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
+const WORKSHOP_HISTORY_DEFAULT_DAYS = 30;
+const WORKSHOP_HISTORY_MAX_DAYS = 365;
 
 const workshopStore = new Store<Record<string, unknown>>({
   name: "aion2-dashboard-workshop",
@@ -424,6 +430,38 @@ function sanitizeTaxRate(raw: unknown): number {
   return clamp(raw, 0, 0.95);
 }
 
+function parseOptionalIso(raw: unknown): Date | null {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function sanitizeLookbackDays(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return WORKSHOP_HISTORY_DEFAULT_DAYS;
+  }
+  return clamp(Math.floor(raw), 1, WORKSHOP_HISTORY_MAX_DAYS);
+}
+
+function buildWeekdayAverages(points: WorkshopPriceHistoryPoint[]): WorkshopWeekdayAverage[] {
+  const aggregates = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }));
+  points.forEach((point) => {
+    const bucket = aggregates[point.weekday];
+    bucket.sum += point.unitPrice;
+    bucket.count += 1;
+  });
+  return aggregates.map((entry, weekday) => ({
+    weekday,
+    averagePrice: entry.count > 0 ? entry.sum / entry.count : null,
+    sampleCount: entry.count,
+  }));
+}
+
 interface WorkshopSampleItemSeed {
   name: string;
   category: WorkshopItemCategory;
@@ -732,6 +770,85 @@ export function getWorkshopCraftOptions(payload?: { taxRate?: number }): Worksho
     }
     return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
   });
+}
+
+export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
+  const state = readWorkshopState();
+  ensureItemExists(state, payload.itemId);
+
+  const lookbackDays = sanitizeLookbackDays(payload.days);
+  const parsedTo = parseOptionalIso(payload.toAt);
+  const parsedFrom = parseOptionalIso(payload.fromAt);
+  const now = new Date();
+  const to = parsedTo ?? now;
+  let from: Date;
+
+  if (payload.fromAt && parsedFrom === null) {
+    throw new Error("fromAt 不是有效时间格式。");
+  }
+  if (payload.toAt && parsedTo === null) {
+    throw new Error("toAt 不是有效时间格式。");
+  }
+
+  if (parsedFrom) {
+    from = parsedFrom;
+  } else {
+    const fromMs = to.getTime() - lookbackDays * 24 * 60 * 60 * 1000;
+    from = new Date(fromMs);
+  }
+
+  if (from.getTime() > to.getTime()) {
+    throw new Error("时间范围无效：fromAt 不能晚于 toAt。");
+  }
+
+  const snapshots = state.prices
+    .filter((entry) => entry.itemId === payload.itemId)
+    .map((entry) => ({
+      ...entry,
+      ts: new Date(entry.capturedAt).getTime(),
+    }))
+    .filter((entry) => Number.isFinite(entry.ts))
+    .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
+    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
+
+  let rollingSum = 0;
+  const rollingWindow: number[] = [];
+  const points: WorkshopPriceHistoryPoint[] = snapshots.map((entry) => {
+    rollingWindow.push(entry.unitPrice);
+    rollingSum += entry.unitPrice;
+    if (rollingWindow.length > 7) {
+      const popped = rollingWindow.shift();
+      if (popped !== undefined) {
+        rollingSum -= popped;
+      }
+    }
+    const ma7 = rollingWindow.length >= 7 ? rollingSum / rollingWindow.length : null;
+    return {
+      id: entry.id,
+      itemId: entry.itemId,
+      unitPrice: entry.unitPrice,
+      capturedAt: new Date(entry.ts).toISOString(),
+      weekday: new Date(entry.ts).getDay(),
+      ma7,
+    };
+  });
+
+  const sampleCount = points.length;
+  const averagePrice = sampleCount > 0 ? points.reduce((acc, point) => acc + point.unitPrice, 0) / sampleCount : null;
+  const latestPoint = points[sampleCount - 1] ?? null;
+
+  return {
+    itemId: payload.itemId,
+    fromAt: from.toISOString(),
+    toAt: to.toISOString(),
+    sampleCount,
+    latestPrice: latestPoint?.unitPrice ?? null,
+    latestCapturedAt: latestPoint?.capturedAt ?? null,
+    averagePrice,
+    ma7Latest: latestPoint?.ma7 ?? null,
+    points,
+    weekdayAverages: buildWeekdayAverages(points),
+  };
 }
 
 export function seedWorkshopSampleData(): WorkshopState {
