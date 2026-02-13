@@ -71,6 +71,22 @@ npm run check:prepackage
 npm run build
 ```
 
+Windows 本地打包（不发布更新元数据）:
+
+```bash
+npm run dist:win
+```
+
+Windows 发布（上传到 GitHub Releases，客户端可自动更新）:
+
+```bash
+npm run dist:win:publish
+```
+
+说明:
+- 自动更新仅对 `NSIS` 安装版生效，`portable` 包不参与自动更新安装流程。
+- 客户端会在启动时检查 GitHub Releases，新版本下载完成后提示重启安装。
+
 ## 数据与备份
 
 - 应用状态由 `electron-store` 本地持久化

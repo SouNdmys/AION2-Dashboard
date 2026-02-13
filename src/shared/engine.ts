@@ -1,4 +1,5 @@
 import {
+  AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
   ENERGY_BASE_CAP,
   ENERGY_BONUS_CAP,
   ENERGY_PER_TICK,
@@ -341,6 +342,9 @@ export function buildCharacterSummary(character: CharacterState, settings: AppSe
   const pendingLabels: string[] = [];
   if (character.missions.dailyRemaining > 0) pendingLabels.push("每日使命未清");
   if (character.missions.weeklyRemaining > 0) pendingLabels.push("每周指令未清");
+  if (character.energy.baseCurrent > AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD) {
+    pendingLabels.push("奥德能量>800，建议清体力");
+  }
   if (character.activities.awakeningRemaining + character.activities.awakeningTicketBonus > 0) pendingLabels.push("觉醒战可打");
   if (character.activities.suppressionRemaining + character.activities.suppressionTicketBonus > 0) pendingLabels.push("讨伐战可打");
   if (character.activities.nightmareRemaining + character.activities.nightmareTicketBonus > 0) pendingLabels.push("恶梦可打");

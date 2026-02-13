@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, dialog } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { autoUpdater } from "electron-updater";
 import { registerIpcHandlers } from "./ipc";
 
 function resolvePreloadPath(): string {
@@ -61,9 +62,56 @@ function resolveAppIconPath(): string | undefined {
   return candidates.find((candidate) => existsSync(candidate));
 }
 
+function setupAutoUpdater(): void {
+  if (!app.isPackaged || process.platform !== "win32") {
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    console.log("[aion2-dashboard] checking for updates");
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("[aion2-dashboard] update available:", info.version);
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    console.log("[aion2-dashboard] update not available");
+  });
+
+  autoUpdater.on("error", (error) => {
+    console.error("[aion2-dashboard] auto update failed", error);
+  });
+
+  autoUpdater.on("update-downloaded", async (info) => {
+    const result = await dialog.showMessageBox({
+      type: "info",
+      title: "发现新版本",
+      message: `新版本 ${info.version} 已下载完成。`,
+      detail: "点击“立即重启更新”后将自动退出并安装更新。",
+      buttons: ["立即重启更新", "稍后"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall();
+    }
+  });
+
+  void autoUpdater.checkForUpdatesAndNotify().catch((error: unknown) => {
+    console.error("[aion2-dashboard] check update request failed", error);
+  });
+}
+
 app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
+  setupAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -17,6 +17,7 @@ export const EXPEDITION_SCHEDULE_HOURS = [5, 13, 21] as const;
 export const TRANSCENDENCE_SCHEDULE_HOURS = [5, 17] as const;
 export const CORRIDOR_UNIFIED_REFRESH_HOUR = 21;
 export const CORRIDOR_UNIFIED_INTERVAL_HOURS = 48;
+export const CORRIDOR_UNIFIED_ANCHOR_LOCAL_ISO = "2026-02-12T21:00:00";
 
 export const EXPEDITION_REWARD_MAX = 21;
 export const EXPEDITION_BOSS_MAX = 35;
@@ -30,6 +31,7 @@ export const AODE_WEEKLY_BASE_CONVERT_MAX = 5;
 export const AODE_WEEKLY_EXTRA_PURCHASE_MAX = 8;
 export const AODE_WEEKLY_EXTRA_CONVERT_MAX = 8;
 export const AODE_POINT_PER_OPERATION = 40;
+export const AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD = 800;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   expeditionGoldPerRun: 1_000_000,

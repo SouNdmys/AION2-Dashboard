@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
   AODE_POINT_PER_OPERATION,
   AODE_WEEKLY_BASE_CONVERT_MAX,
   AODE_WEEKLY_BASE_PURCHASE_MAX,
@@ -475,6 +476,10 @@ export function App(): JSX.Element {
             const corridorMiddleCurrent = item.activities.corridorMiddleAvailable;
             const corridorMiddleTotal = 3;
             const aodeLimits = getCharacterAodeLimits(state, item.id);
+            const aodeBaseEnergyCurrent = item.energy.baseCurrent;
+            const aodeBonusEnergyCurrent = item.energy.bonusCurrent;
+            const aodeBaseEnergyCap = item.energy.baseCap;
+            const aodeBaseEnergyOverflow = aodeBaseEnergyCurrent > AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD;
             const aodeShopAodePurchaseUsed = item.aodePlan.shopAodePurchaseUsed;
             const aodeShopDailyDungeonTicketPurchaseUsed = item.aodePlan.shopDailyDungeonTicketPurchaseUsed;
             const aodeTransformAodeUsed = item.aodePlan.transformAodeUsed;
@@ -545,6 +550,10 @@ export function App(): JSX.Element {
               corridorLowerTotal,
               corridorMiddleCurrent,
               corridorMiddleTotal,
+              aodeBaseEnergyCurrent,
+              aodeBonusEnergyCurrent,
+              aodeBaseEnergyCap,
+              aodeBaseEnergyOverflow,
               aodeShopAodePurchaseUsed,
               aodeShopDailyDungeonTicketPurchaseUsed,
               aodeTransformAodeUsed,
@@ -754,6 +763,17 @@ export function App(): JSX.Element {
     };
 
     for (const entry of overviewRows) {
+      if (entry.aodeBaseEnergyOverflow) {
+        pushItem(
+          entry,
+          "aode-base-overflow",
+          "奥德能量（接近满溢）",
+          980 + entry.aodeBaseEnergyCurrent,
+          "high",
+          `当前 ${entry.aodeBaseEnergyCurrent}/${entry.aodeBaseEnergyCap}（阈值>${AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD}），建议优先清体力`,
+        );
+      }
+
       const sanctumPending = entry.sanctumRaidCurrent + entry.sanctumBoxCurrent;
       if (sanctumPending > 0) {
         pushItem(
@@ -2060,24 +2080,35 @@ export function App(): JSX.Element {
                       key={entry.character.id}
                       className="rounded-2xl border border-white/15 bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
                           <p className="text-sm font-semibold">{entry.character.name}</p>
                           <p className="text-xs text-slate-300">
                             {entry.account.name}
                             {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
                           </p>
                         </div>
-                        <span className="text-xs text-cyan-200">
-                          可执行项 {filteredReadyCount}
-                          {overviewTaskFilter === "all"
-                            ? ""
-                            : overviewTaskFilter === "dungeon"
-                              ? " / 副本"
-                              : overviewTaskFilter === "weekly"
-                                ? " / 周常"
-                                : " / 使命"}
-                        </span>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getUrgentBoardToneClass(
+                              entry.aodeBaseEnergyCurrent,
+                              entry.aodeBaseEnergyCap,
+                              entry.aodeBaseEnergyOverflow,
+                            )}`}
+                          >
+                            奥德 {entry.aodeBaseEnergyCurrent}(+{entry.aodeBonusEnergyCurrent})/{entry.aodeBaseEnergyCap}
+                          </span>
+                          <span className="text-xs text-cyan-200">
+                            可执行项 {filteredReadyCount}
+                            {overviewTaskFilter === "all"
+                              ? ""
+                              : overviewTaskFilter === "dungeon"
+                                ? " / 副本"
+                                : overviewTaskFilter === "weekly"
+                                  ? " / 周常"
+                                  : " / 使命"}
+                          </span>
+                        </div>
                       </div>
                       <div className="mt-2 space-y-2">
                         <div className="flex flex-wrap gap-1.5">
@@ -2623,7 +2654,7 @@ export function App(): JSX.Element {
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <h4 className="text-sm font-semibold">深渊回廊参数（当前账号同步）</h4>
               <p className="mt-1 text-xs text-slate-300">
-                规则: 上层/下层按统一刷新节奏运行（今晚 21:00 起每 48 小时），这里只需录入当前可打数量并同步到当前账号。
+                规则: 上层/下层按统一刷新节奏运行（固定 21:00 锚点，每 48 小时），这里只需录入当前可打数量并同步到当前账号。
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="space-y-1">

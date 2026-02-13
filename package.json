@@ -1,6 +1,6 @@
 {
   "name": "aion2-dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "AION 2 multi-character progress dashboard",
   "author": "SouNd",
@@ -13,9 +13,11 @@
     "typecheck": "tsc --noEmit",
     "check:prepackage": "node scripts/prepackage-check.mjs",
     "prepare:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1",
-    "dist:win": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable"
+    "dist:win": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish never",
+    "dist:win:publish": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish always"
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "electron-store": "^10.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -77,6 +79,13 @@
       "perMachine": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "SouNdmys",
+        "repo": "AION2-Dashboard"
+      }
+    ]
   }
 }
