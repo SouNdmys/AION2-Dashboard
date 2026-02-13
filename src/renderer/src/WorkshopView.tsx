@@ -62,6 +62,7 @@ export function WorkshopView(): JSX.Element {
   const [simulateRuns, setSimulateRuns] = useState("1");
   const [taxMode, setTaxMode] = useState<"0.1" | "0.2">("0.1");
   const [nearCraftBudgetInput, setNearCraftBudgetInput] = useState("50000");
+  const [nearCraftSortMode, setNearCraftSortMode] = useState<"max_budget_profit" | "min_gap_cost">("max_budget_profit");
 
   const taxRate = Number(taxMode);
 
@@ -125,19 +126,41 @@ export function WorkshopView(): JSX.Element {
       .filter((entry) => entry !== null)
       .filter((entry) => entry.affordableRuns > 0 || entry.unknownPriceRows.length > 0)
       .sort((left, right) => {
-        const rightProfit = right.estimatedBudgetProfit ?? Number.NEGATIVE_INFINITY;
+        const leftCost = left.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
+        const rightCost = right.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
         const leftProfit = left.estimatedBudgetProfit ?? Number.NEGATIVE_INFINITY;
+        const rightProfit = right.estimatedBudgetProfit ?? Number.NEGATIVE_INFINITY;
+        const leftPerRunProfit = left.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
+        const rightPerRunProfit = right.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
+
+        if (nearCraftSortMode === "min_gap_cost") {
+          if (leftCost !== rightCost) {
+            return leftCost - rightCost;
+          }
+          if (right.affordableRuns !== left.affordableRuns) {
+            return right.affordableRuns - left.affordableRuns;
+          }
+          if (rightProfit !== leftProfit) {
+            return rightProfit - leftProfit;
+          }
+          if (rightPerRunProfit !== leftPerRunProfit) {
+            return rightPerRunProfit - leftPerRunProfit;
+          }
+          return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
+        }
+
         if (rightProfit !== leftProfit) {
           return rightProfit - leftProfit;
         }
-        const leftCost = left.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
-        const rightCost = right.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
+        if (rightPerRunProfit !== leftPerRunProfit) {
+          return rightPerRunProfit - leftPerRunProfit;
+        }
         if (leftCost !== rightCost) {
           return leftCost - rightCost;
         }
         return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
       });
-  }, [craftOptions, nearCraftBudget]);
+  }, [craftOptions, nearCraftBudget, nearCraftSortMode]);
 
   async function loadState(): Promise<void> {
     const next = await window.aionApi.getWorkshopState();
@@ -730,7 +753,7 @@ export function WorkshopView(): JSX.Element {
       <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <h4 className="text-sm font-semibold">5) Phase 1.2 差一点可做（补差预算）</h4>
         <p className="mt-2 text-xs text-slate-300">输入可补差预算，系统会推算“补一点材料即可开做”的目标与预算内潜在利润。</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]">
           <input
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={nearCraftBudgetInput}
@@ -738,6 +761,15 @@ export function WorkshopView(): JSX.Element {
             disabled={busy}
             placeholder="补差预算（金币）"
           />
+          <select
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={nearCraftSortMode}
+            onChange={(event) => setNearCraftSortMode(event.target.value as "max_budget_profit" | "min_gap_cost")}
+            disabled={busy}
+          >
+            <option value="max_budget_profit">排序: 最高预算利润优先</option>
+            <option value="min_gap_cost">排序: 最低补差成本优先</option>
+          </select>
           <button className="task-btn px-4" onClick={() => void loadCraftOptions()} disabled={busy}>
             按预算刷新
           </button>
