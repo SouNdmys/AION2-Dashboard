@@ -5,11 +5,15 @@ import type {
   AddWorkshopPriceSnapshotInput,
   AppSettings,
   ApplyTaskActionInput,
+  WorkshopCatalogImportFromFileInput,
+  WorkshopOcrPriceImportInput,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
   WorkshopCraftSimulationInput,
   WorkshopPriceHistoryQuery,
+  WorkshopPriceSignalQuery,
+  WorkshopPriceSignalRule,
 } from "../shared/types";
 import {
   addAccount,
@@ -37,13 +41,18 @@ import {
 } from "./store";
 import {
   addWorkshopPriceSnapshot,
+  deleteWorkshopPriceSnapshot,
   deleteWorkshopItem,
   deleteWorkshopRecipe,
   getWorkshopCraftOptions,
   getWorkshopPriceHistory,
+  getWorkshopPriceSignals,
+  importWorkshopCatalogFromFile,
+  importWorkshopOcrPrices,
   getWorkshopState,
   seedWorkshopSampleData,
   simulateWorkshopCraft,
+  updateWorkshopSignalRule,
   upsertWorkshopInventory,
   upsertWorkshopItem,
   upsertWorkshopRecipe,
@@ -166,6 +175,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.addWorkshopPriceSnapshot, (_event, payload: AddWorkshopPriceSnapshotInput) =>
     addWorkshopPriceSnapshot(payload),
   );
+  ipcMain.handle(IPC_CHANNELS.deleteWorkshopPriceSnapshot, (_event, payload: { snapshotId: string }) =>
+    deleteWorkshopPriceSnapshot(payload.snapshotId),
+  );
+  ipcMain.handle(IPC_CHANNELS.importWorkshopOcrPrices, (_event, payload: WorkshopOcrPriceImportInput) =>
+    importWorkshopOcrPrices(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.importWorkshopCatalogFromFile, (_event, payload: WorkshopCatalogImportFromFileInput) =>
+    importWorkshopCatalogFromFile(payload),
+  );
   ipcMain.handle(IPC_CHANNELS.upsertWorkshopInventory, (_event, payload: UpsertWorkshopInventoryInput) =>
     upsertWorkshopInventory(payload),
   );
@@ -177,6 +195,12 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(IPC_CHANNELS.getWorkshopPriceHistory, (_event, payload: WorkshopPriceHistoryQuery) =>
     getWorkshopPriceHistory(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopPriceSignals, (_event, payload?: WorkshopPriceSignalQuery) =>
+    getWorkshopPriceSignals(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.updateWorkshopSignalRule, (_event, payload: Partial<WorkshopPriceSignalRule>) =>
+    updateWorkshopSignalRule(payload),
   );
   ipcMain.handle(IPC_CHANNELS.seedWorkshopSampleData, () => seedWorkshopSampleData());
 }

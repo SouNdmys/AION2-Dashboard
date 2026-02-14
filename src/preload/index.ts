@@ -8,6 +8,10 @@ import type {
   ApplyTaskActionInput,
   ExportDataResult,
   ImportDataResult,
+  WorkshopCatalogImportFromFileInput,
+  WorkshopCatalogImportResult,
+  WorkshopOcrPriceImportInput,
+  WorkshopOcrPriceImportResult,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
@@ -16,6 +20,9 @@ import type {
   WorkshopCraftSimulationResult,
   WorkshopPriceHistoryQuery,
   WorkshopPriceHistoryResult,
+  WorkshopPriceSignalQuery,
+  WorkshopPriceSignalResult,
+  WorkshopPriceSignalRule,
   WorkshopState,
 } from "../shared/types";
 
@@ -110,6 +117,12 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.deleteWorkshopRecipe, { recipeId }),
   addWorkshopPriceSnapshot: (payload: AddWorkshopPriceSnapshotInput): Promise<WorkshopState> =>
     ipcRenderer.invoke(IPC_CHANNELS.addWorkshopPriceSnapshot, payload),
+  deleteWorkshopPriceSnapshot: (snapshotId: string): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.deleteWorkshopPriceSnapshot, { snapshotId }),
+  importWorkshopOcrPrices: (payload: WorkshopOcrPriceImportInput): Promise<WorkshopOcrPriceImportResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.importWorkshopOcrPrices, payload),
+  importWorkshopCatalogFromFile: (payload: WorkshopCatalogImportFromFileInput): Promise<WorkshopCatalogImportResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.importWorkshopCatalogFromFile, payload),
   upsertWorkshopInventory: (payload: UpsertWorkshopInventoryInput): Promise<WorkshopState> =>
     ipcRenderer.invoke(IPC_CHANNELS.upsertWorkshopInventory, payload),
   simulateWorkshopCraft: (payload: WorkshopCraftSimulationInput): Promise<WorkshopCraftSimulationResult> =>
@@ -118,6 +131,10 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.getWorkshopCraftOptions, payload ?? {}),
   getWorkshopPriceHistory: (payload: WorkshopPriceHistoryQuery): Promise<WorkshopPriceHistoryResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.getWorkshopPriceHistory, payload),
+  getWorkshopPriceSignals: (payload?: WorkshopPriceSignalQuery): Promise<WorkshopPriceSignalResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getWorkshopPriceSignals, payload ?? {}),
+  updateWorkshopSignalRule: (payload: Partial<WorkshopPriceSignalRule>): Promise<WorkshopState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.updateWorkshopSignalRule, payload),
   seedWorkshopSampleData: (): Promise<WorkshopState> => ipcRenderer.invoke(IPC_CHANNELS.seedWorkshopSampleData),
 };
 

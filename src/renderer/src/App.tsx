@@ -21,6 +21,7 @@ import {
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { WorkshopView } from "./WorkshopView";
+import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 type ViewMode = "dashboard" | "settings" | "workshop";
@@ -2767,6 +2768,8 @@ export function App(): JSX.Element {
               </button>
             </div>
           </article>
+
+          {viewMode === "workshop" ? <WorkshopSidebarHistoryCard /> : null}
 
           {viewMode === "dashboard" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">

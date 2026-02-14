@@ -1,5 +1,108 @@
 # AION2 Dashboard - 操作日志
 
+## 2026-02-14
+
+### 工坊 Phase 2.2 开发进度（行情中心 UI）
+- 将工坊页原“Phase 2.1 数据验证面板”升级为“Phase 2.2 行情中心: 价格曲线视图”。
+- 新增价格历史快捷筛选：
+  - 7 / 14 / 30 / 90 天一键查询。
+  - 保留手动输入天数查询。
+- 新增曲线图可视化（基于现有 `workshop:get-price-history` 数据）：
+  - 实际价格曲线（青线）。
+  - MA7 曲线（黄线）。
+  - 周三重置日标记线（黄虚线）。
+- 新增行情关键指标卡：
+  - 样本数、最新价、区间均价、MA7(最新)。
+  - 周内均价偏离率（最新价相对“同星期均价”偏离）。
+  - 最新采样时间。
+- 保留并展示按星期几均价明细（周日到周六）。
+- 预留 Phase 2.3 规则入口：
+  - 新增“低于周内均值阈值提示”的阈值输入与触发预览（仅预览，不写入规则引擎）。
+
+### 本次校验
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+### 工坊 Phase 2.3 开发进度（周期性波动提示）
+- 新增后端规则配置模型（持久化到工坊 store）：
+  - `signalRule.enabled`
+  - `signalRule.lookbackDays`
+  - `signalRule.dropBelowWeekdayAverageRatio`
+- 新增工坊信号类型与结果结构：
+  - `WorkshopPriceSignalRule`
+  - `WorkshopPriceSignalQuery`
+  - `WorkshopPriceSignalRow`
+  - `WorkshopPriceSignalResult`
+- 新增 IPC 与 preload API：
+  - `workshop:get-price-signals`
+  - `workshop:update-signal-rule`
+- 后端实现：
+  - `getWorkshopPriceSignals()`：对全物品按“最新价 vs 同星期均价”计算偏离率，并按阈值输出触发行情提示。
+  - `updateWorkshopSignalRule()`：保存规则配置并统一做边界钳制（天数/阈值）。
+  - 价格历史计算逻辑抽出复用，确保 `Phase 2.1/2.2/2.3` 口径一致。
+- 前端接入（工坊 Phase 2.2 面板内）：
+  - 将 Phase 2.3 从“预留预览”升级为“可保存规则”。
+  - 支持开启/关闭规则、设置回看天数、设置阈值%、保存并刷新信号。
+  - 展示触发结果清单（物品、最新价、同星期均价、偏离率、最新采样时间、样本数）。
+  - 非触发场景与规则关闭场景给出明确提示文案。
+
+### 本次校验（Phase 2.3）
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+### 工坊 Phase 3.0 开发进度（半自动抓价 / OCR 导入优先）
+- 新增 OCR 粘贴导入能力（半自动抓价首版）：
+  - 输入方式：多行文本，每行“物品名 + 价格（行尾）”。
+  - 价格 OCR 容错：支持常见分隔符与 `O/o -> 0`、`I/l -> 1` 误识别修正。
+  - 导入结果回显：成功条数、新增物品数、未匹配物品、异常行列表。
+- 新增后端导入协议与接口：
+  - 类型：`WorkshopOcrPriceImportInput`、`WorkshopOcrPriceImportResult`
+  - IPC：`workshop:import-ocr-prices`
+  - API：`importWorkshopOcrPrices(payload)`
+- 导入策略：
+  - 默认写入 `source=import` 价格快照。
+  - 支持“缺失物品自动创建（材料分类）”开关。
+  - 自动创建物品时补充图标键推断（作为图标映射缓存基础）。
+- 工坊页新增“Phase 3 半自动抓价: OCR 粘贴导入”面板，已接入全链路。
+
+### 本次校验（Phase 3.0）
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+### 工坊数据底座录入（采集材料、鐵匠）
+- 新增“目录文件导入”能力，支持从项目内文本文件批量导入工坊物品与配方：
+  - IPC: `workshop:import-catalog-from-file`
+  - API: `importWorkshopCatalogFromFile({ filePath })`
+- 已实现 `采集材料、鐵匠.md` 对应的解析与录入逻辑：
+  - 自动识别“物品段 / 配方段”。
+  - 按分类映射到工坊类别（採集材料/製作材料/武器/裝備等）。
+  - 解析材料明细中 `名稱*數量` 与 `名稱數量` 两种写法。
+  - 对同产物重复配方做跳过并记录 warning（避免覆盖冲突）。
+  - 缺失材料名自动补建物品，保证配方可落库。
+- 工坊页新增按钮：`导入采集材料、鐵匠`
+  - 导入后即时回显：物品数、配方数、隐式补建数、跳过数与 warning。
+- 为后续继续录入其他职业/分类文件打通了复用入口（同格式可继续导入）。
+
+### 本次校验（目录导入）
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+### 工坊录入策略调整（按最新确认）
+- 移除工坊页顶部“`一键导入样例`”与“`导入采集材料、鐵匠`”按钮，避免用户侧手工导入路径。
+- 工坊数据改为“内置目录启动重建”模式：
+  - `WORKSHOP_STATE_VERSION` 升级到 `2`。
+  - 当检测到旧版本或空目录时，自动读取项目根目录 `采集材料、鐵匠.md`，按规则重建物品与配方。
+  - 该重建会覆盖旧工坊目录数据（物品/配方），用于清理历史样例和旧录入。
+- 移除前端“配方录入”卡片（用户不再手动维护配方）。
+- 制作模拟器增强：
+  - 在模拟材料表中支持直接编辑“库存/单价”。
+  - 新增按钮“保存单价/库存并重算”。
+  - 保存后写入现有价格快照与库存链路，并立即重算结果（与未来 OCR 导价链路兼容）。
+
+### 本次校验（策略调整）
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
 ## 2026-02-09
 
 ### 今日完成
@@ -99,6 +202,79 @@
 
 ### 校验
 - 已执行 `npm run typecheck`，通过。
+
+## 2026-02-14
+
+### 今日完成（工坊主线：内置库 + 行情 + 模拟 + 背包工作台）
+- 工坊数据能力扩展：
+  - 增加目录文本导入与 OCR 价格导入链路（含自动创建缺失材料选项）。
+  - 增加价格快照删除能力，用于误操作修正。
+  - 增加周期波动信号规则（按星期均价偏离阈值触发）。
+- 工坊分类与排序对齐：
+  - 物品/配方支持大类+下级分类筛选（鐵匠 / 盔甲 / 手工藝 / 煉金 等）。
+  - 制作模拟、行情中心、价格管理统一分类口径与排序逻辑。
+- UI 结构重构为三段工作台：
+  - `1) 市场工作台`：OCR 抓价 + 行情中心 + 波动信号。
+  - `2) 制作模拟器（单配方）`：单配方成本/利润测算，材料行内可改库存与单价。
+  - `3) 背包与补差工作台`：全局价格/库存修正 + 背包逆向推导 + 差一点可做。
+- 右侧操作中心新增“历史价格管理”卡片：
+  - 支持大类/小类/物品/关键词筛选。
+  - 支持删除指定快照并即时生效。
+
+### 结构改动
+- `src/main/workshop-store.ts`
+  - 升级工坊状态版本，新增 `signalRule`、目录导入/OCR 导入/信号分析/快照删除等核心逻辑。
+- `src/shared/types.ts`
+  - 新增工坊行情信号、OCR 导入、目录导入等类型定义。
+- `src/shared/ipc.ts` / `src/main/ipc.ts` / `src/preload/index.ts`
+  - 新增 IPC：`importWorkshopOcrPrices`、`importWorkshopCatalogFromFile`、`getWorkshopPriceSignals`、
+    `updateWorkshopSignalRule`、`deleteWorkshopPriceSnapshot`。
+- `src/renderer/src/WorkshopView.tsx`
+  - 重构工坊页面为三段工作台，完成分类筛选、行情图、信号配置、模拟器与背包工作台整合。
+- `src/renderer/src/WorkshopSidebarHistoryCard.tsx`（新增）
+  - 右侧历史价格管理 UI，支持筛选与删除。
+- `src/renderer/src/App.tsx`
+  - 在 `workshop` 模式挂载右侧历史价格管理卡片。
+
+### 校验
+- 已执行 `npm run typecheck`，通过。
+- 已执行 `npm run build`，通过。
+
+## 2026-02-13（收口）
+
+### 今日收口进度（工坊主线）
+- Phase 1 已可用：
+  - 物品/价格/库存录入
+  - 配方录入（支持套娃）
+  - 制作模拟（税后收入、净利润、利润率、缺口）
+  - 背包逆向推导
+- Phase 1.1 已完成：
+  - 一键导入样例数据（`样例-*`）
+  - 运行时兼容提示（旧 preload 场景）
+- Phase 1.2 已完成：
+  - “差一点可做”补差预算建议
+  - 排序策略切换：
+    - 最高预算利润优先
+    - 最低补差成本优先
+- Phase 2.1 已开工并完成数据层：
+  - 价格历史查询（按物品 + 天数/区间）
+  - 指标：`MA7`、区间均价、按星期几均价、最新价
+  - 工坊页新增数据验证面板（用于先验算数据正确性）
+
+### 今日提交记录
+- `10bd296` `feat: workshop phase1.2 budget suggestions and responsive fixes`
+- `1d46408` `feat: add phase1.2 near-craft sorting strategies`
+- `747407f` `feat: add workshop phase2.1 price history metrics foundation`
+
+### 当前状态
+- `npm run typecheck` 通过
+- `npm run build` 通过
+
+### 明日开工清单（建议顺序）
+1. Phase 2.2：行情中心 UI（价格曲线视图）
+2. 接入时间筛选（7/14/30/90 天）和“周三重置日”标记线
+3. 在曲线页显示关键数值卡：最新价、MA7、周内均价偏离率
+4. 预留 Phase 2.3 规则入口（低于均值 X% 的提示文案）
 
 ## 2026-02-13
 

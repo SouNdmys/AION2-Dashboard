@@ -232,6 +232,68 @@ export interface WorkshopPriceHistoryResult {
   weekdayAverages: WorkshopWeekdayAverage[];
 }
 
+export interface WorkshopPriceSignalRule {
+  enabled: boolean;
+  lookbackDays: number;
+  dropBelowWeekdayAverageRatio: number;
+}
+
+export interface WorkshopPriceSignalQuery {
+  lookbackDays?: number;
+  thresholdRatio?: number;
+}
+
+export interface WorkshopPriceSignalRow {
+  itemId: string;
+  itemName: string;
+  latestPrice: number | null;
+  latestCapturedAt: string | null;
+  latestWeekday: number | null;
+  weekdayAveragePrice: number | null;
+  deviationRatioFromWeekdayAverage: number | null;
+  sampleCount: number;
+  triggered: boolean;
+}
+
+export interface WorkshopPriceSignalResult {
+  generatedAt: string;
+  lookbackDays: number;
+  thresholdRatio: number;
+  ruleEnabled: boolean;
+  triggeredCount: number;
+  rows: WorkshopPriceSignalRow[];
+}
+
+export interface WorkshopOcrPriceImportInput {
+  text: string;
+  capturedAt?: string;
+  source?: WorkshopPriceSource;
+  autoCreateMissingItems?: boolean;
+  defaultCategory?: WorkshopItemCategory;
+}
+
+export interface WorkshopOcrPriceImportResult {
+  state: WorkshopState;
+  importedCount: number;
+  createdItemCount: number;
+  parsedLineCount: number;
+  unknownItemNames: string[];
+  invalidLines: string[];
+}
+
+export interface WorkshopCatalogImportFromFileInput {
+  filePath: string;
+}
+
+export interface WorkshopCatalogImportResult {
+  state: WorkshopState;
+  importedItemCount: number;
+  importedRecipeCount: number;
+  createdImplicitItemCount: number;
+  skippedRecipeCount: number;
+  warnings: string[];
+}
+
 export interface WorkshopInventoryItem {
   itemId: string;
   quantity: number;
@@ -244,6 +306,7 @@ export interface WorkshopState {
   recipes: WorkshopRecipe[];
   prices: WorkshopPriceSnapshot[];
   inventory: WorkshopInventoryItem[];
+  signalRule: WorkshopPriceSignalRule;
 }
 
 export interface UpsertWorkshopItemInput {
@@ -295,6 +358,7 @@ export interface WorkshopCraftSimulationInput {
   recipeId: string;
   runs: number;
   taxRate?: number;
+  materialMode?: "expanded" | "direct";
 }
 
 export interface WorkshopCraftSimulationResult {
@@ -305,6 +369,7 @@ export interface WorkshopCraftSimulationResult {
   runs: number;
   totalOutputQuantity: number;
   taxRate: number;
+  materialMode: "expanded" | "direct";
   materialRows: WorkshopSimulationMaterialRow[];
   craftSteps: WorkshopSimulationCraftStep[];
   craftableNow: boolean;

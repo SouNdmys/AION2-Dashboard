@@ -1,7 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import Store from "electron-store";
 import type {
   AddWorkshopPriceSnapshotInput,
+  WorkshopCatalogImportFromFileInput,
+  WorkshopCatalogImportResult,
+  WorkshopOcrPriceImportInput,
+  WorkshopOcrPriceImportResult,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
@@ -14,6 +20,10 @@ import type {
   WorkshopPriceHistoryPoint,
   WorkshopPriceHistoryQuery,
   WorkshopPriceHistoryResult,
+  WorkshopPriceSignalQuery,
+  WorkshopPriceSignalResult,
+  WorkshopPriceSignalRow,
+  WorkshopPriceSignalRule,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopRecipeInput,
@@ -21,10 +31,20 @@ import type {
   WorkshopWeekdayAverage,
 } from "../shared/types";
 
-const WORKSHOP_STATE_VERSION = 1;
+const WORKSHOP_STATE_VERSION = 6;
 const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
 const WORKSHOP_HISTORY_DEFAULT_DAYS = 30;
 const WORKSHOP_HISTORY_MAX_DAYS = 365;
+const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.08;
+const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.01;
+const WORKSHOP_SIGNAL_THRESHOLD_MAX = 0.5;
+
+const DEFAULT_WORKSHOP_SIGNAL_RULE: WorkshopPriceSignalRule = {
+  enabled: true,
+  lookbackDays: WORKSHOP_HISTORY_DEFAULT_DAYS,
+  dropBelowWeekdayAverageRatio: WORKSHOP_SIGNAL_THRESHOLD_DEFAULT,
+};
+const BUILTIN_CATALOG_FILE_NAME = "制作管理.md";
 
 const workshopStore = new Store<Record<string, unknown>>({
   name: "aion2-dashboard-workshop",
@@ -35,6 +55,7 @@ const workshopStore = new Store<Record<string, unknown>>({
     recipes: [],
     prices: [],
     inventory: [],
+    signalRule: DEFAULT_WORKSHOP_SIGNAL_RULE,
   },
 });
 
@@ -65,6 +86,223 @@ function sanitizeName(raw: unknown, fallback = ""): string {
     return fallback;
   }
   return raw.trim();
+}
+
+function normalizeLookupName(name: string): string {
+  return name.trim().toLocaleLowerCase().replace(/\s+/g, "");
+}
+
+function inferItemIcon(name: string, category: WorkshopItemCategory): string | undefined {
+  if (category === "equipment") {
+    return "icon-equipment";
+  }
+  if (category === "component") {
+    return "icon-component";
+  }
+  const normalized = name.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes("矿") || normalized.includes("礦") || normalized.includes("结晶") || normalized.includes("結晶") || normalized.includes("石")) {
+    return "icon-material-ore";
+  }
+  if (normalized.includes("粉") || normalized.includes("碎片") || normalized.includes("核心")) {
+    return "icon-material-fragment";
+  }
+  return category === "material" ? "icon-material" : "icon-other";
+}
+
+function stripCatalogImprintTag(value: string): string {
+  return value.replace(/[（(]\s*刻印\s*[）)]/gu, "");
+}
+
+function normalizeCatalogItemName(name: string): string {
+  return stripCatalogImprintTag(name).trim().replace(/\s+/g, " ");
+}
+
+function normalizeCatalogLookupName(name: string): string {
+  return normalizeCatalogItemName(name).toLocaleLowerCase().replace(/\s+/g, "");
+}
+
+function normalizeCatalogMainCategory(raw: string): string {
+  const value = raw.trim();
+  if (!value) {
+    return "";
+  }
+  if (value === "铁匠") {
+    return "鐵匠";
+  }
+  if (value === "手工艺") {
+    return "手工藝";
+  }
+  if (value === "采集材料") {
+    return "採集材料";
+  }
+  return value;
+}
+
+function isMajorCatalogMainCategory(category: string): boolean {
+  return (
+    category === "採集材料" ||
+    category === "鐵匠" ||
+    category === "盔甲" ||
+    category === "手工藝" ||
+    category === "煉金" ||
+    category === "料理"
+  );
+}
+
+function sanitizeRecipeOutputName(raw: string): string {
+  return normalizeCatalogItemName(raw).replace(/\s*[（(]批量[）)]\s*$/u, "");
+}
+
+function parseRecipeInputChunk(chunk: string): { itemName: string; quantity: number } | null {
+  const value = chunk.trim();
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/^(.*?)(\d+)$/u);
+  if (!match) {
+    return null;
+  }
+  const head = match[1]?.replace(/[*xX×]\s*$/u, "").trim() ?? "";
+  const tail = match[2] ?? "";
+  const quantity = Number(tail);
+  if (!head || !Number.isFinite(quantity) || quantity <= 0) {
+    return null;
+  }
+  return {
+    itemName: normalizeCatalogItemName(head),
+    quantity: Math.floor(quantity),
+  };
+}
+
+function mapCatalogCategory(rawCategory: string): WorkshopItemCategory {
+  const category = rawCategory.trim();
+  if (category.includes("武器") || category.includes("裝備") || category.includes("防具") || category.includes("盔甲")) {
+    return "equipment";
+  }
+  if (category.includes("採集")) {
+    return "material";
+  }
+  if (category.includes("材料") || category.includes("消耗")) {
+    return "component";
+  }
+  return "other";
+}
+
+interface CatalogItemRow {
+  name: string;
+  rawCategory: string;
+  mainCategory?: string;
+  alias?: string;
+}
+
+interface CatalogRecipeRow {
+  outputName: string;
+  outputQuantity: number;
+  mainCategory?: string;
+  inputs: WorkshopRecipeInput[];
+}
+
+function parseCatalogCsvText(text: string): {
+  items: CatalogItemRow[];
+  recipes: CatalogRecipeRow[];
+  warnings: string[];
+} {
+  const lines = text.split(/\r?\n/u);
+  const warnings: string[] = [];
+  const itemRows: CatalogItemRow[] = [];
+  const recipeRows: CatalogRecipeRow[] = [];
+  let mode: "item" | "recipe" = "item";
+  let currentMainCategory = "未分類";
+
+  lines.forEach((rawLine, index) => {
+    const lineNo = index + 1;
+    const line = rawLine.trim();
+    if (!line) {
+      return;
+    }
+    if (line.startsWith("#")) {
+      const heading = normalizeCatalogMainCategory(line.replace(/^#+\s*/u, ""));
+      if (heading && isMajorCatalogMainCategory(heading)) {
+        currentMainCategory = heading;
+      }
+      mode = "item";
+      return;
+    }
+    if (line.startsWith("名稱(繁體),分類")) {
+      mode = "item";
+      return;
+    }
+    if (line.startsWith("成品名稱,產量")) {
+      mode = "recipe";
+      return;
+    }
+
+    if (mode === "item") {
+      const segments = rawLine.split(",");
+      const name = normalizeCatalogItemName(segments[0] ?? "");
+      const rawCategory = (segments[1] ?? "").trim();
+      const alias = normalizeCatalogItemName(segments.slice(2).join(","));
+      if (!name) {
+        return;
+      }
+      if (!rawCategory) {
+        return;
+      }
+      itemRows.push({
+        name,
+        rawCategory,
+        mainCategory: currentMainCategory,
+        alias: alias || undefined,
+      });
+      return;
+    }
+
+    if (mode === "recipe") {
+      const first = rawLine.indexOf(",");
+      const second = first < 0 ? -1 : rawLine.indexOf(",", first + 1);
+      if (first < 0 || second < 0) {
+        warnings.push(`第 ${lineNo} 行配方格式异常: ${line}`);
+        return;
+      }
+      const outputRawName = normalizeCatalogItemName(rawLine.slice(0, first));
+      const outputQuantityRaw = rawLine.slice(first + 1, second).trim();
+      const inputText = rawLine.slice(second + 1).trim();
+      const outputQuantity = Number(outputQuantityRaw);
+      if (!outputRawName || !Number.isFinite(outputQuantity) || outputQuantity <= 0) {
+        warnings.push(`第 ${lineNo} 行配方产物格式异常: ${line}`);
+        return;
+      }
+      const outputName = sanitizeRecipeOutputName(outputRawName);
+      const inputChunks = inputText.split(/[;；]/u).map((entry) => entry.trim()).filter(Boolean);
+      const parsedInputs = inputChunks
+        .map((entry) => parseRecipeInputChunk(entry))
+        .filter((entry): entry is { itemName: string; quantity: number } => entry !== null)
+        .map((entry) => ({
+          itemId: entry.itemName,
+          quantity: entry.quantity,
+        }));
+      if (parsedInputs.length === 0) {
+        warnings.push(`第 ${lineNo} 行配方材料为空: ${line}`);
+        return;
+      }
+      recipeRows.push({
+        outputName,
+        outputQuantity: Math.floor(outputQuantity),
+        mainCategory: currentMainCategory,
+        inputs: parsedInputs,
+      });
+      return;
+    }
+  });
+
+  return {
+    items: itemRows,
+    recipes: recipeRows,
+    warnings,
+  };
 }
 
 function toPositiveInt(raw: unknown, fallback: number): number {
@@ -207,6 +445,7 @@ function normalizeInventoryItem(raw: unknown): WorkshopInventoryItem | null {
 function normalizeWorkshopState(raw: unknown): WorkshopState {
   const entity = raw as Record<string, unknown> | undefined;
   const version = typeof entity?.version === "number" ? Math.floor(entity.version) : 0;
+  const signalRule = normalizeSignalRule(entity?.signalRule);
   const itemsRaw = Array.isArray(entity?.items) ? entity?.items : [];
   const itemMap = new Map<string, WorkshopItem>();
   itemsRaw.forEach((entry, index) => {
@@ -214,7 +453,7 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
     itemMap.set(item.id, item);
   });
 
-  const items = Array.from(itemMap.values()).sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+  const items = Array.from(itemMap.values());
   const validItemIds = new Set(items.map((item) => item.id));
 
   const recipesRaw = Array.isArray(entity?.recipes) ? entity?.recipes : [];
@@ -232,9 +471,7 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
     }
     recipeMap.set(recipe.id, recipe);
   });
-  const recipes = Array.from(recipeMap.values()).sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  );
+  const recipes = Array.from(recipeMap.values());
 
   const pricesRaw = Array.isArray(entity?.prices) ? entity?.prices : [];
   const prices = pricesRaw
@@ -259,6 +496,7 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
     recipes,
     prices,
     inventory: Array.from(inventoryMap.values()).sort((left, right) => left.itemId.localeCompare(right.itemId)),
+    signalRule,
   };
 }
 
@@ -268,11 +506,94 @@ function writeWorkshopState(next: WorkshopState): WorkshopState {
   workshopStore.set("recipes", next.recipes);
   workshopStore.set("prices", next.prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT));
   workshopStore.set("inventory", next.inventory);
+  workshopStore.set("signalRule", normalizeSignalRule(next.signalRule));
   return normalizeWorkshopState(workshopStore.store);
 }
 
 function readWorkshopState(): WorkshopState {
-  return normalizeWorkshopState(workshopStore.store);
+  const rawVersion = workshopStore.get("version");
+  const storedBuiltinCatalogSignature = workshopStore.get("builtinCatalogSignature");
+  const normalized = normalizeWorkshopState(workshopStore.store);
+  const version = typeof rawVersion === "number" ? Math.floor(rawVersion) : 0;
+  const currentBuiltinCatalogSignature = resolveBuiltinCatalogSignature();
+  const shouldRebuildForCatalogChange =
+    typeof storedBuiltinCatalogSignature !== "string" || storedBuiltinCatalogSignature !== currentBuiltinCatalogSignature;
+  const shouldRebuildFromBuiltin =
+    version !== WORKSHOP_STATE_VERSION ||
+    normalized.items.length === 0 ||
+    normalized.recipes.length === 0 ||
+    shouldRebuildForCatalogChange;
+  if (!shouldRebuildFromBuiltin) {
+    return normalized;
+  }
+  const builtin = buildBuiltinCatalogState();
+  const rebuilt = remapRuntimeStateToBuiltin(normalized, builtin);
+  const persisted = writeWorkshopState(rebuilt);
+  workshopStore.set("builtinCatalogSignature", currentBuiltinCatalogSignature);
+  return persisted;
+}
+
+function remapRuntimeStateToBuiltin(previous: WorkshopState, builtin: WorkshopState): WorkshopState {
+  const builtinByLookup = new Map<string, WorkshopItem>();
+  builtin.items.forEach((item) => {
+    builtinByLookup.set(normalizeCatalogLookupName(item.name), item);
+  });
+
+  const mappedItemIdByLegacyId = new Map<string, string>();
+  previous.items.forEach((item) => {
+    const key = normalizeCatalogLookupName(item.name);
+    const hit = builtinByLookup.get(key);
+    if (!hit) {
+      return;
+    }
+    mappedItemIdByLegacyId.set(item.id, hit.id);
+  });
+
+  const mappedPrices = previous.prices
+    .map((row) => {
+      const mappedItemId = mappedItemIdByLegacyId.get(row.itemId);
+      if (!mappedItemId) {
+        return null;
+      }
+      return {
+        ...row,
+        itemId: mappedItemId,
+      };
+    })
+    .filter((row): row is WorkshopPriceSnapshot => row !== null)
+    .slice(-WORKSHOP_PRICE_HISTORY_LIMIT);
+
+  const mappedInventoryByItemId = new Map<string, WorkshopInventoryItem>();
+  previous.inventory.forEach((row) => {
+    const mappedItemId = mappedItemIdByLegacyId.get(row.itemId);
+    if (!mappedItemId) {
+      return;
+    }
+    const prev = mappedInventoryByItemId.get(mappedItemId);
+    if (!prev) {
+      mappedInventoryByItemId.set(mappedItemId, {
+        ...row,
+        itemId: mappedItemId,
+      });
+      return;
+    }
+    const prevTs = new Date(prev.updatedAt).getTime();
+    const nextTs = new Date(row.updatedAt).getTime();
+    if (nextTs >= prevTs) {
+      mappedInventoryByItemId.set(mappedItemId, {
+        ...row,
+        itemId: mappedItemId,
+      });
+    }
+  });
+
+  return normalizeWorkshopState({
+    ...builtin,
+    version: WORKSHOP_STATE_VERSION,
+    prices: mappedPrices,
+    inventory: Array.from(mappedInventoryByItemId.values()).sort((left, right) => left.itemId.localeCompare(right.itemId)),
+    signalRule: previous.signalRule,
+  });
 }
 
 function ensureItemExists(state: WorkshopState, itemId: string): void {
@@ -303,6 +624,7 @@ function buildSimulation(
   recipe: WorkshopRecipe,
   runs: number,
   taxRate: number,
+  materialMode: "expanded" | "direct",
 ): WorkshopCraftSimulationResult {
   const recipeByOutput = new Map(state.recipes.map((entry) => [entry.outputItemId, entry]));
   const itemById = new Map(state.items.map((entry) => [entry.id, entry]));
@@ -351,9 +673,15 @@ function buildSimulation(
   };
 
   addCraftRuns(recipe.outputItemId, runs);
-  recipe.inputs.forEach((input) => {
-    expandNeededItem(input.itemId, input.quantity * runs);
-  });
+  if (materialMode === "direct") {
+    recipe.inputs.forEach((input) => {
+      addMaterial(input.itemId, input.quantity * runs);
+    });
+  } else {
+    recipe.inputs.forEach((input) => {
+      expandNeededItem(input.itemId, input.quantity * runs);
+    });
+  }
 
   const materialRows = Array.from(requiredMaterials.entries())
     .map(([itemId, required]) => {
@@ -409,6 +737,7 @@ function buildSimulation(
     runs,
     totalOutputQuantity,
     taxRate,
+    materialMode,
     materialRows,
     craftSteps,
     craftableNow: materialRows.every((row) => row.missing <= 0),
@@ -448,6 +777,23 @@ function sanitizeLookbackDays(raw: unknown): number {
   return clamp(Math.floor(raw), 1, WORKSHOP_HISTORY_MAX_DAYS);
 }
 
+function sanitizeSignalThresholdRatio(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return WORKSHOP_SIGNAL_THRESHOLD_DEFAULT;
+  }
+  return clamp(raw, WORKSHOP_SIGNAL_THRESHOLD_MIN, WORKSHOP_SIGNAL_THRESHOLD_MAX);
+}
+
+function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
+  const entity = raw as Record<string, unknown> | undefined;
+  const enabled = typeof entity?.enabled === "boolean" ? entity.enabled : DEFAULT_WORKSHOP_SIGNAL_RULE.enabled;
+  return {
+    enabled,
+    lookbackDays: sanitizeLookbackDays(entity?.lookbackDays),
+    dropBelowWeekdayAverageRatio: sanitizeSignalThresholdRatio(entity?.dropBelowWeekdayAverageRatio),
+  };
+}
+
 function buildWeekdayAverages(points: WorkshopPriceHistoryPoint[]): WorkshopWeekdayAverage[] {
   const aggregates = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }));
   points.forEach((point) => {
@@ -460,6 +806,87 @@ function buildWeekdayAverages(points: WorkshopPriceHistoryPoint[]): WorkshopWeek
     averagePrice: entry.count > 0 ? entry.sum / entry.count : null,
     sampleCount: entry.count,
   }));
+}
+
+function resolveHistoryRange(payload: WorkshopPriceHistoryQuery): { from: Date; to: Date } {
+  const lookbackDays = sanitizeLookbackDays(payload.days);
+  const parsedTo = parseOptionalIso(payload.toAt);
+  const parsedFrom = parseOptionalIso(payload.fromAt);
+  const now = new Date();
+  const to = parsedTo ?? now;
+  let from: Date;
+
+  if (payload.fromAt && parsedFrom === null) {
+    throw new Error("fromAt 不是有效时间格式。");
+  }
+  if (payload.toAt && parsedTo === null) {
+    throw new Error("toAt 不是有效时间格式。");
+  }
+
+  if (parsedFrom) {
+    from = parsedFrom;
+  } else {
+    const fromMs = to.getTime() - lookbackDays * 24 * 60 * 60 * 1000;
+    from = new Date(fromMs);
+  }
+
+  if (from.getTime() > to.getTime()) {
+    throw new Error("时间范围无效：fromAt 不能晚于 toAt。");
+  }
+
+  return { from, to };
+}
+
+function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
+  const { from, to } = resolveHistoryRange(payload);
+  const snapshots = state.prices
+    .filter((entry) => entry.itemId === payload.itemId)
+    .map((entry) => ({
+      ...entry,
+      ts: new Date(entry.capturedAt).getTime(),
+    }))
+    .filter((entry) => Number.isFinite(entry.ts))
+    .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
+    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
+
+  let rollingSum = 0;
+  const rollingWindow: number[] = [];
+  const points: WorkshopPriceHistoryPoint[] = snapshots.map((entry) => {
+    rollingWindow.push(entry.unitPrice);
+    rollingSum += entry.unitPrice;
+    if (rollingWindow.length > 7) {
+      const popped = rollingWindow.shift();
+      if (popped !== undefined) {
+        rollingSum -= popped;
+      }
+    }
+    const ma7 = rollingWindow.length >= 7 ? rollingSum / rollingWindow.length : null;
+    return {
+      id: entry.id,
+      itemId: entry.itemId,
+      unitPrice: entry.unitPrice,
+      capturedAt: new Date(entry.ts).toISOString(),
+      weekday: new Date(entry.ts).getDay(),
+      ma7,
+    };
+  });
+
+  const sampleCount = points.length;
+  const averagePrice = sampleCount > 0 ? points.reduce((acc, point) => acc + point.unitPrice, 0) / sampleCount : null;
+  const latestPoint = points[sampleCount - 1] ?? null;
+
+  return {
+    itemId: payload.itemId,
+    fromAt: from.toISOString(),
+    toAt: to.toISOString(),
+    sampleCount,
+    latestPrice: latestPoint?.unitPrice ?? null,
+    latestCapturedAt: latestPoint?.capturedAt ?? null,
+    averagePrice,
+    ma7Latest: latestPoint?.ma7 ?? null,
+    points,
+    weekdayAverages: buildWeekdayAverages(points),
+  };
 }
 
 interface WorkshopSampleItemSeed {
@@ -532,6 +959,79 @@ const WORKSHOP_SAMPLE_INVENTORY: WorkshopSampleInventorySeed[] = [
   { itemName: "样例-勇者长剑", quantity: 0 },
 ];
 
+interface ParsedOcrPriceLine {
+  lineNumber: number;
+  raw: string;
+  itemName: string;
+  unitPrice: number;
+}
+
+function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
+  source: "manual" | "import";
+  capturedAt: string;
+  autoCreateMissingItems: boolean;
+  defaultCategory: WorkshopItemCategory;
+  text: string;
+} {
+  const source = payload.source === "manual" ? "manual" : "import";
+  const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
+  const autoCreateMissingItems = payload.autoCreateMissingItems ?? false;
+  const defaultCategory = sanitizeCategory(payload.defaultCategory);
+  return {
+    source,
+    capturedAt,
+    autoCreateMissingItems,
+    defaultCategory,
+    text: typeof payload.text === "string" ? payload.text : "",
+  };
+}
+
+function parseOcrPriceLines(rawText: string): { parsedLines: ParsedOcrPriceLine[]; invalidLines: string[] } {
+  const parsedLines: ParsedOcrPriceLine[] = [];
+  const invalidLines: string[] = [];
+  const lines = rawText.split(/\r?\n/);
+
+  lines.forEach((origin, index) => {
+    const lineNumber = index + 1;
+    const raw = origin.trim();
+    if (!raw) {
+      return;
+    }
+    const normalizedLine = raw
+      .replace(/[|丨]/g, " ")
+      .replace(/[，]/g, ",")
+      .replace(/[：]/g, ":")
+      .replace(/\s+/g, " ");
+    const match = normalizedLine.match(/(-?\d[\d,\.\s]*)$/);
+    if (!match || match.index === undefined) {
+      invalidLines.push(`#${lineNumber} ${raw}`);
+      return;
+    }
+    let itemName = normalizedLine.slice(0, match.index).trim();
+    itemName = itemName
+      .replace(/[:=\-–—|]\s*$/g, "")
+      .replace(/^\d+\s*[.)、:：\-]\s*/, "")
+      .trim();
+    const normalizedPriceText = match[1].replace(/[,\.\s]/g, "").replace(/[oO]/g, "0").replace(/[lI]/g, "1");
+    const unitPrice = Number(normalizedPriceText);
+    if (!itemName || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      invalidLines.push(`#${lineNumber} ${raw}`);
+      return;
+    }
+    parsedLines.push({
+      lineNumber,
+      raw,
+      itemName,
+      unitPrice: Math.floor(unitPrice),
+    });
+  });
+
+  return {
+    parsedLines,
+    invalidLines,
+  };
+}
+
 export function getWorkshopState(): WorkshopState {
   return readWorkshopState();
 }
@@ -558,7 +1058,7 @@ export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopSt
         ...existing,
         name,
         category,
-        icon: payload.icon?.trim() || undefined,
+        icon: payload.icon?.trim() || existing.icon || inferItemIcon(name, category),
         notes: payload.notes?.trim() || undefined,
         updatedAt: nowIso,
       }
@@ -566,15 +1066,19 @@ export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopSt
         id: randomUUID(),
         name,
         category,
-        icon: payload.icon?.trim() || undefined,
+        icon: payload.icon?.trim() || inferItemIcon(name, category),
         notes: payload.notes?.trim() || undefined,
         createdAt: nowIso,
         updatedAt: nowIso,
       };
 
-  const nextItems = [...state.items.filter((item) => item.id !== nextItem.id), nextItem].sort((left, right) =>
-    left.name.localeCompare(right.name, "zh-CN"),
-  );
+  const existingIndex = state.items.findIndex((item) => item.id === nextItem.id);
+  const nextItems = [...state.items];
+  if (existingIndex >= 0) {
+    nextItems[existingIndex] = nextItem;
+  } else {
+    nextItems.push(nextItem);
+  }
 
   return writeWorkshopState({
     ...state,
@@ -637,9 +1141,13 @@ export function upsertWorkshopRecipe(payload: UpsertWorkshopRecipeInput): Worksh
     updatedAt: nowIso,
   };
 
-  const nextRecipes = [...state.recipes.filter((recipe) => recipe.id !== nextRecipe.id), nextRecipe].sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  );
+  const existingIndex = state.recipes.findIndex((recipe) => recipe.id === nextRecipe.id);
+  const nextRecipes = [...state.recipes];
+  if (existingIndex >= 0) {
+    nextRecipes[existingIndex] = nextRecipe;
+  } else {
+    nextRecipes.push(nextRecipe);
+  }
 
   return writeWorkshopState({
     ...state,
@@ -686,6 +1194,333 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
   });
 }
 
+export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
+  const state = readWorkshopState();
+  if (!state.prices.some((entry) => entry.id === snapshotId)) {
+    return state;
+  }
+  return writeWorkshopState({
+    ...state,
+    version: WORKSHOP_STATE_VERSION,
+    prices: state.prices.filter((entry) => entry.id !== snapshotId),
+  });
+}
+
+export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): WorkshopOcrPriceImportResult {
+  const state = readWorkshopState();
+  const sanitized = sanitizeOcrImportPayload(payload);
+  if (!sanitized.text.trim()) {
+    throw new Error("OCR 导入内容为空，请先粘贴文本。");
+  }
+
+  const { parsedLines, invalidLines } = parseOcrPriceLines(sanitized.text);
+  const items = [...state.items];
+  const prices = [...state.prices];
+  const itemByLookupName = new Map<string, WorkshopItem>();
+  items.forEach((item) => {
+    itemByLookupName.set(normalizeLookupName(item.name), item);
+  });
+
+  const unknownItemNameSet = new Set<string>();
+  let importedCount = 0;
+  let createdItemCount = 0;
+
+  parsedLines.forEach((line) => {
+    const key = normalizeLookupName(line.itemName);
+    let item = itemByLookupName.get(key);
+    if (!item) {
+      if (!sanitized.autoCreateMissingItems) {
+        unknownItemNameSet.add(line.itemName);
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      item = {
+        id: randomUUID(),
+        name: line.itemName,
+        category: sanitized.defaultCategory,
+        icon: inferItemIcon(line.itemName, sanitized.defaultCategory),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      items.push(item);
+      itemByLookupName.set(key, item);
+      createdItemCount += 1;
+    }
+
+    prices.push({
+      id: randomUUID(),
+      itemId: item.id,
+      unitPrice: line.unitPrice,
+      capturedAt: sanitized.capturedAt,
+      source: sanitized.source,
+      note: `ocr-import#line-${line.lineNumber}`,
+    });
+    importedCount += 1;
+  });
+
+  const nextState = writeWorkshopState({
+    ...state,
+    version: WORKSHOP_STATE_VERSION,
+    items,
+    prices: prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+  });
+
+  return {
+    state: nextState,
+    importedCount,
+    createdItemCount,
+    parsedLineCount: parsedLines.length,
+    unknownItemNames: Array.from(unknownItemNameSet).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    invalidLines,
+  };
+}
+
+function resolveCatalogImportFilePath(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("导入文件路径不能为空。");
+  }
+  if (path.isAbsolute(trimmed) && fs.existsSync(trimmed)) {
+    return trimmed;
+  }
+  const candidates = [
+    path.resolve(process.cwd(), trimmed),
+    path.resolve(process.cwd(), path.basename(trimmed)),
+  ];
+  const hit = candidates.find((entry) => fs.existsSync(entry));
+  if (!hit) {
+    throw new Error(`未找到导入文件: ${trimmed}`);
+  }
+  return hit;
+}
+
+function resolveBuiltinCatalogFilePath(): string {
+  const candidates = [
+    path.resolve(process.cwd(), BUILTIN_CATALOG_FILE_NAME),
+    path.resolve(process.cwd(), "..", BUILTIN_CATALOG_FILE_NAME),
+    path.resolve(process.cwd(), "..", "..", BUILTIN_CATALOG_FILE_NAME),
+  ];
+  const hit = candidates.find((entry) => fs.existsSync(entry));
+  if (!hit) {
+    throw new Error(`未找到内置目录文件: ${BUILTIN_CATALOG_FILE_NAME}`);
+  }
+  return hit;
+}
+
+function resolveBuiltinCatalogSignature(): string {
+  const filePath = resolveBuiltinCatalogFilePath();
+  const text = fs.readFileSync(filePath, "utf8");
+  return createHash("sha1").update(text).digest("hex");
+}
+
+function applyCatalogData(
+  baseState: WorkshopState,
+  parsed: { items: CatalogItemRow[]; recipes: CatalogRecipeRow[]; warnings: string[] },
+  sourceTag: string,
+): WorkshopCatalogImportResult {
+  const nowIso = new Date().toISOString();
+  const items = [...baseState.items];
+  const itemByLookup = new Map<string, WorkshopItem>();
+  items.forEach((item) => {
+    itemByLookup.set(normalizeCatalogLookupName(item.name), item);
+  });
+
+  let importedItemCount = 0;
+  let createdImplicitItemCount = 0;
+
+  const ensureItemByName = (
+    itemName: string,
+    fallbackCategory: WorkshopItemCategory,
+    mainCategory?: string,
+  ): WorkshopItem => {
+    const normalized = normalizeCatalogItemName(itemName);
+    const key = normalizeCatalogLookupName(normalized);
+    const existing = itemByLookup.get(key);
+    if (existing) {
+      return existing;
+    }
+    const normalizedMainCategory = mainCategory ? normalizeCatalogMainCategory(mainCategory) : "";
+    const note = normalizedMainCategory
+      ? `來源: ${sourceTag}; 大類: ${normalizedMainCategory}; 分類: 隱式`
+      : `來源: ${sourceTag}; 分類: 隱式`;
+    const created: WorkshopItem = {
+      id: randomUUID(),
+      name: normalized,
+      category: fallbackCategory,
+      icon: inferItemIcon(normalized, fallbackCategory),
+      notes: note,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    items.push(created);
+    itemByLookup.set(key, created);
+    createdImplicitItemCount += 1;
+    return created;
+  };
+
+  parsed.items.forEach((row) => {
+    const key = normalizeCatalogLookupName(row.name);
+    const mappedCategory = mapCatalogCategory(row.rawCategory);
+    const normalizedMainCategory = row.mainCategory ? normalizeCatalogMainCategory(row.mainCategory) : "";
+    const mainCategoryNote = normalizedMainCategory ? `; 大類: ${normalizedMainCategory}` : "";
+    const note =
+      row.alias
+        ? `來源: ${sourceTag}${mainCategoryNote}; 分類: ${row.rawCategory}; 別名: ${row.alias}`
+        : `來源: ${sourceTag}${mainCategoryNote}; 分類: ${row.rawCategory}`;
+    const existing = itemByLookup.get(key);
+    if (existing) {
+      const shouldRefreshNote = !existing.notes || existing.notes.includes("來源:");
+      const nextExisting: WorkshopItem = {
+        ...existing,
+        category: mappedCategory,
+        icon: existing.icon ?? inferItemIcon(existing.name, mappedCategory),
+        notes: shouldRefreshNote ? note : existing.notes,
+        updatedAt: nowIso,
+      };
+      const index = items.findIndex((item) => item.id === existing.id);
+      if (index >= 0) {
+        items[index] = nextExisting;
+      }
+      itemByLookup.set(key, nextExisting);
+      importedItemCount += 1;
+      return;
+    }
+    const created: WorkshopItem = {
+      id: randomUUID(),
+      name: row.name,
+      category: mappedCategory,
+      icon: inferItemIcon(row.name, mappedCategory),
+      notes: note,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    items.push(created);
+    itemByLookup.set(key, created);
+    importedItemCount += 1;
+  });
+
+  let importedRecipeCount = 0;
+  let skippedRecipeCount = 0;
+  const warnings = [...parsed.warnings];
+  const nextRecipes = [...baseState.recipes];
+  const touchedOutputItemIds = new Set<string>();
+  const touchedOutputItemOrder: string[] = [];
+
+  parsed.recipes.forEach((recipeRow) => {
+    const outputItem = ensureItemByName(recipeRow.outputName, "equipment", recipeRow.mainCategory);
+    if (touchedOutputItemIds.has(outputItem.id)) {
+      skippedRecipeCount += 1;
+      warnings.push(`重复产物配方已跳过: ${recipeRow.outputName}`);
+      return;
+    }
+    touchedOutputItemIds.add(outputItem.id);
+    touchedOutputItemOrder.push(outputItem.id);
+
+    const inputRows = recipeRow.inputs
+      .map((input) => {
+        const inputItem = ensureItemByName(input.itemId, "component");
+        return {
+          itemId: inputItem.id,
+          quantity: input.quantity,
+        };
+      })
+      .filter((entry) => entry.quantity > 0);
+
+    const dedupInputMap = new Map<string, number>();
+    inputRows.forEach((entry) => {
+      dedupInputMap.set(entry.itemId, (dedupInputMap.get(entry.itemId) ?? 0) + entry.quantity);
+    });
+    const dedupInputs = Array.from(dedupInputMap.entries())
+      .map(([itemId, quantity]) => ({ itemId, quantity: Math.max(1, Math.floor(quantity)) }))
+      .sort((left, right) => left.itemId.localeCompare(right.itemId));
+    if (dedupInputs.length === 0) {
+      skippedRecipeCount += 1;
+      warnings.push(`配方材料为空已跳过: ${recipeRow.outputName}`);
+      return;
+    }
+
+    const existingIndex = nextRecipes.findIndex((entry) => entry.outputItemId === outputItem.id);
+    if (existingIndex >= 0) {
+      nextRecipes[existingIndex] = {
+        ...nextRecipes[existingIndex],
+        outputQuantity: Math.max(1, Math.floor(recipeRow.outputQuantity)),
+        inputs: dedupInputs,
+        updatedAt: nowIso,
+      };
+    } else {
+      nextRecipes.push({
+        id: randomUUID(),
+        outputItemId: outputItem.id,
+        outputQuantity: Math.max(1, Math.floor(recipeRow.outputQuantity)),
+        inputs: dedupInputs,
+        updatedAt: nowIso,
+      });
+    }
+    importedRecipeCount += 1;
+  });
+
+  const touchedOrderByOutputItemId = new Map<string, number>();
+  touchedOutputItemOrder.forEach((itemId, index) => {
+    touchedOrderByOutputItemId.set(itemId, index);
+  });
+  const orderedTouchedRecipes = nextRecipes
+    .filter((recipe) => touchedOrderByOutputItemId.has(recipe.outputItemId))
+    .sort(
+      (left, right) =>
+        (touchedOrderByOutputItemId.get(left.outputItemId) ?? Number.MAX_SAFE_INTEGER) -
+        (touchedOrderByOutputItemId.get(right.outputItemId) ?? Number.MAX_SAFE_INTEGER),
+    );
+  const orderedUntouchedRecipes = nextRecipes.filter((recipe) => !touchedOrderByOutputItemId.has(recipe.outputItemId));
+  const orderedRecipes = [...orderedTouchedRecipes, ...orderedUntouchedRecipes];
+
+  const nextState = normalizeWorkshopState({
+    ...baseState,
+    version: WORKSHOP_STATE_VERSION,
+    items,
+    recipes: orderedRecipes,
+  });
+
+  return {
+    state: nextState,
+    importedItemCount,
+    importedRecipeCount,
+    createdImplicitItemCount,
+    skippedRecipeCount,
+    warnings,
+  };
+}
+
+function buildBuiltinCatalogState(): WorkshopState {
+  const filePath = resolveBuiltinCatalogFilePath();
+  const text = fs.readFileSync(filePath, "utf8");
+  const parsed = parseCatalogCsvText(text);
+  const baseState: WorkshopState = {
+    version: WORKSHOP_STATE_VERSION,
+    items: [],
+    recipes: [],
+    prices: [],
+    inventory: [],
+    signalRule: DEFAULT_WORKSHOP_SIGNAL_RULE,
+  };
+  const result = applyCatalogData(baseState, parsed, path.basename(filePath));
+  if (result.state.items.length === 0 || result.state.recipes.length === 0) {
+    throw new Error(`内置目录解析失败: ${filePath}`);
+  }
+  return result.state;
+}
+
+export function importWorkshopCatalogFromFile(payload: WorkshopCatalogImportFromFileInput): WorkshopCatalogImportResult {
+  const state = readWorkshopState();
+  const fullPath = resolveCatalogImportFilePath(payload.filePath);
+  const text = fs.readFileSync(fullPath, "utf8");
+  const parsed = parseCatalogCsvText(text);
+  const result = applyCatalogData(state, parsed, path.basename(fullPath));
+  return {
+    ...result,
+    state: writeWorkshopState(result.state),
+  };
+}
+
 export function upsertWorkshopInventory(payload: UpsertWorkshopInventoryInput): WorkshopState {
   const state = readWorkshopState();
   ensureItemExists(state, payload.itemId);
@@ -725,7 +1560,8 @@ export function simulateWorkshopCraft(payload: WorkshopCraftSimulationInput): Wo
     throw new Error("制作次数必须是正整数。");
   }
   const taxRate = sanitizeTaxRate(payload.taxRate);
-  return buildSimulation(state, recipe, runs, taxRate);
+  const materialMode = payload.materialMode === "expanded" ? "expanded" : "direct";
+  return buildSimulation(state, recipe, runs, taxRate, materialMode);
 }
 
 export function getWorkshopCraftOptions(payload?: { taxRate?: number }): WorkshopCraftOption[] {
@@ -734,7 +1570,7 @@ export function getWorkshopCraftOptions(payload?: { taxRate?: number }): Worksho
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
 
   const options = state.recipes.map((recipe) => {
-    const simulation = buildSimulation(state, recipe, 1, taxRate);
+    const simulation = buildSimulation(state, recipe, 1, taxRate, "expanded");
     const craftableCountFromInventory =
       simulation.materialRows.length === 0
         ? 0
@@ -775,79 +1611,94 @@ export function getWorkshopCraftOptions(payload?: { taxRate?: number }): Worksho
 export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const state = readWorkshopState();
   ensureItemExists(state, payload.itemId);
+  return buildWorkshopPriceHistoryResult(state, payload);
+}
 
-  const lookbackDays = sanitizeLookbackDays(payload.days);
-  const parsedTo = parseOptionalIso(payload.toAt);
-  const parsedFrom = parseOptionalIso(payload.fromAt);
-  const now = new Date();
-  const to = parsedTo ?? now;
-  let from: Date;
+export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRule>): WorkshopState {
+  const state = readWorkshopState();
+  const nextRule: WorkshopPriceSignalRule = {
+    enabled: typeof payload.enabled === "boolean" ? payload.enabled : state.signalRule.enabled,
+    lookbackDays:
+      payload.lookbackDays === undefined ? state.signalRule.lookbackDays : sanitizeLookbackDays(payload.lookbackDays),
+    dropBelowWeekdayAverageRatio:
+      payload.dropBelowWeekdayAverageRatio === undefined
+        ? state.signalRule.dropBelowWeekdayAverageRatio
+        : sanitizeSignalThresholdRatio(payload.dropBelowWeekdayAverageRatio),
+  };
 
-  if (payload.fromAt && parsedFrom === null) {
-    throw new Error("fromAt 不是有效时间格式。");
-  }
-  if (payload.toAt && parsedTo === null) {
-    throw new Error("toAt 不是有效时间格式。");
-  }
+  return writeWorkshopState({
+    ...state,
+    version: WORKSHOP_STATE_VERSION,
+    signalRule: nextRule,
+  });
+}
 
-  if (parsedFrom) {
-    from = parsedFrom;
-  } else {
-    const fromMs = to.getTime() - lookbackDays * 24 * 60 * 60 * 1000;
-    from = new Date(fromMs);
-  }
+export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): WorkshopPriceSignalResult {
+  const state = readWorkshopState();
+  const lookbackDays = payload?.lookbackDays === undefined ? state.signalRule.lookbackDays : sanitizeLookbackDays(payload.lookbackDays);
+  const thresholdRatio =
+    payload?.thresholdRatio === undefined
+      ? state.signalRule.dropBelowWeekdayAverageRatio
+      : sanitizeSignalThresholdRatio(payload.thresholdRatio);
+  const rows: WorkshopPriceSignalRow[] = state.items.map((item) => {
+    const history = buildWorkshopPriceHistoryResult(state, {
+      itemId: item.id,
+      days: lookbackDays,
+    });
+    const latestPoint = history.points[history.points.length - 1] ?? null;
+    const latestWeekday = latestPoint?.weekday ?? null;
+    const weekdayAveragePrice =
+      latestWeekday === null ? null : history.weekdayAverages.find((entry) => entry.weekday === latestWeekday)?.averagePrice ?? null;
+    const deviationRatioFromWeekdayAverage =
+      history.latestPrice === null || weekdayAveragePrice === null || weekdayAveragePrice <= 0
+        ? null
+        : (history.latestPrice - weekdayAveragePrice) / weekdayAveragePrice;
+    const triggered =
+      state.signalRule.enabled &&
+      deviationRatioFromWeekdayAverage !== null &&
+      deviationRatioFromWeekdayAverage <= -thresholdRatio;
 
-  if (from.getTime() > to.getTime()) {
-    throw new Error("时间范围无效：fromAt 不能晚于 toAt。");
-  }
-
-  const snapshots = state.prices
-    .filter((entry) => entry.itemId === payload.itemId)
-    .map((entry) => ({
-      ...entry,
-      ts: new Date(entry.capturedAt).getTime(),
-    }))
-    .filter((entry) => Number.isFinite(entry.ts))
-    .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
-    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
-
-  let rollingSum = 0;
-  const rollingWindow: number[] = [];
-  const points: WorkshopPriceHistoryPoint[] = snapshots.map((entry) => {
-    rollingWindow.push(entry.unitPrice);
-    rollingSum += entry.unitPrice;
-    if (rollingWindow.length > 7) {
-      const popped = rollingWindow.shift();
-      if (popped !== undefined) {
-        rollingSum -= popped;
-      }
-    }
-    const ma7 = rollingWindow.length >= 7 ? rollingSum / rollingWindow.length : null;
     return {
-      id: entry.id,
-      itemId: entry.itemId,
-      unitPrice: entry.unitPrice,
-      capturedAt: new Date(entry.ts).toISOString(),
-      weekday: new Date(entry.ts).getDay(),
-      ma7,
+      itemId: item.id,
+      itemName: item.name,
+      latestPrice: history.latestPrice,
+      latestCapturedAt: history.latestCapturedAt,
+      latestWeekday,
+      weekdayAveragePrice,
+      deviationRatioFromWeekdayAverage,
+      sampleCount: history.sampleCount,
+      triggered,
     };
   });
 
-  const sampleCount = points.length;
-  const averagePrice = sampleCount > 0 ? points.reduce((acc, point) => acc + point.unitPrice, 0) / sampleCount : null;
-  const latestPoint = points[sampleCount - 1] ?? null;
+  rows.sort((left, right) => {
+    if (left.triggered !== right.triggered) {
+      return left.triggered ? -1 : 1;
+    }
+    const leftDeviation = left.deviationRatioFromWeekdayAverage;
+    const rightDeviation = right.deviationRatioFromWeekdayAverage;
+    if (leftDeviation !== null && rightDeviation !== null && leftDeviation !== rightDeviation) {
+      return leftDeviation - rightDeviation;
+    }
+    if (leftDeviation === null && rightDeviation !== null) {
+      return 1;
+    }
+    if (leftDeviation !== null && rightDeviation === null) {
+      return -1;
+    }
+    if (right.sampleCount !== left.sampleCount) {
+      return right.sampleCount - left.sampleCount;
+    }
+    return left.itemName.localeCompare(right.itemName, "zh-CN");
+  });
 
   return {
-    itemId: payload.itemId,
-    fromAt: from.toISOString(),
-    toAt: to.toISOString(),
-    sampleCount,
-    latestPrice: latestPoint?.unitPrice ?? null,
-    latestCapturedAt: latestPoint?.capturedAt ?? null,
-    averagePrice,
-    ma7Latest: latestPoint?.ma7 ?? null,
-    points,
-    weekdayAverages: buildWeekdayAverages(points),
+    generatedAt: new Date().toISOString(),
+    lookbackDays,
+    thresholdRatio,
+    ruleEnabled: state.signalRule.enabled,
+    triggeredCount: rows.filter((row) => row.triggered).length,
+    rows,
   };
 }
 
@@ -999,5 +1850,6 @@ export function seedWorkshopSampleData(): WorkshopState {
     recipes: nextRecipes,
     prices: nextPrices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
     inventory: Array.from(inventoryByItemId.values()).sort((left, right) => left.itemId.localeCompare(right.itemId)),
+    signalRule: state.signalRule,
   });
 }

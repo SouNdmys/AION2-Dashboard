@@ -3,8 +3,9 @@ import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationResult,
   WorkshopItemCategory,
+  WorkshopOcrPriceImportResult,
   WorkshopPriceHistoryResult,
-  WorkshopRecipeInput,
+  WorkshopPriceSignalResult,
   WorkshopState,
 } from "../../shared/types";
 
@@ -32,11 +33,12 @@ function toPercent(value: number | null): string {
   return `${(value * 100).toFixed(2)}%`;
 }
 
-function categoryLabel(category: WorkshopItemCategory): string {
-  if (category === "material") return "材料";
-  if (category === "equipment") return "装备";
-  if (category === "component") return "中间件";
-  return "其他";
+function toSignedPercent(value: number | null): string {
+  if (value === null) {
+    return "--";
+  }
+  const percent = (value * 100).toFixed(2);
+  return `${value > 0 ? "+" : ""}${percent}%`;
 }
 
 function weekdayLabel(weekday: number): string {
@@ -49,6 +51,235 @@ function weekdayLabel(weekday: number): string {
   return "周六";
 }
 
+function formatDateLabel(raw: string): string {
+  return new Date(raw).toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function buildNullableLinePath(points: Array<{ x: number; y: number | null }>): string {
+  let path = "";
+  let drawing = false;
+  points.forEach((point) => {
+    if (point.y === null) {
+      drawing = false;
+      return;
+    }
+    const command = drawing ? "L" : "M";
+    path += `${command} ${point.x.toFixed(2)} ${point.y.toFixed(2)} `;
+    drawing = true;
+  });
+  return path.trim();
+}
+
+const HISTORY_QUICK_DAY_OPTIONS = [7, 14, 30, 90] as const;
+const CATEGORY_SUB_ORDER = [
+  "巨劍",
+  "長劍",
+  "短劍",
+  "釘錘",
+  "弓",
+  "法杖",
+  "法書",
+  "法珠",
+  "臂甲",
+  "頭盔",
+  "肩甲",
+  "上衣",
+  "下衣",
+  "手套",
+  "鞋子",
+  "披風",
+  "項鍊",
+  "耳環",
+  "戒指",
+  "手鐲",
+  "藥水",
+  "咒文書",
+  "魔石",
+  "材料",
+] as const;
+
+function parseItemRawCategory(notes?: string): string {
+  if (!notes) {
+    return "";
+  }
+  const match = notes.match(/分類:\s*([^;]+)/u);
+  return match?.[1]?.trim() ?? "";
+}
+
+function parseItemSourceTag(notes?: string): string {
+  if (!notes) {
+    return "";
+  }
+  const match = notes.match(/來源:\s*([^;]+)/u);
+  return match?.[1]?.trim() ?? "";
+}
+
+function parseItemMainCategory(notes?: string): string {
+  if (!notes) {
+    return "";
+  }
+  const match = notes.match(/大類:\s*([^;]+)/u);
+  return match?.[1]?.trim() ?? "";
+}
+
+function normalizeMainCategoryLabel(raw: string): string {
+  const value = raw.trim();
+  if (!value) {
+    return "";
+  }
+  if (value === "铁匠") {
+    return "鐵匠";
+  }
+  if (value === "手工艺") {
+    return "手工藝";
+  }
+  if (value === "采集材料") {
+    return "採集材料";
+  }
+  if (value === "炼金") {
+    return "煉金";
+  }
+  if (value === "料理") {
+    return "料理";
+  }
+  return value;
+}
+
+function inferRecipeMainCategory(sourceTag: string): string {
+  const normalized = sourceTag.replace(/\.md$/iu, "").trim();
+  if (!normalized) {
+    return "未分類";
+  }
+  const parts = normalized.split(/[、,，\s]+/u).map((part) => part.trim()).filter(Boolean);
+  return parts[parts.length - 1] ?? normalized;
+}
+
+function inferMainCategoryByContext(
+  explicitMainCategory: string,
+  sourceTag: string,
+  subCategory: string,
+  rawCategory: string,
+  itemName: string,
+): string {
+  const normalizedExplicitMainCategory = normalizeMainCategoryLabel(explicitMainCategory);
+  if (normalizedExplicitMainCategory) {
+    return normalizedExplicitMainCategory;
+  }
+  const text = `${rawCategory} ${itemName}`;
+  if (
+    subCategory === "臂甲" ||
+    subCategory === "頭盔" ||
+    subCategory === "肩甲" ||
+    subCategory === "上衣" ||
+    subCategory === "下衣" ||
+    subCategory === "手套" ||
+    subCategory === "鞋子" ||
+    subCategory === "披風" ||
+    text.includes("防具") ||
+    text.includes("盔甲")
+  ) {
+    return "盔甲";
+  }
+  if (
+    subCategory === "弓" ||
+    subCategory === "法杖" ||
+    subCategory === "法書" ||
+    subCategory === "法珠" ||
+    subCategory === "項鍊" ||
+    subCategory === "耳環" ||
+    subCategory === "戒指" ||
+    subCategory === "手鐲" ||
+    subCategory === "藥水" ||
+    subCategory === "咒文書" ||
+    subCategory === "魔石" ||
+    text.includes("飾品")
+  ) {
+    if (subCategory === "藥水" || subCategory === "咒文書" || subCategory === "魔石" || text.includes("消耗品")) {
+      return "煉金";
+    }
+    return "手工藝";
+  }
+  if (subCategory === "巨劍" || subCategory === "長劍" || subCategory === "短劍" || subCategory === "釘錘") {
+    return "鐵匠";
+  }
+  return inferRecipeMainCategory(sourceTag);
+}
+
+function inferRecipeSubCategory(rawCategory: string, itemName: string, itemCategory: WorkshopItemCategory): string {
+  const text = `${rawCategory} ${itemName}`;
+  if (text.includes("巨劍") || text.includes("巨剑")) return "巨劍";
+  if (text.includes("長劍") || text.includes("长剑")) return "長劍";
+  if (text.includes("短劍") || text.includes("短剑")) return "短劍";
+  if (text.includes("釘錘") || text.includes("钉锤")) return "釘錘";
+  if (text.includes("弓")) return "弓";
+  if (text.includes("法杖")) return "法杖";
+  if (text.includes("法書") || text.includes("法书")) return "法書";
+  if (text.includes("法珠")) return "法珠";
+  if (text.includes("臂甲")) return "臂甲";
+  if (text.includes("頭盔") || text.includes("头盔")) return "頭盔";
+  if (text.includes("肩甲")) return "肩甲";
+  if (text.includes("上衣") || text.includes("胸甲")) return "上衣";
+  if (text.includes("下衣") || text.includes("腿甲")) return "下衣";
+  if (text.includes("手套")) return "手套";
+  if (text.includes("鞋子") || text.includes("長靴") || text.includes("长靴") || text.includes("靴")) return "鞋子";
+  if (text.includes("披風") || text.includes("披风")) return "披風";
+  if (text.includes("項鍊") || text.includes("项链")) return "項鍊";
+  if (text.includes("耳環") || text.includes("耳环")) return "耳環";
+  if (text.includes("戒指")) return "戒指";
+  if (text.includes("手鐲") || text.includes("手镯")) return "手鐲";
+  if (text.includes("藥水") || text.includes("药水") || text.includes("祕藥") || text.includes("秘药")) return "藥水";
+  if (text.includes("咒文書") || text.includes("咒文书")) return "咒文書";
+  if (text.includes("魔石") || text.includes("靈石") || text.includes("灵石")) return "魔石";
+  if (
+    text.includes("材料") ||
+    text.includes("消耗") ||
+    text.includes("採集") ||
+    text.includes("采集") ||
+    itemCategory === "material" ||
+    itemCategory === "component"
+  ) {
+    return "材料";
+  }
+  return "其他";
+}
+
+function sortCategoryText(left: string, right: string): number {
+  const leftIndex = CATEGORY_SUB_ORDER.indexOf(left as (typeof CATEGORY_SUB_ORDER)[number]);
+  const rightIndex = CATEGORY_SUB_ORDER.indexOf(right as (typeof CATEGORY_SUB_ORDER)[number]);
+  if (leftIndex >= 0 || rightIndex >= 0) {
+    if (leftIndex < 0) return 1;
+    if (rightIndex < 0) return -1;
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+  }
+  if (left === "其他") return 1;
+  if (right === "其他") return -1;
+  return left.localeCompare(right, "zh-CN");
+}
+
+function sortMainCategoryText(left: string, right: string): number {
+  if (left === "鐵匠" && right !== "鐵匠") return -1;
+  if (right === "鐵匠" && left !== "鐵匠") return 1;
+  return left.localeCompare(right, "zh-CN");
+}
+
+interface SimulationRecipeOption {
+  id: string;
+  outputName: string;
+  mainCategory: string;
+  subCategory: string;
+}
+
+interface ClassifiedItemOption {
+  id: string;
+  name: string;
+  category: WorkshopItemCategory;
+  mainCategory: string;
+  subCategory: string;
+}
+
 export function WorkshopView(): JSX.Element {
   const [state, setState] = useState<WorkshopState | null>(null);
   const [craftOptions, setCraftOptions] = useState<WorkshopCraftOption[]>([]);
@@ -57,33 +288,178 @@ export function WorkshopView(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [itemName, setItemName] = useState("");
-  const [itemCategory, setItemCategory] = useState<WorkshopItemCategory>("material");
+  const [itemMainCategory, setItemMainCategory] = useState("鐵匠");
+  const [itemSubCategory, setItemSubCategory] = useState<"all" | string>("all");
   const [selectedItemId, setSelectedItemId] = useState("");
   const [selectedItemPrice, setSelectedItemPrice] = useState("0");
   const [selectedItemInventory, setSelectedItemInventory] = useState("0");
 
-  const [recipeOutputItemId, setRecipeOutputItemId] = useState("");
-  const [recipeOutputQuantity, setRecipeOutputQuantity] = useState("1");
-  const [recipeInputItemId, setRecipeInputItemId] = useState("");
-  const [recipeInputQuantity, setRecipeInputQuantity] = useState("1");
-  const [recipeDraftInputs, setRecipeDraftInputs] = useState<WorkshopRecipeInput[]>([]);
-
   const [simulateRecipeId, setSimulateRecipeId] = useState("");
+  const [simulateMainCategory, setSimulateMainCategory] = useState("鐵匠");
+  const [simulateSubCategory, setSimulateSubCategory] = useState<"all" | string>("all");
   const [simulateRuns, setSimulateRuns] = useState("1");
   const [taxMode, setTaxMode] = useState<"0.1" | "0.2">("0.1");
   const [nearCraftBudgetInput, setNearCraftBudgetInput] = useState("50000");
   const [nearCraftSortMode, setNearCraftSortMode] = useState<"max_budget_profit" | "min_gap_cost">("max_budget_profit");
   const [historyItemId, setHistoryItemId] = useState("");
+  const [historyMainCategory, setHistoryMainCategory] = useState("鐵匠");
+  const [historySubCategory, setHistorySubCategory] = useState<"all" | string>("all");
+  const [historyKeyword, setHistoryKeyword] = useState("");
   const [historyDaysInput, setHistoryDaysInput] = useState("30");
   const [historyResult, setHistoryResult] = useState<WorkshopPriceHistoryResult | null>(null);
+  const [signalRuleEnabled, setSignalRuleEnabled] = useState(true);
+  const [signalLookbackDaysInput, setSignalLookbackDaysInput] = useState("30");
+  const [signalThresholdPercentInput, setSignalThresholdPercentInput] = useState("8");
+  const [signalResult, setSignalResult] = useState<WorkshopPriceSignalResult | null>(null);
+  const [ocrRawText, setOcrRawText] = useState("");
+  const [ocrAutoCreateMissing, setOcrAutoCreateMissing] = useState(false);
+  const [ocrImportResult, setOcrImportResult] = useState<WorkshopOcrPriceImportResult | null>(null);
+  const [simulationMaterialDraft, setSimulationMaterialDraft] = useState<Record<string, { unitPrice: string; owned: string }>>({});
 
   const taxRate = Number(taxMode);
 
   const itemById = useMemo(() => {
-    if (!state) return new Map<string, { name: string }>();
-    return new Map(state.items.map((item) => [item.id, { name: item.name }]));
+    if (!state) return new Map<string, { name: string; category: WorkshopItemCategory; notes?: string }>();
+    return new Map(state.items.map((item) => [item.id, { name: item.name, category: item.category, notes: item.notes }]));
   }, [state]);
+
+  const classifiedItemOptions = useMemo<ClassifiedItemOption[]>(() => {
+    if (!state) {
+      return [];
+    }
+    return state.items
+      .map((item) => {
+        const rawCategory = parseItemRawCategory(item.notes);
+        const sourceTag = parseItemSourceTag(item.notes);
+        const explicitMainCategory = parseItemMainCategory(item.notes);
+        const subCategory = inferRecipeSubCategory(rawCategory, item.name, item.category);
+        return {
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          mainCategory: inferMainCategoryByContext(explicitMainCategory, sourceTag, subCategory, rawCategory, item.name),
+          subCategory,
+        };
+      });
+  }, [state]);
+
+  const itemMainCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(classifiedItemOptions.map((entry) => entry.mainCategory).filter(Boolean)));
+    if (unique.length === 0) {
+      return ["鐵匠"];
+    }
+    return unique.sort(sortMainCategoryText);
+  }, [classifiedItemOptions]);
+
+  const itemsByMainCategory = useMemo(() => {
+    return classifiedItemOptions.filter((entry) => {
+      if (itemMainCategory && entry.mainCategory !== itemMainCategory) {
+        return false;
+      }
+      return true;
+    });
+  }, [classifiedItemOptions, itemMainCategory]);
+
+  const filteredItems = useMemo(() => {
+    return itemsByMainCategory.filter((entry) => {
+      if (itemSubCategory !== "all" && entry.subCategory !== itemSubCategory) {
+        return false;
+      }
+      return true;
+    });
+  }, [itemsByMainCategory, itemSubCategory]);
+
+  const itemSubCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(itemsByMainCategory.map((entry) => entry.subCategory).filter(Boolean)));
+    return unique.sort(sortCategoryText);
+  }, [itemsByMainCategory]);
+
+  const historyMainCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(classifiedItemOptions.map((entry) => entry.mainCategory).filter(Boolean)));
+    if (unique.length === 0) {
+      return ["鐵匠"];
+    }
+    return unique.sort(sortMainCategoryText);
+  }, [classifiedItemOptions]);
+
+  const historyItemsByMainCategory = useMemo(() => {
+    return classifiedItemOptions.filter((entry) => {
+      if (historyMainCategory && entry.mainCategory !== historyMainCategory) {
+        return false;
+      }
+      return true;
+    });
+  }, [classifiedItemOptions, historyMainCategory]);
+
+  const historySubCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(historyItemsByMainCategory.map((entry) => entry.subCategory).filter(Boolean)));
+    return unique.sort(sortCategoryText);
+  }, [historyItemsByMainCategory]);
+
+  const filteredHistoryItems = useMemo(() => {
+    const keyword = historyKeyword.trim();
+    return historyItemsByMainCategory.filter((entry) => {
+      if (historySubCategory !== "all" && entry.subCategory !== historySubCategory) {
+        return false;
+      }
+      if (keyword && !entry.name.includes(keyword)) {
+        return false;
+      }
+      return true;
+    });
+  }, [historyItemsByMainCategory, historySubCategory, historyKeyword]);
+
+  const simulationRecipeOptions = useMemo<SimulationRecipeOption[]>(() => {
+    if (!state) {
+      return [];
+    }
+    return state.recipes
+      .map((recipe) => {
+        const outputItem = itemById.get(recipe.outputItemId);
+        const outputName = outputItem?.name ?? recipe.outputItemId;
+        const rawCategory = parseItemRawCategory(outputItem?.notes);
+        const sourceTag = parseItemSourceTag(outputItem?.notes);
+        const explicitMainCategory = parseItemMainCategory(outputItem?.notes);
+        const subCategory = inferRecipeSubCategory(rawCategory, outputName, outputItem?.category ?? "other");
+        return {
+          id: recipe.id,
+          outputName,
+          mainCategory: inferMainCategoryByContext(explicitMainCategory, sourceTag, subCategory, rawCategory, outputName),
+          subCategory,
+        };
+      });
+  }, [state, itemById]);
+
+  const simulationMainCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(simulationRecipeOptions.map((entry) => entry.mainCategory).filter(Boolean)));
+    if (unique.length === 0) {
+      return ["鐵匠"];
+    }
+    return unique.sort(sortMainCategoryText);
+  }, [simulationRecipeOptions]);
+
+  const simulationRecipesByMainCategory = useMemo(() => {
+    return simulationRecipeOptions.filter((entry) => {
+      if (simulateMainCategory && entry.mainCategory !== simulateMainCategory) {
+        return false;
+      }
+      return true;
+    });
+  }, [simulationRecipeOptions, simulateMainCategory]);
+
+  const filteredSimulationRecipes = useMemo(() => {
+    return simulationRecipesByMainCategory.filter((entry) => {
+      if (simulateSubCategory !== "all" && entry.subCategory !== simulateSubCategory) {
+        return false;
+      }
+      return true;
+    });
+  }, [simulationRecipesByMainCategory, simulateSubCategory]);
+
+  const simulationSubCategoryOptions = useMemo(() => {
+    const unique = Array.from(new Set(simulationRecipesByMainCategory.map((entry) => entry.subCategory).filter(Boolean)));
+    return unique.sort(sortCategoryText);
+  }, [simulationRecipesByMainCategory]);
 
   const latestPriceByItemId = useMemo(() => {
     if (!state) return new Map<string, number>();
@@ -176,6 +552,121 @@ export function WorkshopView(): JSX.Element {
       });
   }, [craftOptions, nearCraftBudget, nearCraftSortMode]);
 
+  const activeHistoryQuickDays = useMemo(() => {
+    const current = toInt(historyDaysInput);
+    if (current === null) {
+      return null;
+    }
+    return HISTORY_QUICK_DAY_OPTIONS.find((days) => days === current) ?? null;
+  }, [historyDaysInput]);
+
+  const historyInsight = useMemo(() => {
+    if (!historyResult || historyResult.sampleCount <= 0) {
+      return null;
+    }
+    const latestPoint = historyResult.points[historyResult.points.length - 1] ?? null;
+    if (!latestPoint) {
+      return null;
+    }
+    const latestWeekdayAverage =
+      historyResult.weekdayAverages.find((entry) => entry.weekday === latestPoint.weekday)?.averagePrice ?? null;
+    const deviationFromWeekday =
+      historyResult.latestPrice === null || latestWeekdayAverage === null || latestWeekdayAverage === 0
+        ? null
+        : (historyResult.latestPrice - latestWeekdayAverage) / latestWeekdayAverage;
+
+    return {
+      latestPoint,
+      latestWeekdayAverage,
+      deviationFromWeekday,
+    };
+  }, [historyResult]);
+
+  const triggeredSignalRows = useMemo(() => {
+    if (!signalResult) {
+      return [];
+    }
+    return signalResult.rows.filter((row) => row.triggered);
+  }, [signalResult]);
+
+  const historyChartModel = useMemo(() => {
+    if (!historyResult || historyResult.points.length === 0) {
+      return null;
+    }
+    const width = 960;
+    const height = 320;
+    const left = 56;
+    const right = 20;
+    const top = 18;
+    const bottom = 38;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    const values = historyResult.points.map((point) => point.unitPrice);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+
+    const valuePadding = minValue === maxValue ? Math.max(1, Math.round(maxValue * 0.06)) : 0;
+    const lowerBound = Math.max(0, minValue - valuePadding);
+    const upperBound = maxValue + valuePadding;
+    const valueSpan = Math.max(1, upperBound - lowerBound);
+
+    const points = historyResult.points.map((point, index) => {
+      const xRatio = historyResult.points.length <= 1 ? 0.5 : index / (historyResult.points.length - 1);
+      const x = left + xRatio * plotWidth;
+      const y = top + ((upperBound - point.unitPrice) / valueSpan) * plotHeight;
+      const ma7Y = point.ma7 === null ? null : top + ((upperBound - point.ma7) / valueSpan) * plotHeight;
+      return {
+        ...point,
+        x,
+        y,
+        ma7Y,
+        dateKey: point.capturedAt.slice(0, 10),
+      };
+    });
+
+    const pricePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+    const ma7Path = buildNullableLinePath(points.map((point) => ({ x: point.x, y: point.ma7Y })));
+    const yTicks = Array.from({ length: 4 }, (_, index) => {
+      const ratio = index / 3;
+      const value = upperBound - ratio * valueSpan;
+      const y = top + ratio * plotHeight;
+      return {
+        value,
+        y,
+      };
+    });
+    const xTickIndexes = Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])).sort(
+      (leftIndex, rightIndex) => leftIndex - rightIndex,
+    );
+    const xTicks = xTickIndexes.map((index) => ({
+      x: points[index].x,
+      label: formatDateLabel(points[index].capturedAt),
+    }));
+    const wednesdayByDate = new Map<string, number>();
+    points.forEach((point) => {
+      if (point.weekday !== 3 || wednesdayByDate.has(point.dateKey)) {
+        return;
+      }
+      wednesdayByDate.set(point.dateKey, point.x);
+    });
+
+    return {
+      width,
+      height,
+      left,
+      right,
+      top,
+      bottom,
+      pricePath,
+      ma7Path,
+      points,
+      yTicks,
+      xTicks,
+      wednesdayMarkers: Array.from(wednesdayByDate.entries()).map(([date, x]) => ({ date, x })),
+      latestPoint: points[points.length - 1] ?? null,
+    };
+  }, [historyResult]);
+
   async function loadState(): Promise<void> {
     const next = await window.aionApi.getWorkshopState();
     setState(next);
@@ -186,11 +677,16 @@ export function WorkshopView(): JSX.Element {
     setCraftOptions(next);
   }
 
+  async function loadSignals(): Promise<void> {
+    const next = await window.aionApi.getWorkshopPriceSignals();
+    setSignalResult(next);
+  }
+
   async function bootstrap(): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      await Promise.all([loadState(), loadCraftOptions()]);
+      await Promise.all([loadState(), loadCraftOptions(), loadSignals()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "工坊初始化失败");
     } finally {
@@ -206,7 +702,7 @@ export function WorkshopView(): JSX.Element {
       const next = await action();
       setState(next);
       setMessage(successText);
-      await loadCraftOptions();
+      await Promise.all([loadCraftOptions(), loadSignals()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "工坊操作失败");
     } finally {
@@ -214,65 +710,82 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
-  function onSeedSampleData(): void {
-    const api = window.aionApi as unknown as { seedWorkshopSampleData?: () => Promise<WorkshopState> };
-    if (typeof api.seedWorkshopSampleData !== "function") {
-      setError("当前运行实例未加载到最新 preload。请完全退出应用后重启，再点“一键导入样例”。");
-      return;
-    }
-    void commit(() => api.seedWorkshopSampleData!(), "样例数据已导入，可直接在“制作模拟器”验证");
-  }
-
   useEffect(() => {
     void bootstrap();
   }, []);
 
   useEffect(() => {
-    if (!state) return;
-    const exists = selectedItemId && state.items.some((item) => item.id === selectedItemId);
+    if (!itemMainCategoryOptions.includes(itemMainCategory)) {
+      setItemMainCategory(itemMainCategoryOptions[0] ?? "鐵匠");
+      return;
+    }
+    if (itemSubCategory !== "all" && !itemSubCategoryOptions.includes(itemSubCategory)) {
+      setItemSubCategory("all");
+      return;
+    }
+    const exists = selectedItemId && filteredItems.some((item) => item.id === selectedItemId);
     if (!exists) {
-      const fallback = state.items[0]?.id ?? "";
+      const fallback = filteredItems[0]?.id ?? "";
       setSelectedItemId(fallback);
     }
-  }, [state, selectedItemId]);
+  }, [itemMainCategory, itemMainCategoryOptions, itemSubCategory, itemSubCategoryOptions, selectedItemId, filteredItems]);
 
   useEffect(() => {
-    if (!state) return;
-    const exists = historyItemId && state.items.some((item) => item.id === historyItemId);
+    if (!historyMainCategoryOptions.includes(historyMainCategory)) {
+      setHistoryMainCategory(historyMainCategoryOptions[0] ?? "鐵匠");
+      return;
+    }
+    if (historySubCategory !== "all" && !historySubCategoryOptions.includes(historySubCategory)) {
+      setHistorySubCategory("all");
+      return;
+    }
+    const exists = historyItemId && filteredHistoryItems.some((item) => item.id === historyItemId);
     if (!exists) {
-      const fallback = state.items[0]?.id ?? "";
+      const fallback = filteredHistoryItems[0]?.id ?? "";
       setHistoryItemId(fallback);
       setHistoryResult(null);
     }
-  }, [state, historyItemId]);
+  }, [
+    historyMainCategory,
+    historyMainCategoryOptions,
+    historySubCategory,
+    historySubCategoryOptions,
+    historyItemId,
+    filteredHistoryItems,
+  ]);
 
   useEffect(() => {
-    if (!state) return;
-    const exists = recipeOutputItemId && state.items.some((item) => item.id === recipeOutputItemId);
-    if (!exists) {
-      const fallback = state.items[0]?.id ?? "";
-      setRecipeOutputItemId(fallback);
+    if (!simulationMainCategoryOptions.includes(simulateMainCategory)) {
+      setSimulateMainCategory(simulationMainCategoryOptions[0] ?? "鐵匠");
+      return;
     }
-  }, [state, recipeOutputItemId]);
-
-  useEffect(() => {
-    if (!state) return;
-    const exists = recipeInputItemId && state.items.some((item) => item.id === recipeInputItemId);
-    if (!exists) {
-      const fallback = state.items[0]?.id ?? "";
-      setRecipeInputItemId(fallback);
+    if (simulateSubCategory !== "all" && !simulationSubCategoryOptions.includes(simulateSubCategory)) {
+      setSimulateSubCategory("all");
+      return;
     }
-  }, [state, recipeInputItemId]);
-
-  useEffect(() => {
-    if (!state) return;
-    const exists = simulateRecipeId && state.recipes.some((recipe) => recipe.id === simulateRecipeId);
+    const exists = simulateRecipeId && filteredSimulationRecipes.some((recipe) => recipe.id === simulateRecipeId);
     if (!exists) {
-      const fallback = state.recipes[0]?.id ?? "";
+      const fallback = filteredSimulationRecipes[0]?.id ?? "";
       setSimulateRecipeId(fallback);
       setSimulation(null);
     }
-  }, [state, simulateRecipeId]);
+  }, [
+    simulateMainCategory,
+    simulationMainCategoryOptions,
+    simulateSubCategory,
+    simulationSubCategoryOptions,
+    simulateRecipeId,
+    filteredSimulationRecipes,
+  ]);
+
+  useEffect(() => {
+    if (!state) {
+      return;
+    }
+    setSignalRuleEnabled(state.signalRule.enabled);
+    setSignalLookbackDaysInput(String(state.signalRule.lookbackDays));
+    setSignalThresholdPercentInput(String(Math.round(state.signalRule.dropBelowWeekdayAverageRatio * 10000) / 100));
+  }, [state?.signalRule.enabled, state?.signalRule.lookbackDays, state?.signalRule.dropBelowWeekdayAverageRatio]);
 
   useEffect(() => {
     if (!selectedItemId) return;
@@ -286,32 +799,6 @@ export function WorkshopView(): JSX.Element {
     if (!state) return;
     void loadCraftOptions();
   }, [taxMode]);
-
-  function onAddItem(): void {
-    const name = itemName.trim();
-    if (!name) {
-      setError("请先输入物品名称。");
-      return;
-    }
-    void commit(
-      () =>
-        window.aionApi.upsertWorkshopItem({
-          name,
-          category: itemCategory,
-        }),
-      `已新增物品: ${name}`,
-    );
-    setItemName("");
-  }
-
-  function onDeleteItem(itemId: string): void {
-    const itemNameText = itemById.get(itemId)?.name ?? itemId;
-    const confirmed = window.confirm(`删除物品「${itemNameText}」后，关联配方/价格/库存会一起删除，是否继续？`);
-    if (!confirmed) {
-      return;
-    }
-    void commit(() => window.aionApi.deleteWorkshopItem(itemId), `已删除物品: ${itemNameText}`);
-  }
 
   function onSaveSelectedPrice(): void {
     if (!selectedItemId) {
@@ -347,68 +834,12 @@ export function WorkshopView(): JSX.Element {
     void commit(() => window.aionApi.upsertWorkshopInventory({ itemId: selectedItemId, quantity }), "已更新库存");
   }
 
-  function onAddRecipeInput(): void {
-    if (!recipeInputItemId) {
-      setError("请先选择材料物品。");
-      return;
-    }
-    const quantity = toInt(recipeInputQuantity);
-    if (quantity === null || quantity <= 0) {
-      setError("材料数量必须是正整数。");
-      return;
-    }
-    setRecipeDraftInputs((prev) => {
-      const existing = prev.find((entry) => entry.itemId === recipeInputItemId);
-      if (existing) {
-        return prev.map((entry) =>
-          entry.itemId === recipeInputItemId ? { ...entry, quantity: entry.quantity + quantity } : entry,
-        );
-      }
-      return [...prev, { itemId: recipeInputItemId, quantity }];
-    });
-  }
-
-  function onRemoveRecipeInput(itemId: string): void {
-    setRecipeDraftInputs((prev) => prev.filter((entry) => entry.itemId !== itemId));
-  }
-
-  function onSaveRecipe(): void {
-    if (!recipeOutputItemId) {
-      setError("请先选择成品物品。");
-      return;
-    }
-    const outputQuantity = toInt(recipeOutputQuantity);
-    if (outputQuantity === null || outputQuantity <= 0) {
-      setError("成品数量必须是正整数。");
-      return;
-    }
-    if (recipeDraftInputs.length === 0) {
-      setError("配方至少需要一个材料。");
-      return;
-    }
-    if (recipeDraftInputs.some((entry) => entry.itemId === recipeOutputItemId)) {
-      setError("配方输入不能包含成品本身。");
-      return;
-    }
-    void commit(
-      () =>
-        window.aionApi.upsertWorkshopRecipe({
-          outputItemId: recipeOutputItemId,
-          outputQuantity,
-          inputs: recipeDraftInputs,
-        }),
-      "已保存配方",
-    );
-    setRecipeDraftInputs([]);
-    setRecipeOutputQuantity("1");
-  }
-
-  function onDeleteRecipe(recipeId: string): void {
-    const confirmed = window.confirm("确认删除该配方？");
-    if (!confirmed) {
-      return;
-    }
-    void commit(() => window.aionApi.deleteWorkshopRecipe(recipeId), "已删除配方");
+  function onPickItemForCorrection(itemId: string): void {
+    setSelectedItemId(itemId);
+    const price = latestPriceByItemId.get(itemId) ?? 0;
+    const inventory = inventoryByItemId.get(itemId) ?? 0;
+    setSelectedItemPrice(String(price));
+    setSelectedItemInventory(String(inventory));
   }
 
   async function onSimulate(): Promise<void> {
@@ -429,8 +860,17 @@ export function WorkshopView(): JSX.Element {
         recipeId: simulateRecipeId,
         runs,
         taxRate,
+        materialMode: "direct",
       });
       setSimulation(result);
+      const draftMap: Record<string, { unitPrice: string; owned: string }> = {};
+      result.materialRows.forEach((row) => {
+        draftMap[row.itemId] = {
+          unitPrice: row.latestUnitPrice === null ? "" : String(row.latestUnitPrice),
+          owned: String(row.owned),
+        };
+      });
+      setSimulationMaterialDraft(draftMap);
       setMessage("模拟完成");
     } catch (err) {
       setError(err instanceof Error ? err.message : "模拟失败");
@@ -439,12 +879,78 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
-  async function onLoadPriceHistory(): Promise<void> {
+  async function onApplySimulationMaterialEdits(): Promise<void> {
+    if (!simulation) {
+      setError("请先运行一次模拟。");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      for (const row of simulation.materialRows) {
+        const draft = simulationMaterialDraft[row.itemId];
+        if (!draft) {
+          continue;
+        }
+        const owned = toInt(draft.owned);
+        if (owned === null || owned < 0) {
+          throw new Error(`材料「${row.itemName}」库存必须是大于等于 0 的整数。`);
+        }
+        if (owned !== row.owned) {
+          await window.aionApi.upsertWorkshopInventory({ itemId: row.itemId, quantity: owned });
+        }
+        const priceText = draft.unitPrice.trim();
+        if (priceText) {
+          const unitPrice = toInt(priceText);
+          if (unitPrice === null || unitPrice < 0) {
+            throw new Error(`材料「${row.itemName}」单价必须是大于等于 0 的整数。`);
+          }
+          if (row.latestUnitPrice === null || unitPrice !== row.latestUnitPrice) {
+            await window.aionApi.addWorkshopPriceSnapshot({
+              itemId: row.itemId,
+              unitPrice,
+              source: "manual",
+              note: "simulate-inline-edit",
+            });
+          }
+        }
+      }
+
+      const [nextState, rerun] = await Promise.all([
+        window.aionApi.getWorkshopState(),
+        window.aionApi.simulateWorkshopCraft({
+          recipeId: simulation.recipeId,
+          runs: simulation.runs,
+          taxRate,
+          materialMode: "direct",
+        }),
+      ]);
+      setState(nextState);
+      setSimulation(rerun);
+      const nextDraftMap: Record<string, { unitPrice: string; owned: string }> = {};
+      rerun.materialRows.forEach((row) => {
+        nextDraftMap[row.itemId] = {
+          unitPrice: row.latestUnitPrice === null ? "" : String(row.latestUnitPrice),
+          owned: String(row.owned),
+        };
+      });
+      setSimulationMaterialDraft(nextDraftMap);
+      await Promise.all([loadCraftOptions(), loadSignals()]);
+      setMessage("材料单价/库存已保存，并已按最新数据重算。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "更新材料参数失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onLoadPriceHistory(daysOverride?: number): Promise<void> {
     if (!historyItemId) {
       setError("请先选择要查询的物品。");
       return;
     }
-    const days = toInt(historyDaysInput);
+    const days = daysOverride ?? toInt(historyDaysInput);
     if (days === null || days <= 0) {
       setError("查询天数必须是正整数。");
       return;
@@ -466,6 +972,71 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
+  async function onSaveSignalRule(): Promise<void> {
+    const lookbackDays = toInt(signalLookbackDaysInput);
+    if (lookbackDays === null || lookbackDays <= 0) {
+      setError("Phase 2.3 规则配置失败：回看天数必须是正整数。");
+      return;
+    }
+    const thresholdPercent = Number(signalThresholdPercentInput);
+    if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0) {
+      setError("Phase 2.3 规则配置失败：阈值必须是大于 0 的数字。");
+      return;
+    }
+
+    await commit(
+      () =>
+        window.aionApi.updateWorkshopSignalRule({
+          enabled: signalRuleEnabled,
+          lookbackDays,
+          dropBelowWeekdayAverageRatio: thresholdPercent / 100,
+        }),
+      "Phase 2.3 周期波动提示规则已保存",
+    );
+  }
+
+  async function onRefreshSignals(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await loadSignals();
+      setMessage("Phase 2.3 信号已刷新");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Phase 2.3 信号刷新失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onImportOcrPrices(): Promise<void> {
+    if (!ocrRawText.trim()) {
+      setError("请先粘贴 OCR 识别文本。");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await window.aionApi.importWorkshopOcrPrices({
+        text: ocrRawText,
+        source: "import",
+        autoCreateMissingItems: ocrAutoCreateMissing,
+        defaultCategory: "material",
+      });
+      setState(result.state);
+      setOcrImportResult(result);
+      await Promise.all([loadCraftOptions(), loadSignals()]);
+      setMessage(
+        `OCR 导入完成：成功 ${result.importedCount} 条，新增物品 ${result.createdItemCount} 个，无法匹配 ${result.unknownItemNames.length} 行，异常 ${result.invalidLines.length} 行。`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "OCR 导入失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!state) {
     return (
       <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
@@ -475,15 +1046,12 @@ export function WorkshopView(): JSX.Element {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-semibold">工坊 Phase 1（MVP）</h3>
-          <button className="pill-btn" onClick={onSeedSampleData} disabled={busy}>
-            一键导入样例
-          </button>
+          <h3 className="text-base font-semibold">工坊（内置配方库）</h3>
         </div>
-        <p className="mt-2 text-xs text-slate-300">当前已支持: 物品/价格/库存录入，配方录入，制作模拟，背包可制作推荐。</p>
+        <p className="mt-2 text-xs text-slate-300">当前已支持: 内置材料/配方库，价格与库存维护，制作模拟，背包可制作推荐。</p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
           <div className="data-pill">物品数: {state.items.length}</div>
           <div className="data-pill">配方数: {state.recipes.length}</div>
@@ -494,111 +1062,104 @@ export function WorkshopView(): JSX.Element {
         {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
       </article>
 
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">1) 物品、价格、库存</h4>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]">
-          <input
-            className="min-w-0 w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            placeholder="物品名称（如：奥德结晶）"
-            value={itemName}
-            onChange={(event) => setItemName(event.target.value)}
-            disabled={busy}
-          />
+      <article className="order-1 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+        <h4 className="text-sm font-semibold">1) 市场工作台：OCR 抓价导入</h4>
+        <p className="mt-2 text-xs text-slate-300">
+          支持粘贴“物品名 + 价格”文本，每行一条；价格写在行尾。示例: `奥德矿石 1280`
+        </p>
+        <textarea
+          className="mt-3 min-h-[136px] w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          value={ocrRawText}
+          onChange={(event) => setOcrRawText(event.target.value)}
+          disabled={busy}
+          placeholder={"奥德矿石 1280\n副本核心 9600\n强化锭 23500"}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={itemCategory}
-            onChange={(event) => setItemCategory(event.target.value as WorkshopItemCategory)}
+            value={ocrAutoCreateMissing ? "on" : "off"}
+            onChange={(event) => setOcrAutoCreateMissing(event.target.value === "on")}
             disabled={busy}
           >
-            <option value="material">材料</option>
-            <option value="equipment">装备</option>
-            <option value="component">中间件</option>
-            <option value="other">其他</option>
+            <option value="off">缺失物品: 仅跳过并提示</option>
+            <option value="on">缺失物品: 自动创建(材料)</option>
           </select>
-          <button className="task-btn px-4" onClick={onAddItem} disabled={busy || !itemName.trim()}>
-            新增物品
+          <button className="task-btn px-4" onClick={() => void onImportOcrPrices()} disabled={busy || !ocrRawText.trim()}>
+            执行 OCR 导入
           </button>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+        {ocrImportResult ? (
+          <div className="mt-3 space-y-2 text-xs">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+              <div className="data-pill">解析行数: {ocrImportResult.parsedLineCount}</div>
+              <div className="data-pill">导入成功: {ocrImportResult.importedCount}</div>
+              <div className="data-pill">新增物品: {ocrImportResult.createdItemCount}</div>
+              <div className="data-pill">未匹配: {ocrImportResult.unknownItemNames.length}</div>
+              <div className="data-pill">异常行: {ocrImportResult.invalidLines.length}</div>
+            </div>
+            {ocrImportResult.unknownItemNames.length > 0 ? (
+              <p className="text-amber-300">未匹配物品: {ocrImportResult.unknownItemNames.join("、")}</p>
+            ) : null}
+            {ocrImportResult.invalidLines.length > 0 ? (
+              <div className="max-h-28 overflow-auto rounded-lg border border-white/10 bg-black/25 p-2 text-slate-300">
+                <p className="mb-1 text-rose-300">异常行（请修正后重试）:</p>
+                {ocrImportResult.invalidLines.slice(0, 20).map((line) => (
+                  <p key={`ocr-invalid-${line}`}>{line}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </article>
+
+      <article className="order-2 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+        <h4 className="text-sm font-semibold">1) 市场工作台：行情中心与波动信号</h4>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={selectedItemId}
-            onChange={(event) => setSelectedItemId(event.target.value)}
-            disabled={busy || state.items.length === 0}
+            value={historyMainCategory}
+            onChange={(event) => setHistoryMainCategory(event.target.value)}
+            disabled={busy || historyMainCategoryOptions.length === 0}
           >
-            {state.items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ({categoryLabel(item.category)})
+            {historyMainCategoryOptions.map((category) => (
+              <option key={`history-main-category-${category}`} value={category}>
+                大类: {category}
+              </option>
+            ))}
+          </select>
+          <select
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={historySubCategory}
+            onChange={(event) => setHistorySubCategory(event.target.value)}
+            disabled={busy}
+          >
+            <option value="all">下级分类: 全部</option>
+            {historySubCategoryOptions.map((category) => (
+              <option key={`history-sub-category-${category}`} value={category}>
+                下级分类: {category}
               </option>
             ))}
           </select>
           <input
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            placeholder="最新单价"
-            value={selectedItemPrice}
-            onChange={(event) => setSelectedItemPrice(event.target.value)}
-            disabled={busy || !selectedItemId}
+            value={historyKeyword}
+            onChange={(event) => setHistoryKeyword(event.target.value)}
+            disabled={busy}
+            placeholder="搜索物品（可选）"
           />
-          <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            placeholder="库存数量"
-            value={selectedItemInventory}
-            onChange={(event) => setSelectedItemInventory(event.target.value)}
-            disabled={busy || !selectedItemId}
-          />
-          <div className="flex gap-2">
-            <button className="task-btn px-3" onClick={onSaveSelectedPrice} disabled={busy || !selectedItemId}>
-              记价格
-            </button>
-            <button className="task-btn px-3" onClick={onSaveSelectedInventory} disabled={busy || !selectedItemId}>
-              记库存
-            </button>
-          </div>
         </div>
 
-        <div className="mt-3 max-h-56 overflow-auto rounded-xl border border-white/10 bg-black/20">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-white/5 text-slate-300">
-              <tr>
-                <th className="px-3 py-2">物品</th>
-                <th className="px-3 py-2">分类</th>
-                <th className="px-3 py-2">最新价格</th>
-                <th className="px-3 py-2">库存</th>
-                <th className="px-3 py-2">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.items.map((item) => (
-                <tr key={item.id} className="border-t border-white/10">
-                  <td className="px-3 py-2">{item.name}</td>
-                  <td className="px-3 py-2">{categoryLabel(item.category)}</td>
-                  <td className="px-3 py-2">{formatGold(latestPriceByItemId.get(item.id) ?? null)}</td>
-                  <td className="px-3 py-2">{inventoryByItemId.get(item.id) ?? 0}</td>
-                  <td className="px-3 py-2">
-                    <button className="pill-btn" onClick={() => onDeleteItem(item.id)} disabled={busy}>
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </article>
-
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">Phase 2.1 数据验证: 价格历史与指标</h4>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto]">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={historyItemId}
             onChange={(event) => setHistoryItemId(event.target.value)}
-            disabled={busy || state.items.length === 0}
+            disabled={busy || filteredHistoryItems.length === 0}
           >
-            {state.items.map((item) => (
+            {filteredHistoryItems.map((item) => (
               <option key={`history-item-${item.id}`} value={item.id}>
-                {item.name}
+                [{item.subCategory}] {item.name}
               </option>
             ))}
           </select>
@@ -613,17 +1174,133 @@ export function WorkshopView(): JSX.Element {
             查询历史
           </button>
         </div>
+        {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前筛选下没有可查询物品。</p> : null}
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {HISTORY_QUICK_DAY_OPTIONS.map((days) => {
+            const active = activeHistoryQuickDays === days;
+            return (
+              <button
+                key={`history-quick-${days}`}
+                className={`pill-btn ${active ? "!border-cyan-300/60 !bg-cyan-300/20 !text-cyan-100" : ""}`}
+                onClick={() => {
+                  setHistoryDaysInput(String(days));
+                  void onLoadPriceHistory(days);
+                }}
+                disabled={busy || !historyItemId}
+              >
+                {days} 天
+              </button>
+            );
+          })}
+        </div>
+
         {historyResult ? (
-          <div className="mt-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-6">
               <div className="data-pill">样本数: {historyResult.sampleCount}</div>
               <div className="data-pill">最新价: {formatGold(historyResult.latestPrice)}</div>
               <div className="data-pill">区间均价: {formatGold(historyResult.averagePrice)}</div>
               <div className="data-pill">MA7(最新): {formatGold(historyResult.ma7Latest)}</div>
+              <div
+                className={`data-pill ${
+                  historyInsight?.deviationFromWeekday !== null && historyInsight?.deviationFromWeekday !== undefined
+                    ? historyInsight.deviationFromWeekday <= 0
+                      ? "text-emerald-300"
+                      : "text-rose-300"
+                    : ""
+                }`}
+              >
+                周内均价偏离: {toSignedPercent(historyInsight?.deviationFromWeekday ?? null)}
+              </div>
               <div className="data-pill">
                 最新时间: {historyResult.latestCapturedAt ? new Date(historyResult.latestCapturedAt).toLocaleString() : "--"}
               </div>
             </div>
+
+            {historyChartModel ? (
+              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/25 p-3">
+                <svg viewBox={`0 0 ${historyChartModel.width} ${historyChartModel.height}`} className="h-[280px] w-full min-w-[760px]">
+                  {historyChartModel.yTicks.map((tick) => (
+                    <g key={`history-y-${tick.y}`}>
+                      <line
+                        x1={historyChartModel.left}
+                        y1={tick.y}
+                        x2={historyChartModel.width - historyChartModel.right}
+                        y2={tick.y}
+                        stroke="rgba(148,163,184,0.2)"
+                        strokeWidth="1"
+                      />
+                      <text x={historyChartModel.left - 8} y={tick.y + 4} textAnchor="end" fill="#cbd5e1" fontSize="11">
+                        {formatGold(tick.value)}
+                      </text>
+                    </g>
+                  ))}
+
+                  {historyChartModel.wednesdayMarkers.map((marker) => (
+                    <line
+                      key={`history-wed-${marker.date}`}
+                      x1={marker.x}
+                      y1={historyChartModel.top}
+                      x2={marker.x}
+                      y2={historyChartModel.height - historyChartModel.bottom}
+                      stroke="rgba(251,191,36,0.4)"
+                      strokeDasharray="5 5"
+                      strokeWidth="1"
+                    />
+                  ))}
+
+                  <line
+                    x1={historyChartModel.left}
+                    y1={historyChartModel.height - historyChartModel.bottom}
+                    x2={historyChartModel.width - historyChartModel.right}
+                    y2={historyChartModel.height - historyChartModel.bottom}
+                    stroke="rgba(148,163,184,0.55)"
+                    strokeWidth="1.1"
+                  />
+
+                  {historyChartModel.pricePath ? (
+                    <path d={historyChartModel.pricePath} fill="none" stroke="#22d3ee" strokeWidth="2.4" />
+                  ) : null}
+                  {historyChartModel.ma7Path ? (
+                    <path d={historyChartModel.ma7Path} fill="none" stroke="#fbbf24" strokeWidth="2.1" />
+                  ) : null}
+
+                  {historyChartModel.latestPoint ? (
+                    <circle
+                      cx={historyChartModel.latestPoint.x}
+                      cy={historyChartModel.latestPoint.y}
+                      r="4.2"
+                      fill="#22d3ee"
+                      stroke="rgba(255,255,255,0.85)"
+                      strokeWidth="1.2"
+                    />
+                  ) : null}
+
+                  {historyChartModel.xTicks.map((tick) => (
+                    <text
+                      key={`history-x-${tick.x}`}
+                      x={tick.x}
+                      y={historyChartModel.height - 8}
+                      textAnchor="middle"
+                      fill="#cbd5e1"
+                      fontSize="11"
+                    >
+                      {tick.label}
+                    </text>
+                  ))}
+                </svg>
+
+                <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-300">
+                  <span>青线: 实际价格</span>
+                  <span>黄线: MA7</span>
+                  <span>黄虚线: 周三重置日</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-300">当前区间没有价格样本，无法绘制曲线。</p>
+            )}
+
             <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-7">
               {historyResult.weekdayAverages.map((entry) => (
                 <div key={`weekday-avg-${entry.weekday}`} className="data-pill">
@@ -631,111 +1308,131 @@ export function WorkshopView(): JSX.Element {
                 </div>
               ))}
             </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
+              <p className="text-slate-200">Phase 2.3 周期性波动提示（按星期）</p>
+              <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto_auto]">
+                <select
+                  className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={signalRuleEnabled ? "on" : "off"}
+                  onChange={(event) => setSignalRuleEnabled(event.target.value === "on")}
+                  disabled={busy}
+                >
+                  <option value="on">规则开启</option>
+                  <option value="off">规则关闭</option>
+                </select>
+                <input
+                  className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={signalLookbackDaysInput}
+                  onChange={(event) => setSignalLookbackDaysInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="回看天数（如 30）"
+                />
+                <input
+                  className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={signalThresholdPercentInput}
+                  onChange={(event) => setSignalThresholdPercentInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="触发阈值%（如 8）"
+                />
+                <button className="task-btn px-4" onClick={() => void onSaveSignalRule()} disabled={busy}>
+                  保存规则
+                </button>
+                <button className="pill-btn" onClick={() => void onRefreshSignals()} disabled={busy}>
+                  刷新信号
+                </button>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div className="data-pill">规则状态: {signalResult?.ruleEnabled ? "开启" : "关闭"}</div>
+                <div className="data-pill">分析天数: {signalResult?.lookbackDays ?? "--"}</div>
+                <div className="data-pill">阈值: {toPercent(signalResult ? signalResult.thresholdRatio : null)}</div>
+                <div className="data-pill">触发数: {signalResult?.triggeredCount ?? 0}</div>
+              </div>
+
+              {signalResult ? (
+                triggeredSignalRows.length > 0 ? (
+                  <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-white/10 bg-black/30 p-2">
+                    {triggeredSignalRows.slice(0, 20).map((row) => (
+                      <div key={`signal-${row.itemId}`} className="mb-2 rounded-lg border border-emerald-200/30 bg-emerald-500/10 p-2">
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                          <div className="data-pill">物品: {row.itemName}</div>
+                          <div className="data-pill">最新价: {formatGold(row.latestPrice)}</div>
+                          <div className="data-pill">
+                            {row.latestWeekday === null ? "同星期均价: --" : `同星期均价(${weekdayLabel(row.latestWeekday)}): ${formatGold(row.weekdayAveragePrice)}`}
+                          </div>
+                          <div className="data-pill text-emerald-300">
+                            偏离: {toSignedPercent(row.deviationRatioFromWeekdayAverage)}
+                          </div>
+                        </div>
+                        <p className="mt-2 text-slate-300">
+                          最新采样: {row.latestCapturedAt ? new Date(row.latestCapturedAt).toLocaleString() : "--"}，样本数:{" "}
+                          {row.sampleCount}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-slate-300">
+                    {signalResult.ruleEnabled ? "当前没有达到阈值的周期波动提示。" : "规则当前已关闭，已暂停触发提示。"}
+                  </p>
+                )
+              ) : (
+                <p className="mt-2 text-slate-300">尚未生成信号结果。</p>
+              )}
+            </div>
           </div>
         ) : (
           <p className="mt-2 text-xs text-slate-300">还没有查询结果。先选物品和天数后点击“查询历史”。</p>
         )}
       </article>
 
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">2) 配方录入</h4>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_auto]">
+      <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold">2) 制作模拟器（单配方）+ 机会分析</h4>
+          {simulation ? (
+            <button className="pill-btn" onClick={() => void onApplySimulationMaterialEdits()} disabled={busy}>
+              保存单价/库存并重算
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={recipeOutputItemId}
-            onChange={(event) => setRecipeOutputItemId(event.target.value)}
-            disabled={busy || state.items.length === 0}
+            value={simulateMainCategory}
+            onChange={(event) => setSimulateMainCategory(event.target.value)}
+            disabled={busy || simulationMainCategoryOptions.length === 0}
           >
-            {state.items.map((item) => (
-              <option key={`recipe-output-${item.id}`} value={item.id}>
-                成品: {item.name}
+            {simulationMainCategoryOptions.map((category) => (
+              <option key={`sim-main-category-${category}`} value={category}>
+                大类: {category}
               </option>
             ))}
           </select>
-          <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={recipeOutputQuantity}
-            onChange={(event) => setRecipeOutputQuantity(event.target.value)}
-            disabled={busy}
-            placeholder="成品数"
-          />
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={recipeInputItemId}
-            onChange={(event) => setRecipeInputItemId(event.target.value)}
-            disabled={busy || state.items.length === 0}
+            value={simulateSubCategory}
+            onChange={(event) => setSimulateSubCategory(event.target.value)}
+            disabled={busy}
           >
-            {state.items.map((item) => (
-              <option key={`recipe-input-${item.id}`} value={item.id}>
-                材料: {item.name}
+            <option value="all">下级分类: 全部</option>
+            {simulationSubCategoryOptions.map((category) => (
+              <option key={`sim-sub-category-${category}`} value={category}>
+                下级分类: {category}
               </option>
             ))}
           </select>
-          <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={recipeInputQuantity}
-            onChange={(event) => setRecipeInputQuantity(event.target.value)}
-            disabled={busy}
-            placeholder="材料数"
-          />
-          <button className="task-btn px-4" onClick={onAddRecipeInput} disabled={busy || !recipeInputItemId}>
-            添加材料
-          </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {recipeDraftInputs.length === 0 ? <p className="text-xs text-slate-300">当前配方草稿还没有材料。</p> : null}
-          {recipeDraftInputs.map((entry) => (
-            <span key={`draft-input-${entry.itemId}`} className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs">
-              {(itemById.get(entry.itemId)?.name ?? entry.itemId) + ` x${entry.quantity}`}
-              <button className="ml-2 text-rose-300" onClick={() => onRemoveRecipeInput(entry.itemId)} disabled={busy}>
-                删除
-              </button>
-            </span>
-          ))}
-        </div>
-        <div className="mt-3">
-          <button className="task-btn px-4" onClick={onSaveRecipe} disabled={busy || recipeDraftInputs.length === 0}>
-            保存配方
-          </button>
-        </div>
-        <div className="mt-3 max-h-52 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2">
-          {state.recipes.length === 0 ? (
-            <p className="px-2 py-2 text-xs text-slate-300">暂无配方。</p>
-          ) : (
-            state.recipes.map((recipe) => (
-              <div key={recipe.id} className="mb-2 rounded-lg border border-white/10 bg-white/5 p-2 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <p>
-                    <span className="font-semibold">{itemById.get(recipe.outputItemId)?.name ?? recipe.outputItemId}</span>
-                    {` x${recipe.outputQuantity}`}
-                  </p>
-                  <button className="pill-btn" onClick={() => onDeleteRecipe(recipe.id)} disabled={busy}>
-                    删除
-                  </button>
-                </div>
-                <p className="mt-1 text-slate-300">
-                  {recipe.inputs
-                    .map((input) => `${itemById.get(input.itemId)?.name ?? input.itemId} x${input.quantity}`)
-                    .join(" + ")}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
-      </article>
-
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">3) 制作模拟器 + 机会分析</h4>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_auto]">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={simulateRecipeId}
             onChange={(event) => setSimulateRecipeId(event.target.value)}
-            disabled={busy || state.recipes.length === 0}
+            disabled={busy || filteredSimulationRecipes.length === 0}
           >
-            {state.recipes.map((recipe) => (
+            {filteredSimulationRecipes.map((recipe) => (
               <option key={`sim-recipe-${recipe.id}`} value={recipe.id}>
-                {itemById.get(recipe.outputItemId)?.name ?? recipe.outputItemId}
+                [{recipe.subCategory}] {recipe.outputName}
               </option>
             ))}
           </select>
@@ -759,6 +1456,9 @@ export function WorkshopView(): JSX.Element {
             运行模拟
           </button>
         </div>
+        {filteredSimulationRecipes.length === 0 ? (
+          <p className="mt-2 text-xs text-amber-300">当前分类下没有可模拟的配方。</p>
+        ) : null}
 
         {simulation ? (
           <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
@@ -788,9 +1488,9 @@ export function WorkshopView(): JSX.Element {
                   <tr>
                     <th className="px-2 py-1">材料</th>
                     <th className="px-2 py-1">需求</th>
-                    <th className="px-2 py-1">库存</th>
+                    <th className="px-2 py-1">库存(可改)</th>
                     <th className="px-2 py-1">缺口</th>
-                    <th className="px-2 py-1">单价</th>
+                    <th className="px-2 py-1">单价(可改)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -798,9 +1498,40 @@ export function WorkshopView(): JSX.Element {
                     <tr key={`sim-material-${row.itemId}`} className="border-t border-white/10">
                       <td className="px-2 py-1">{row.itemName}</td>
                       <td className="px-2 py-1">{row.required}</td>
-                      <td className="px-2 py-1">{row.owned}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-24 rounded border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
+                          value={simulationMaterialDraft[row.itemId]?.owned ?? String(row.owned)}
+                          onChange={(event) =>
+                            setSimulationMaterialDraft((prev) => ({
+                              ...prev,
+                              [row.itemId]: {
+                                unitPrice: prev[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice)),
+                                owned: event.target.value,
+                              },
+                            }))
+                          }
+                          disabled={busy}
+                        />
+                      </td>
                       <td className={`px-2 py-1 ${row.missing > 0 ? "text-rose-300" : "text-emerald-300"}`}>{row.missing}</td>
-                      <td className="px-2 py-1">{formatGold(row.latestUnitPrice)}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-28 rounded border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
+                          value={simulationMaterialDraft[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice))}
+                          onChange={(event) =>
+                            setSimulationMaterialDraft((prev) => ({
+                              ...prev,
+                              [row.itemId]: {
+                                unitPrice: event.target.value,
+                                owned: prev[row.itemId]?.owned ?? String(row.owned),
+                              },
+                            }))
+                          }
+                          disabled={busy}
+                          placeholder="留空=不改"
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -810,13 +1541,117 @@ export function WorkshopView(): JSX.Element {
         ) : null}
       </article>
 
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+      <article className="order-4 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">4) 背包逆向推导（可制作什么）</h4>
+          <h4 className="text-sm font-semibold">3) 背包与补差工作台（库存驱动）</h4>
           <button className="pill-btn" onClick={() => void loadCraftOptions()} disabled={busy}>
             刷新建议
           </button>
         </div>
+
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <h5 className="text-xs font-semibold text-slate-200">3.1 价格/库存修正（全局）</h5>
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              value={itemMainCategory}
+              onChange={(event) => setItemMainCategory(event.target.value)}
+              disabled={busy || itemMainCategoryOptions.length === 0}
+            >
+              {itemMainCategoryOptions.map((category) => (
+                <option key={`item-main-category-${category}`} value={category}>
+                  大类: {category}
+                </option>
+              ))}
+            </select>
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              value={itemSubCategory}
+              onChange={(event) => setItemSubCategory(event.target.value)}
+              disabled={busy}
+            >
+              <option value="all">下级分类: 全部</option>
+              {itemSubCategoryOptions.map((category) => (
+                <option key={`item-sub-category-${category}`} value={category}>
+                  下级分类: {category}
+                </option>
+              ))}
+            </select>
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              value={selectedItemId}
+              onChange={(event) => setSelectedItemId(event.target.value)}
+              disabled={busy || filteredItems.length === 0}
+            >
+              {filteredItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  [{item.subCategory}] {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <input
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              placeholder="最新单价"
+              value={selectedItemPrice}
+              onChange={(event) => setSelectedItemPrice(event.target.value)}
+              disabled={busy || !selectedItemId}
+            />
+            <input
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              placeholder="库存数量"
+              value={selectedItemInventory}
+              onChange={(event) => setSelectedItemInventory(event.target.value)}
+              disabled={busy || !selectedItemId}
+            />
+            <div className="flex gap-2">
+              <button className="task-btn px-3" onClick={onSaveSelectedPrice} disabled={busy || !selectedItemId}>
+                记价格
+              </button>
+              <button className="task-btn px-3" onClick={onSaveSelectedInventory} disabled={busy || !selectedItemId}>
+                记库存
+              </button>
+            </div>
+          </div>
+          {selectedItemId ? (
+            <p className="mt-2 text-xs text-slate-300">
+              当前值: 单价 {formatGold(latestPriceByItemId.get(selectedItemId) ?? null)} / 库存 {inventoryByItemId.get(selectedItemId) ?? 0}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-amber-300">当前分类下没有物品。</p>
+          )}
+          <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-white/10 bg-black/30">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-white/5 text-slate-300">
+                <tr>
+                  <th className="px-2 py-1">物品</th>
+                  <th className="px-2 py-1">分类</th>
+                  <th className="px-2 py-1">最新价格</th>
+                  <th className="px-2 py-1">库存</th>
+                  <th className="px-2 py-1">修正</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => (
+                  <tr key={item.id} className="border-t border-white/10">
+                    <td className="px-2 py-1">{item.name}</td>
+                    <td className="px-2 py-1">{`${item.mainCategory} / ${item.subCategory}`}</td>
+                    <td className="px-2 py-1">{formatGold(latestPriceByItemId.get(item.id) ?? null)}</td>
+                    <td className="px-2 py-1">{inventoryByItemId.get(item.id) ?? 0}</td>
+                    <td className="px-2 py-1">
+                      <button className="pill-btn" onClick={() => onPickItemForCorrection(item.id)} disabled={busy}>
+                        选择
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h5 className="mt-4 text-xs font-semibold text-slate-200">3.2 背包逆向推导（可制作什么）</h5>
         <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
           {craftOptions.length === 0 ? (
             <p className="px-2 py-2 text-slate-300">暂无可分析配方。</p>
@@ -849,10 +1684,9 @@ export function WorkshopView(): JSX.Element {
             ))
           )}
         </div>
-      </article>
 
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">5) Phase 1.2 差一点可做（补差预算）</h4>
+        <div className="mt-4">
+          <h5 className="text-xs font-semibold text-slate-200">3.3 差一点可做（补差预算）</h5>
         <p className="mt-2 text-xs text-slate-300">输入可补差预算，系统会推算“补一点材料即可开做”的目标与预算内潜在利润。</p>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]">
           <input
@@ -911,6 +1745,7 @@ export function WorkshopView(): JSX.Element {
               </div>
             ))
           )}
+        </div>
         </div>
       </article>
     </div>
