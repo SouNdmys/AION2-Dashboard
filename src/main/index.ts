@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
+import { cleanupWorkshopOcrHotkey } from "./workshop-automation";
 
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
@@ -127,4 +128,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("will-quit", () => {
+  cleanupWorkshopOcrHotkey();
 });

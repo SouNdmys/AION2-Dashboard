@@ -1,13 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { nativeImage } from "electron";
 import Store from "electron-store";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopCatalogImportFromFileInput,
   WorkshopCatalogImportResult,
+  WorkshopOcrExtractTextInput,
+  WorkshopOcrExtractTextResult,
+  WorkshopOcrIconCaptureConfig,
   WorkshopOcrPriceImportInput,
   WorkshopOcrPriceImportResult,
+  WorkshopRect,
+  WorkshopTradeBoardPreset,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
@@ -17,6 +25,7 @@ import type {
   WorkshopInventoryItem,
   WorkshopItem,
   WorkshopItemCategory,
+  WorkshopPriceMarket,
   WorkshopPriceHistoryPoint,
   WorkshopPriceHistoryQuery,
   WorkshopPriceHistoryResult,
@@ -24,6 +33,7 @@ import type {
   WorkshopPriceSignalResult,
   WorkshopPriceSignalRow,
   WorkshopPriceSignalRule,
+  WorkshopPriceTrendTag,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopRecipeInput,
@@ -38,6 +48,9 @@ const WORKSHOP_HISTORY_MAX_DAYS = 365;
 const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.08;
 const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.01;
 const WORKSHOP_SIGNAL_THRESHOLD_MAX = 0.5;
+const WORKSHOP_ICON_CACHE_KEY = "iconCache";
+const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra+eng";
+const WORKSHOP_OCR_DEFAULT_PSM = 6;
 
 const DEFAULT_WORKSHOP_SIGNAL_RULE: WorkshopPriceSignalRule = {
   enabled: true,
@@ -56,6 +69,7 @@ const workshopStore = new Store<Record<string, unknown>>({
     prices: [],
     inventory: [],
     signalRule: DEFAULT_WORKSHOP_SIGNAL_RULE,
+    iconCache: {},
   },
 });
 
@@ -81,6 +95,13 @@ function sanitizeCategory(raw: unknown): WorkshopItemCategory {
   return "material";
 }
 
+function sanitizePriceMarket(raw: unknown): WorkshopPriceMarket {
+  if (raw === "server" || raw === "world" || raw === "single") {
+    return raw;
+  }
+  return "single";
+}
+
 function sanitizeName(raw: unknown, fallback = ""): string {
   if (typeof raw !== "string") {
     return fallback;
@@ -88,8 +109,200 @@ function sanitizeName(raw: unknown, fallback = ""): string {
   return raw.trim();
 }
 
+function sanitizeIconToken(raw: unknown): string | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const icon = raw.trim();
+  return icon || undefined;
+}
+
 function normalizeLookupName(name: string): string {
   return name.trim().toLocaleLowerCase().replace(/\s+/g, "");
+}
+
+function sanitizeOcrLineItemName(raw: string): string {
+  return raw
+    .replace(/[|丨]/g, " ")
+    .replace(/[，]/g, ",")
+    .replace(/[：]/g, ":")
+    .replace(/[“”‘’"'`]/g, "")
+    .replace(/[()（）[\]{}<>﹤﹥]/g, " ")
+    .replace(/^[^0-9a-zA-Z\u3400-\u9fff]+/gu, "")
+    .replace(/[^0-9a-zA-Z\u3400-\u9fff]+$/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildOcrLookupCandidates(rawName: string): string[] {
+  const candidates = new Set<string>();
+  const add = (value: string): void => {
+    const normalized = normalizeLookupName(value);
+    if (normalized.length >= 2) {
+      candidates.add(normalized);
+    }
+  };
+  add(rawName);
+  const cleaned = sanitizeOcrLineItemName(rawName).replace(/[^0-9a-zA-Z\u3400-\u9fff]/gu, "");
+  add(cleaned);
+  const normalized = normalizeLookupName(cleaned);
+  const trimLimit = Math.min(6, Math.max(0, normalized.length - 2));
+  for (let index = 1; index <= trimLimit; index += 1) {
+    add(normalized.slice(index));
+  }
+  if (normalized.length > 4) {
+    add(normalized.slice(0, -1));
+    add(normalized.slice(0, -2));
+  }
+  return Array.from(candidates);
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+  if (!left) {
+    return right.length;
+  }
+  if (!right) {
+    return left.length;
+  }
+  const prev = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    let diagonal = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const up = prev[j];
+      const leftCost = prev[j - 1] + 1;
+      const upCost = up + 1;
+      const replaceCost = diagonal + (left[i - 1] === right[j - 1] ? 0 : 1);
+      prev[j] = Math.min(leftCost, upCost, replaceCost);
+      diagonal = up;
+    }
+  }
+  return prev[right.length];
+}
+
+function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawName: string): WorkshopItem | undefined {
+  const candidates = buildOcrLookupCandidates(rawName);
+  for (const candidate of candidates) {
+    const exact = itemByLookupName.get(candidate);
+    if (exact) {
+      return exact;
+    }
+  }
+
+  let bestContainItem: WorkshopItem | undefined;
+  let bestContainOverlap = -1;
+  let bestContainScore = -1;
+  itemByLookupName.forEach((item, lookup) => {
+    if (lookup.length < 4) {
+      return;
+    }
+    candidates.forEach((candidate) => {
+      const overlap = Math.min(candidate.length, lookup.length);
+      if (overlap < 4) {
+        return;
+      }
+      if (!candidate.includes(lookup) && !lookup.includes(candidate)) {
+        return;
+      }
+      const score = overlap / Math.max(candidate.length, lookup.length);
+      if (
+        overlap > bestContainOverlap ||
+        (overlap === bestContainOverlap && score > bestContainScore)
+      ) {
+        bestContainItem = item;
+        bestContainOverlap = overlap;
+        bestContainScore = score;
+      }
+    });
+  });
+  if (bestContainItem) {
+    return bestContainItem;
+  }
+
+  const fuzzy: Array<{ item: WorkshopItem; ratio: number; maxLen: number }> = [];
+  itemByLookupName.forEach((item, lookup) => {
+    candidates.forEach((candidate) => {
+      if (candidate.length < 4 || lookup.length < 4) {
+        return;
+      }
+      if (Math.abs(candidate.length - lookup.length) > 4) {
+        return;
+      }
+      const dist = levenshteinDistance(candidate, lookup);
+      const maxLen = Math.max(candidate.length, lookup.length);
+      const ratio = 1 - dist / maxLen;
+      const threshold = maxLen >= 8 ? 0.62 : 0.68;
+      if (ratio < threshold) {
+        return;
+      }
+      fuzzy.push({ item, ratio, maxLen });
+    });
+  });
+  if (fuzzy.length === 0) {
+    return undefined;
+  }
+  fuzzy.sort((left, right) => {
+    if (right.ratio !== left.ratio) {
+      return right.ratio - left.ratio;
+    }
+    if (right.maxLen !== left.maxLen) {
+      return right.maxLen - left.maxLen;
+    }
+    return left.item.name.localeCompare(right.item.name, "zh-CN");
+  });
+  const best = fuzzy[0];
+  const second = fuzzy[1];
+  if (best.ratio >= 0.9) {
+    return best.item;
+  }
+  if (!second || best.ratio - second.ratio >= 0.08) {
+    return best.item;
+  }
+  return undefined;
+}
+
+function resolveUniqueItemByIcon(items: WorkshopItem[], icon: string | undefined): WorkshopItem | undefined {
+  if (!icon) {
+    return undefined;
+  }
+  let matched: WorkshopItem | undefined;
+  for (const item of items) {
+    if (item.icon !== icon) {
+      continue;
+    }
+    if (matched) {
+      return undefined;
+    }
+    matched = item;
+  }
+  return matched;
+}
+
+function isAmbiguousExactOcrNameMatch(item: WorkshopItem, ocrName: string, items: WorkshopItem[]): boolean {
+  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
+  if (!ocrKey) {
+    return false;
+  }
+  const itemKey = normalizeLookupName(item.name);
+  if (!itemKey || itemKey !== ocrKey) {
+    return false;
+  }
+  return items.some((other) => {
+    if (other.id === item.id) {
+      return false;
+    }
+    const otherKey = normalizeLookupName(other.name);
+    return otherKey.length > ocrKey.length && otherKey.includes(ocrKey);
+  });
+}
+
+function isExactOcrNameMatch(item: WorkshopItem, ocrName: string): boolean {
+  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
+  const itemKey = normalizeLookupName(item.name);
+  return Boolean(ocrKey) && ocrKey === itemKey;
 }
 
 function inferItemIcon(name: string, category: WorkshopItemCategory): string | undefined {
@@ -110,6 +323,75 @@ function inferItemIcon(name: string, category: WorkshopItemCategory): string | u
     return "icon-material-fragment";
   }
   return category === "material" ? "icon-material" : "icon-other";
+}
+
+function normalizeIconCache(raw: unknown): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!raw || typeof raw !== "object") {
+    return map;
+  }
+  Object.entries(raw as Record<string, unknown>).forEach(([rawKey, rawIcon]) => {
+    const key = normalizeLookupName(rawKey);
+    const icon = sanitizeIconToken(rawIcon);
+    if (!key || !icon) {
+      return;
+    }
+    map.set(key, icon);
+  });
+  return map;
+}
+
+function serializeIconCache(iconCache: Map<string, string>): Record<string, string> {
+  const pairs = Array.from(iconCache.entries()).sort((left, right) => left[0].localeCompare(right[0]));
+  return Object.fromEntries(pairs);
+}
+
+function cacheIconByName(iconCache: Map<string, string>, name: string, icon: string | undefined): void {
+  if (!icon) {
+    return;
+  }
+  const key = normalizeLookupName(name);
+  if (!key) {
+    return;
+  }
+  iconCache.set(key, icon);
+}
+
+function extractItemAliasesFromNotes(notes?: string): string[] {
+  if (!notes) {
+    return [];
+  }
+  const match = notes.match(/別名:\s*([^;]+)/u);
+  if (!match?.[1]) {
+    return [];
+  }
+  return match[1]
+    .split(/[、,，/]/u)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function resolveItemIconWithCache(
+  iconCache: Map<string, string>,
+  name: string,
+  category: WorkshopItemCategory,
+  preferredIcon?: string,
+): string | undefined {
+  const explicitIcon = sanitizeIconToken(preferredIcon);
+  if (explicitIcon) {
+    cacheIconByName(iconCache, name, explicitIcon);
+    return explicitIcon;
+  }
+  const lookup = normalizeLookupName(name);
+  if (lookup) {
+    const cached = iconCache.get(lookup);
+    if (cached) {
+      return cached;
+    }
+  }
+  const inferred = inferItemIcon(name, category);
+  cacheIconByName(iconCache, name, inferred);
+  return inferred;
 }
 
 function stripCatalogImprintTag(value: string): string {
@@ -349,7 +631,7 @@ function normalizeItem(raw: unknown, index: number): WorkshopItem {
   const name = sanitizeName((raw as { name?: unknown })?.name, nameFallback) || nameFallback;
   const createdAt = asIso((raw as { createdAt?: unknown })?.createdAt, nowIso);
   const updatedAt = asIso((raw as { updatedAt?: unknown })?.updatedAt, nowIso);
-  const icon = sanitizeName((raw as { icon?: unknown })?.icon) || undefined;
+  const icon = sanitizeIconToken((raw as { icon?: unknown })?.icon);
   const notes = sanitizeName((raw as { notes?: unknown })?.notes) || undefined;
 
   return {
@@ -409,6 +691,7 @@ function normalizePriceSnapshot(raw: unknown): WorkshopPriceSnapshot | null {
 
   const sourceRaw = (raw as { source?: unknown }).source;
   const source = sourceRaw === "import" ? "import" : "manual";
+  const market = sanitizePriceMarket((raw as { market?: unknown }).market);
   const capturedAt = asIso((raw as { capturedAt?: unknown }).capturedAt, new Date().toISOString());
   const note = sanitizeName((raw as { note?: unknown }).note) || undefined;
 
@@ -418,6 +701,7 @@ function normalizePriceSnapshot(raw: unknown): WorkshopPriceSnapshot | null {
     unitPrice,
     capturedAt,
     source,
+    market,
     note,
   };
 }
@@ -446,6 +730,7 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
   const entity = raw as Record<string, unknown> | undefined;
   const version = typeof entity?.version === "number" ? Math.floor(entity.version) : 0;
   const signalRule = normalizeSignalRule(entity?.signalRule);
+  const iconCache = normalizeIconCache(entity?.[WORKSHOP_ICON_CACHE_KEY]);
   const itemsRaw = Array.isArray(entity?.items) ? entity?.items : [];
   const itemMap = new Map<string, WorkshopItem>();
   itemsRaw.forEach((entry, index) => {
@@ -453,7 +738,12 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
     itemMap.set(item.id, item);
   });
 
-  const items = Array.from(itemMap.values());
+  const items = Array.from(itemMap.values()).map((item) => {
+    const icon = resolveItemIconWithCache(iconCache, item.name, item.category, item.icon);
+    const aliases = extractItemAliasesFromNotes(item.notes);
+    aliases.forEach((alias) => cacheIconByName(iconCache, alias, icon));
+    return icon === item.icon ? item : { ...item, icon };
+  });
   const validItemIds = new Set(items.map((item) => item.id));
 
   const recipesRaw = Array.isArray(entity?.recipes) ? entity?.recipes : [];
@@ -501,12 +791,20 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
 }
 
 function writeWorkshopState(next: WorkshopState): WorkshopState {
+  const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
+  const normalizedItems = next.items.map((item) => {
+    const icon = resolveItemIconWithCache(iconCache, item.name, item.category, item.icon);
+    const aliases = extractItemAliasesFromNotes(item.notes);
+    aliases.forEach((alias) => cacheIconByName(iconCache, alias, icon));
+    return icon === item.icon ? item : { ...item, icon };
+  });
   workshopStore.set("version", next.version);
-  workshopStore.set("items", next.items);
+  workshopStore.set("items", normalizedItems);
   workshopStore.set("recipes", next.recipes);
   workshopStore.set("prices", next.prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT));
   workshopStore.set("inventory", next.inventory);
   workshopStore.set("signalRule", normalizeSignalRule(next.signalRule));
+  workshopStore.set(WORKSHOP_ICON_CACHE_KEY, serializeIconCache(iconCache));
   return normalizeWorkshopState(workshopStore.store);
 }
 
@@ -603,6 +901,12 @@ function ensureItemExists(state: WorkshopState, itemId: string): void {
 }
 
 function getLatestPriceMap(state: WorkshopState): Map<string, WorkshopPriceSnapshot> {
+  const scoreByMarket = (market: WorkshopPriceMarket | undefined): number => {
+    if (market === "server") return 3;
+    if (market === "single") return 2;
+    if (market === "world") return 1;
+    return 0;
+  };
   const map = new Map<string, WorkshopPriceSnapshot>();
   state.prices.forEach((snapshot) => {
     const previous = map.get(snapshot.itemId);
@@ -612,7 +916,11 @@ function getLatestPriceMap(state: WorkshopState): Map<string, WorkshopPriceSnaps
     }
     const prevTs = new Date(previous.capturedAt).getTime();
     const nextTs = new Date(snapshot.capturedAt).getTime();
-    if (nextTs >= prevTs) {
+    if (nextTs > prevTs) {
+      map.set(snapshot.itemId, snapshot);
+      return;
+    }
+    if (nextTs === prevTs && scoreByMarket(snapshot.market) > scoreByMarket(previous.market)) {
       map.set(snapshot.itemId, snapshot);
     }
   });
@@ -794,6 +1102,29 @@ function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
   };
 }
 
+function resolvePriceTrendTag(
+  sampleCount: number,
+  deviationFromWeekdayAverage: number | null,
+  deviationFromMa7: number | null,
+  thresholdRatio: number,
+): WorkshopPriceTrendTag {
+  if (sampleCount < 5 || deviationFromWeekdayAverage === null) {
+    return "watch";
+  }
+  const ma7Threshold = thresholdRatio * 0.5;
+  const buyByWeekday = deviationFromWeekdayAverage <= -thresholdRatio;
+  const sellByWeekday = deviationFromWeekdayAverage >= thresholdRatio;
+  const buyByMa7 = deviationFromMa7 === null ? true : deviationFromMa7 <= -ma7Threshold;
+  const sellByMa7 = deviationFromMa7 === null ? true : deviationFromMa7 >= ma7Threshold;
+  if (buyByWeekday && buyByMa7) {
+    return "buy-zone";
+  }
+  if (sellByWeekday && sellByMa7) {
+    return "sell-zone";
+  }
+  return "watch";
+}
+
 function buildWeekdayAverages(points: WorkshopPriceHistoryPoint[]): WorkshopWeekdayAverage[] {
   const aggregates = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }));
   points.forEach((point) => {
@@ -964,25 +1295,200 @@ interface ParsedOcrPriceLine {
   raw: string;
   itemName: string;
   unitPrice: number;
+  market: WorkshopPriceMarket;
+}
+
+interface OcrIconCaptureOutcome {
+  iconByLineNumber: Map<number, string>;
+  iconCapturedCount: number;
+  iconSkippedCount: number;
+  warnings: string[];
+}
+
+function parseIntLike(raw: unknown): number | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return null;
+  }
+  return Math.floor(raw);
+}
+
+function sanitizeOcrIconCaptureConfig(raw: unknown): { config: WorkshopOcrIconCaptureConfig | null; warnings: string[] } {
+  if (!raw || typeof raw !== "object") {
+    return { config: null, warnings: [] };
+  }
+  const entity = raw as Partial<WorkshopOcrIconCaptureConfig>;
+  const screenshotPath = typeof entity.screenshotPath === "string" ? entity.screenshotPath.trim() : "";
+  const firstRowTop = parseIntLike(entity.firstRowTop);
+  const rowHeight = parseIntLike(entity.rowHeight);
+  const nameAnchorX = parseIntLike(entity.nameAnchorX);
+  const iconOffsetX = parseIntLike(entity.iconOffsetX);
+  const iconTopOffset = parseIntLike(entity.iconTopOffset);
+  const iconWidth = parseIntLike(entity.iconWidth);
+  const iconHeight = parseIntLike(entity.iconHeight);
+
+  const warnings: string[] = [];
+  if (!screenshotPath) {
+    warnings.push("图标抓取已忽略：缺少截图路径。");
+  }
+  if (firstRowTop === null || firstRowTop < 0) {
+    warnings.push("图标抓取已忽略：firstRowTop 必须是 >= 0 的整数。");
+  }
+  if (rowHeight === null || rowHeight <= 0) {
+    warnings.push("图标抓取已忽略：rowHeight 必须是正整数。");
+  }
+  if (nameAnchorX === null || nameAnchorX < 0) {
+    warnings.push("图标抓取已忽略：nameAnchorX 必须是 >= 0 的整数。");
+  }
+  if (iconOffsetX === null) {
+    warnings.push("图标抓取已忽略：iconOffsetX 必须是整数。");
+  }
+  if (iconTopOffset === null) {
+    warnings.push("图标抓取已忽略：iconTopOffset 必须是整数。");
+  }
+  if (iconWidth === null || iconWidth <= 0) {
+    warnings.push("图标抓取已忽略：iconWidth 必须是正整数。");
+  }
+  if (iconHeight === null || iconHeight <= 0) {
+    warnings.push("图标抓取已忽略：iconHeight 必须是正整数。");
+  }
+
+  if (warnings.length > 0) {
+    return {
+      config: null,
+      warnings,
+    };
+  }
+
+  return {
+    config: {
+      screenshotPath,
+      firstRowTop: firstRowTop ?? 0,
+      rowHeight: rowHeight ?? 1,
+      nameAnchorX: nameAnchorX ?? 0,
+      iconOffsetX: iconOffsetX ?? 0,
+      iconTopOffset: iconTopOffset ?? 0,
+      iconWidth: iconWidth ?? 1,
+      iconHeight: iconHeight ?? 1,
+    },
+    warnings,
+  };
 }
 
 function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
   source: "manual" | "import";
   capturedAt: string;
   autoCreateMissingItems: boolean;
+  strictIconMatch: boolean;
   defaultCategory: WorkshopItemCategory;
   text: string;
+  tradeRows: WorkshopOcrPriceImportInput["tradeRows"];
+  iconCapture: WorkshopOcrIconCaptureConfig | null;
+  iconCaptureWarnings: string[];
 } {
   const source = payload.source === "manual" ? "manual" : "import";
   const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
   const autoCreateMissingItems = payload.autoCreateMissingItems ?? false;
+  const strictIconMatch = payload.strictIconMatch === true;
   const defaultCategory = sanitizeCategory(payload.defaultCategory);
+  const iconCaptureSanitized = sanitizeOcrIconCaptureConfig(payload.iconCapture);
   return {
     source,
     capturedAt,
     autoCreateMissingItems,
+    strictIconMatch,
     defaultCategory,
     text: typeof payload.text === "string" ? payload.text : "",
+    tradeRows: Array.isArray(payload.tradeRows) ? payload.tradeRows : undefined,
+    iconCapture: iconCaptureSanitized.config,
+    iconCaptureWarnings: iconCaptureSanitized.warnings,
+  };
+}
+
+function captureOcrLineIcons(
+  parsedLines: ParsedOcrPriceLine[],
+  config: WorkshopOcrIconCaptureConfig,
+): OcrIconCaptureOutcome {
+  const iconByLineNumber = new Map<number, string>();
+  const warnings: string[] = [];
+  const uniqueLineCount = new Set(parsedLines.map((line) => line.lineNumber)).size;
+  const addWarning = (message: string): void => {
+    if (warnings.length < 40) {
+      warnings.push(message);
+    }
+  };
+
+  let imagePath: string;
+  try {
+    imagePath = resolveCatalogImportFilePath(config.screenshotPath);
+  } catch (err) {
+    addWarning(err instanceof Error ? `图标抓取失败：${err.message}` : "图标抓取失败：无法定位截图路径。");
+    return {
+      iconByLineNumber,
+      iconCapturedCount: 0,
+      iconSkippedCount: uniqueLineCount,
+      warnings,
+    };
+  }
+
+  const image = nativeImage.createFromPath(imagePath);
+  if (image.isEmpty()) {
+    addWarning(`图标抓取失败：截图无法读取 (${path.basename(imagePath)})。`);
+    return {
+      iconByLineNumber,
+      iconCapturedCount: 0,
+      iconSkippedCount: uniqueLineCount,
+      warnings,
+    };
+  }
+
+  const imageSize = image.getSize();
+  let iconCapturedCount = 0;
+  let iconSkippedCount = 0;
+  const uniqueLines = new Map<number, ParsedOcrPriceLine>();
+  parsedLines.forEach((line) => {
+    if (!uniqueLines.has(line.lineNumber)) {
+      uniqueLines.set(line.lineNumber, line);
+    }
+  });
+
+  Array.from(uniqueLines.values()).forEach((line) => {
+    const rowIndex = Math.max(0, line.lineNumber - 1);
+    const left = config.nameAnchorX + config.iconOffsetX;
+    const top = config.firstRowTop + rowIndex * config.rowHeight + config.iconTopOffset;
+    const rect = {
+      x: Math.floor(left),
+      y: Math.floor(top),
+      width: Math.floor(config.iconWidth),
+      height: Math.floor(config.iconHeight),
+    };
+    const isInside =
+      rect.x >= 0 &&
+      rect.y >= 0 &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.x + rect.width <= imageSize.width &&
+      rect.y + rect.height <= imageSize.height;
+    if (!isInside) {
+      iconSkippedCount += 1;
+      addWarning(`第 ${line.lineNumber} 行图标窗口越界，已跳过。`);
+      return;
+    }
+    const bitmap = image.crop(rect).toBitmap();
+    if (!bitmap || bitmap.length === 0) {
+      iconSkippedCount += 1;
+      addWarning(`第 ${line.lineNumber} 行图标抓取为空，已跳过。`);
+      return;
+    }
+    const hash = createHash("sha1").update(bitmap).digest("hex").slice(0, 16);
+    iconByLineNumber.set(line.lineNumber, `icon-img-${hash}`);
+    iconCapturedCount += 1;
+  });
+
+  return {
+    iconByLineNumber,
+    iconCapturedCount,
+    iconSkippedCount,
+    warnings,
   };
 }
 
@@ -1002,7 +1508,7 @@ function parseOcrPriceLines(rawText: string): { parsedLines: ParsedOcrPriceLine[
       .replace(/[，]/g, ",")
       .replace(/[：]/g, ":")
       .replace(/\s+/g, " ");
-    const match = normalizedLine.match(/(-?\d[\d,\.\s]*)$/);
+    const match = normalizedLine.match(/(-?[0-9oOlI|sSbB][0-9oOlI|sSbB,\.\s]*)$/);
     if (!match || match.index === undefined) {
       invalidLines.push(`#${lineNumber} ${raw}`);
       return;
@@ -1012,9 +1518,9 @@ function parseOcrPriceLines(rawText: string): { parsedLines: ParsedOcrPriceLine[
       .replace(/[:=\-–—|]\s*$/g, "")
       .replace(/^\d+\s*[.)、:：\-]\s*/, "")
       .trim();
-    const normalizedPriceText = match[1].replace(/[,\.\s]/g, "").replace(/[oO]/g, "0").replace(/[lI]/g, "1");
-    const unitPrice = Number(normalizedPriceText);
-    if (!itemName || !Number.isFinite(unitPrice) || unitPrice < 0) {
+    itemName = sanitizeOcrLineItemName(itemName);
+    const unitPrice = normalizeNumericToken(match[1]);
+    if (!itemName || unitPrice === null) {
       invalidLines.push(`#${lineNumber} ${raw}`);
       return;
     }
@@ -1022,13 +1528,786 @@ function parseOcrPriceLines(rawText: string): { parsedLines: ParsedOcrPriceLine[
       lineNumber,
       raw,
       itemName,
-      unitPrice: Math.floor(unitPrice),
+      unitPrice,
+      market: "single",
     });
   });
 
   return {
     parsedLines,
     invalidLines,
+  };
+}
+
+function parseOcrTradeRows(
+  tradeRows: WorkshopOcrPriceImportInput["tradeRows"],
+): { parsedLines: ParsedOcrPriceLine[]; invalidLines: string[] } {
+  if (!Array.isArray(tradeRows) || tradeRows.length === 0) {
+    return {
+      parsedLines: [],
+      invalidLines: [],
+    };
+  }
+  const parsedLines: ParsedOcrPriceLine[] = [];
+  const invalidLines: string[] = [];
+
+  tradeRows.forEach((row, index) => {
+    const lineNumber = Number.isFinite(row.lineNumber) ? Math.max(1, Math.floor(row.lineNumber)) : index + 1;
+    const rawName = typeof row.itemName === "string" ? row.itemName : "";
+    const itemName = sanitizeOcrLineItemName(rawName);
+    const serverPrice = normalizeNumericToken(String(row.serverPrice ?? ""));
+    const worldPrice = normalizeNumericToken(String(row.worldPrice ?? ""));
+    if (!itemName) {
+      invalidLines.push(`#${lineNumber} ${rawName || "<空名称>"}`);
+      return;
+    }
+    if (serverPrice === null && worldPrice === null) {
+      invalidLines.push(`#${lineNumber} ${itemName} <双价格均为空>`);
+      return;
+    }
+    if (serverPrice !== null) {
+      parsedLines.push({
+        lineNumber,
+        raw: `${itemName} server=${serverPrice}`,
+        itemName,
+        unitPrice: serverPrice,
+        market: "server",
+      });
+    }
+    if (worldPrice !== null) {
+      parsedLines.push({
+        lineNumber,
+        raw: `${itemName} world=${worldPrice}`,
+        itemName,
+        unitPrice: worldPrice,
+        market: "world",
+      });
+    }
+  });
+
+  return {
+    parsedLines,
+    invalidLines,
+  };
+}
+
+function sanitizeOcrLanguage(raw: unknown): string {
+  if (typeof raw !== "string") {
+    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
+  }
+  const value = raw.trim();
+  if (!value) {
+    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
+  }
+  if (!/^[a-zA-Z0-9_+]+$/u.test(value)) {
+    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
+  }
+  return value;
+}
+
+function sanitizeOcrPsm(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return WORKSHOP_OCR_DEFAULT_PSM;
+  }
+  return clamp(Math.floor(raw), 3, 13);
+}
+
+function resolveTradeNameLanguage(language: string): string {
+  const parts = language
+    .split("+")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return language;
+  }
+  const chinese = parts.filter((entry) => entry.startsWith("chi_"));
+  if (chinese.length > 0) {
+    return Array.from(new Set(chinese)).join("+");
+  }
+  return language;
+}
+
+function sanitizeRect(raw: unknown): WorkshopRect | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const entity = raw as Partial<WorkshopRect>;
+  const x = parseIntLike(entity.x);
+  const y = parseIntLike(entity.y);
+  const width = parseIntLike(entity.width);
+  const height = parseIntLike(entity.height);
+  if (x === null || y === null || width === null || height === null) {
+    return null;
+  }
+  if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+    return null;
+  }
+  return { x, y, width, height };
+}
+
+function sanitizeTradeBoardPreset(raw: unknown): WorkshopTradeBoardPreset | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const entity = raw as Partial<WorkshopTradeBoardPreset>;
+  if (!entity.enabled) {
+    return null;
+  }
+  const namesRect = sanitizeRect(entity.namesRect);
+  const pricesRect = sanitizeRect(entity.pricesRect);
+  if (!namesRect || !pricesRect) {
+    return null;
+  }
+  const rowCountRaw = parseIntLike(entity.rowCount);
+  const rowCount = rowCountRaw === null ? 7 : clamp(rowCountRaw, 1, 30);
+  return {
+    enabled: true,
+    rowCount,
+    namesRect,
+    pricesRect,
+    priceMode: entity.priceMode === "single" ? "single" : "dual",
+    priceColumn: entity.priceColumn === "right" ? "right" : "left",
+    leftPriceRole: entity.leftPriceRole === "world" ? "world" : "server",
+    rightPriceRole: entity.rightPriceRole === "server" ? "server" : "world",
+  };
+}
+
+function normalizeOcrText(raw: string): string {
+  return raw
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function runTesseractExtract(imagePath: string, language: string, psm: number): { stdout: string; stderr: string; ok: boolean; error?: Error } {
+  const args = [imagePath, "stdout", "-l", language, "--psm", String(psm), "-c", "preserve_interword_spaces=1"];
+  const proc = spawnSync("tesseract", args, {
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
+  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
+  const ok = proc.status === 0 && !proc.error;
+  return {
+    stdout,
+    stderr,
+    ok,
+    error: proc.error ?? undefined,
+  };
+}
+
+function runTesseractExtractWithOptions(
+  imagePath: string,
+  language: string,
+  psm: number,
+  options: Array<[string, string]>,
+): { stdout: string; stderr: string; ok: boolean; error?: Error } {
+  const baseArgs = [imagePath, "stdout", "-l", language, "--psm", String(psm)];
+  const optionArgs = options.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
+  const proc = spawnSync("tesseract", [...baseArgs, ...optionArgs], {
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
+  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
+  const ok = proc.status === 0 && !proc.error;
+  return {
+    stdout,
+    stderr,
+    ok,
+    error: proc.error ?? undefined,
+  };
+}
+
+function runTesseractTsvWithOptions(
+  imagePath: string,
+  language: string,
+  psm: number,
+  options: Array<[string, string]>,
+): { stdout: string; stderr: string; ok: boolean; error?: Error } {
+  const baseArgs = [imagePath, "stdout", "-l", language, "--psm", String(psm), "tsv"];
+  const optionArgs = options.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
+  const proc = spawnSync("tesseract", [...baseArgs, ...optionArgs], {
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
+  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
+  const ok = proc.status === 0 && !proc.error;
+  return {
+    stdout,
+    stderr,
+    ok,
+    error: proc.error ?? undefined,
+  };
+}
+
+interface OcrTsvWord {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  confidence: number;
+}
+
+function parseTsvWords(tsvText: string): OcrTsvWord[] {
+  const lines = tsvText.replace(/\r/g, "").split("\n");
+  if (lines.length <= 1) {
+    return [];
+  }
+  const words: OcrTsvWord[] = [];
+  for (let i = 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) {
+      continue;
+    }
+    const segments = line.split("\t");
+    if (segments.length < 12) {
+      continue;
+    }
+    const level = Number(segments[0]);
+    if (!Number.isFinite(level) || level !== 5) {
+      continue;
+    }
+    const left = Number(segments[6]);
+    const top = Number(segments[7]);
+    const width = Number(segments[8]);
+    const height = Number(segments[9]);
+    const confidence = Number(segments[10]);
+    const text = (segments[11] ?? "").trim();
+    if (!text) {
+      continue;
+    }
+    if (!Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(width) || !Number.isFinite(height)) {
+      continue;
+    }
+    words.push({
+      text,
+      left: Math.floor(left),
+      top: Math.floor(top),
+      width: Math.max(1, Math.floor(width)),
+      height: Math.max(1, Math.floor(height)),
+      confidence: Number.isFinite(confidence) ? confidence : -1,
+    });
+  }
+  return words;
+}
+
+function normalizeNumericToken(raw: string): number | null {
+  const normalized = raw
+    .replace(/[,\.\s]/g, "")
+    .replace(/[oO]/g, "0")
+    .replace(/[lI|]/g, "1")
+    .replace(/[sS]/g, "5")
+    .replace(/[bB]/g, "8")
+    .replace(/[^0-9]/g, "");
+  if (!normalized) {
+    return null;
+  }
+  const num = Number(normalized);
+  if (!Number.isFinite(num) || num < 0) {
+    return null;
+  }
+  return Math.floor(num);
+}
+
+function cropImageToTempFile(imagePath: string, rect: WorkshopRect, scale = 1): string {
+  const image = nativeImage.createFromPath(imagePath);
+  if (image.isEmpty()) {
+    throw new Error(`截图无法读取: ${path.basename(imagePath)}`);
+  }
+  const size = image.getSize();
+  if (
+    rect.x < 0 ||
+    rect.y < 0 ||
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    rect.x + rect.width > size.width ||
+    rect.y + rect.height > size.height
+  ) {
+    throw new Error(`ROI 越界: (${rect.x},${rect.y},${rect.width},${rect.height})，截图尺寸 ${size.width}x${size.height}`);
+  }
+  const cropped = image.crop({
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  });
+  const resized =
+    scale > 1
+      ? cropped.resize({
+          width: Math.max(1, Math.floor(rect.width * scale)),
+          height: Math.max(1, Math.floor(rect.height * scale)),
+          quality: "best",
+        })
+      : cropped;
+  const filePath = path.join(os.tmpdir(), `aion2-ocr-roi-${Date.now()}-${randomUUID()}.png`);
+  fs.writeFileSync(filePath, resized.toPNG());
+  return filePath;
+}
+
+function cleanupTempFile(filePath: string | null): void {
+  if (!filePath) {
+    return;
+  }
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    // ignore
+  }
+}
+
+function parsePriceFromLine(line: string, column: "left" | "right"): number | null {
+  const matches = Array.from(line.matchAll(/([0-9oOlI|sSbB][0-9oOlI|sSbB,\.\s]*)/g)).map((entry) => entry[1] ?? "");
+  if (matches.length === 0) {
+    return null;
+  }
+  const picked = column === "right" ? matches[matches.length - 1] : matches[0];
+  return normalizeNumericToken(picked);
+}
+
+function parseNonEmptyLines(text: string): string[] {
+  return text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function groupWordsByRow(words: OcrTsvWord[], rowCount: number, totalHeight: number): OcrTsvWord[][] {
+  const buckets: OcrTsvWord[][] = Array.from({ length: rowCount }, () => []);
+  const rowHeight = totalHeight / rowCount;
+  words.forEach((word) => {
+    const centerY = word.top + word.height / 2;
+    const rowIndex = clamp(Math.floor(centerY / Math.max(1, rowHeight)), 0, rowCount - 1);
+    buckets[rowIndex].push(word);
+  });
+  return buckets.map((bucket) => bucket.sort((left, right) => left.left - right.left));
+}
+
+function buildNameRowsFromWords(words: OcrTsvWord[], rowCount: number, totalHeight: number): Array<string | null> {
+  const rows = groupWordsByRow(words, rowCount, totalHeight);
+  return rows.map((row) => {
+    const text = row.map((word) => word.text).join("").trim();
+    return text || null;
+  });
+}
+
+function buildPriceRowsFromWords(
+  words: OcrTsvWord[],
+  rowCount: number,
+  totalHeight: number,
+  column: "left" | "right",
+  warnings: string[],
+): Array<number | null> {
+  const rows = groupWordsByRow(words, rowCount, totalHeight);
+  return rows.map((row, index) => {
+    const numericWords = row
+      .map((word) => ({
+        ...word,
+        value: normalizeNumericToken(word.text),
+      }))
+      .filter((entry): entry is OcrTsvWord & { value: number } => entry.value !== null);
+    if (numericWords.length === 0) {
+      warnings.push(`第 ${index + 1} 行价格解析失败（TSV 无数字词）。`);
+      return null;
+    }
+    numericWords.sort((left, right) => left.left - right.left);
+    const picked = column === "right" ? numericWords[numericWords.length - 1] : numericWords[0];
+    return picked.value;
+  });
+}
+
+function detectTradePriceRoleByHeaderText(rawText: string): "server" | "world" | null {
+  const normalized = rawText
+    .replace(/\s+/g, "")
+    .replace(/[：:]/g, "")
+    .toLocaleLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.includes("世界") || normalized.includes("world")) {
+    return "world";
+  }
+  if (
+    normalized.includes("伺服器") ||
+    normalized.includes("服务器") ||
+    normalized.includes("本服") ||
+    normalized.includes("server")
+  ) {
+    return "server";
+  }
+  return null;
+}
+
+function resolveDualPriceRolesByHeader(
+  imagePath: string,
+  pricesRect: WorkshopRect,
+  language: string,
+  psm: number,
+  fallbackLeftRole: "server" | "world",
+  fallbackRightRole: "server" | "world",
+  warnings: string[],
+): { leftRole: "server" | "world"; rightRole: "server" | "world" } {
+  const headerHeight = clamp(Math.floor(pricesRect.height * 0.16), 40, 180);
+  const leftWidth = Math.max(1, Math.floor(pricesRect.width / 2));
+  const rightWidth = Math.max(1, pricesRect.width - leftWidth);
+  const leftRect: WorkshopRect = {
+    x: pricesRect.x,
+    y: pricesRect.y,
+    width: leftWidth,
+    height: headerHeight,
+  };
+  const rightRect: WorkshopRect = {
+    x: pricesRect.x + leftWidth,
+    y: pricesRect.y,
+    width: rightWidth,
+    height: headerHeight,
+  };
+  const headerLanguage = resolveTradeNameLanguage(language);
+
+  const readHeaderText = (rect: WorkshopRect, label: "左列" | "右列"): string => {
+    let tempPath: string | null = null;
+    try {
+      tempPath = cropImageToTempFile(imagePath, rect, 2);
+      const extract = runTesseractExtract(tempPath, headerLanguage, psm);
+      if (!extract.ok) {
+        const reason = extract.stderr.trim() || extract.error?.message || "未知错误";
+        warnings.push(`${label}表头识别失败：${reason}`);
+        return "";
+      }
+      return extract.stdout;
+    } catch (err) {
+      warnings.push(`${label}表头识别失败：${err instanceof Error ? err.message : "未知异常"}`);
+      return "";
+    } finally {
+      cleanupTempFile(tempPath);
+    }
+  };
+
+  const leftHeaderText = readHeaderText(leftRect, "左列");
+  const rightHeaderText = readHeaderText(rightRect, "右列");
+  const leftDetected = detectTradePriceRoleByHeaderText(leftHeaderText);
+  const rightDetected = detectTradePriceRoleByHeaderText(rightHeaderText);
+
+  if (leftDetected && rightDetected && leftDetected !== rightDetected) {
+    return {
+      leftRole: leftDetected,
+      rightRole: rightDetected,
+    };
+  }
+  if (leftDetected && !rightDetected) {
+    return {
+      leftRole: leftDetected,
+      rightRole: leftDetected === "server" ? "world" : "server",
+    };
+  }
+  if (!leftDetected && rightDetected) {
+    return {
+      leftRole: rightDetected === "server" ? "world" : "server",
+      rightRole: rightDetected,
+    };
+  }
+  warnings.push("价格表头自动识别失败，已回退到手动列角色预设。");
+  return {
+    leftRole: fallbackLeftRole,
+    rightRole: fallbackRightRole,
+  };
+}
+
+interface PriceRowsOcrOutcome {
+  values: Array<number | null>;
+  rawText: string;
+  tsvText: string;
+}
+
+function extractPriceRowsForRect(
+  imagePath: string,
+  rect: WorkshopRect,
+  psm: number,
+  rowCount: number,
+  scale: number,
+  column: "left" | "right",
+  warnings: string[],
+  warningPrefix: string,
+): PriceRowsOcrOutcome {
+  const tempPath = cropImageToTempFile(imagePath, rect, scale);
+  try {
+    const extract = runTesseractExtractWithOptions(tempPath, "eng", psm, [
+      ["tessedit_char_whitelist", "0123456789,."],
+      ["preserve_interword_spaces", "1"],
+    ]);
+    if (!extract.ok) {
+      const reason = extract.stderr.trim() || extract.error?.message || "未知错误";
+      throw new Error(`${warningPrefix}OCR 失败：${reason}`);
+    }
+    const tsv = runTesseractTsvWithOptions(tempPath, "eng", psm, [
+      ["tessedit_char_whitelist", "0123456789,."],
+      ["preserve_interword_spaces", "1"],
+    ]);
+    const tsvWords = tsv.ok ? parseTsvWords(tsv.stdout) : [];
+    const tsvRows = buildPriceRowsFromWords(tsvWords, rowCount, Math.floor(rect.height * scale), column, warnings);
+    const fallbackRows = parseNonEmptyLines(extract.stdout)
+      .slice(0, rowCount)
+      .map((line, index) => {
+        const parsed = parsePriceFromLine(line, column);
+        if (parsed === null) {
+          warnings.push(`${warningPrefix}第 ${index + 1} 行价格解析失败：${line}`);
+          return null;
+        }
+        return parsed;
+      });
+    const tsvValid = tsvRows.filter((entry): entry is number => entry !== null).length;
+    const fallbackValid = fallbackRows.filter((entry): entry is number => entry !== null).length;
+    const values = tsvValid >= fallbackValid ? tsvRows : fallbackRows;
+    if (tsvValid < fallbackValid) {
+      warnings.push(`${warningPrefix}TSV 结果不足，已回退到普通文本行解析。`);
+    }
+    return {
+      values,
+      rawText: extract.stdout,
+      tsvText: tsv.stdout,
+    };
+  } finally {
+    cleanupTempFile(tempPath);
+  }
+}
+
+export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): WorkshopOcrExtractTextResult {
+  const imageRawPath = payload.imagePath?.trim();
+  if (!imageRawPath) {
+    throw new Error("OCR 识别失败：请先填写截图路径。");
+  }
+  const imagePath = resolveCatalogImportFilePath(imageRawPath);
+  const language = sanitizeOcrLanguage(payload.language);
+  const psm = sanitizeOcrPsm(payload.psm);
+  const warnings: string[] = [];
+  const tradeBoardPreset = sanitizeTradeBoardPreset(payload.tradeBoardPreset);
+
+  if (tradeBoardPreset) {
+    let namesTempPath: string | null = null;
+    try {
+      const namesLanguage = resolveTradeNameLanguage(language);
+      const namesScale = 2;
+      const pricesScale = 2;
+      namesTempPath = cropImageToTempFile(imagePath, tradeBoardPreset.namesRect, namesScale);
+      const namesExtract = runTesseractExtract(namesTempPath, namesLanguage, psm);
+      if (!namesExtract.ok) {
+        const reason = namesExtract.stderr.trim() || namesExtract.error?.message || "未知错误";
+        throw new Error(`名称区 OCR 失败：${reason}`);
+      }
+      const namesTsv = runTesseractTsvWithOptions(namesTempPath, namesLanguage, psm, [["preserve_interword_spaces", "1"]]);
+      const nameWords = namesTsv.ok ? parseTsvWords(namesTsv.stdout) : [];
+      const nameRowsFromTsv = buildNameRowsFromWords(
+        nameWords,
+        tradeBoardPreset.rowCount,
+        Math.floor(tradeBoardPreset.namesRect.height * namesScale),
+      );
+      const nameRowsTsvSanitized = nameRowsFromTsv.map((row) => {
+        const cleaned = sanitizeOcrLineItemName(row ?? "");
+        return cleaned || null;
+      });
+      const nameLinesFallback = parseNonEmptyLines(namesExtract.stdout)
+        .map((line) => sanitizeOcrLineItemName(line))
+        .filter(Boolean)
+        .slice(0, tradeBoardPreset.rowCount);
+      const nameRowsFallback = Array.from({ length: tradeBoardPreset.rowCount }, (_, index) => nameLinesFallback[index] ?? null);
+      const nameRows =
+        nameRowsTsvSanitized.filter((entry) => entry !== null).length >= nameLinesFallback.length
+          ? nameRowsTsvSanitized
+          : nameRowsFallback;
+
+      let leftValues: Array<number | null> = [];
+      let rightValues: Array<number | null> = [];
+      let rawPriceSection = "";
+      let rawPriceTsvSection = "";
+      let effectiveLeftRole: "server" | "world" = tradeBoardPreset.leftPriceRole === "world" ? "world" : "server";
+      let effectiveRightRole: "server" | "world" = tradeBoardPreset.rightPriceRole === "server" ? "server" : "world";
+
+      if (tradeBoardPreset.priceMode === "dual") {
+        const detectedRoles = resolveDualPriceRolesByHeader(
+          imagePath,
+          tradeBoardPreset.pricesRect,
+          namesLanguage,
+          psm,
+          effectiveLeftRole,
+          effectiveRightRole,
+          warnings,
+        );
+        effectiveLeftRole = detectedRoles.leftRole;
+        effectiveRightRole = detectedRoles.rightRole;
+        const leftWidth = Math.max(1, Math.floor(tradeBoardPreset.pricesRect.width / 2));
+        const rightWidth = Math.max(1, tradeBoardPreset.pricesRect.width - leftWidth);
+        const leftRect: WorkshopRect = {
+          x: tradeBoardPreset.pricesRect.x,
+          y: tradeBoardPreset.pricesRect.y,
+          width: leftWidth,
+          height: tradeBoardPreset.pricesRect.height,
+        };
+        const rightRect: WorkshopRect = {
+          x: tradeBoardPreset.pricesRect.x + leftWidth,
+          y: tradeBoardPreset.pricesRect.y,
+          width: rightWidth,
+          height: tradeBoardPreset.pricesRect.height,
+        };
+        const leftOutcome = extractPriceRowsForRect(
+          imagePath,
+          leftRect,
+          psm,
+          tradeBoardPreset.rowCount,
+          pricesScale,
+          "left",
+          warnings,
+          "左列价格：",
+        );
+        const rightOutcome = extractPriceRowsForRect(
+          imagePath,
+          rightRect,
+          psm,
+          tradeBoardPreset.rowCount,
+          pricesScale,
+          "left",
+          warnings,
+          "右列价格：",
+        );
+        leftValues = leftOutcome.values;
+        rightValues = rightOutcome.values;
+        rawPriceSection = `${leftOutcome.rawText}\n\n---RIGHT_PRICE---\n\n${rightOutcome.rawText}`;
+        rawPriceTsvSection = `${leftOutcome.tsvText}\n\n---RIGHT_PRICE_TSV---\n\n${rightOutcome.tsvText}`;
+        warnings.push(
+          `双价格列角色：左列=${effectiveLeftRole === "server" ? "伺服器" : "世界"}，右列=${
+            effectiveRightRole === "server" ? "伺服器" : "世界"
+          }。`,
+        );
+      } else {
+        const singleOutcome = extractPriceRowsForRect(
+          imagePath,
+          tradeBoardPreset.pricesRect,
+          psm,
+          tradeBoardPreset.rowCount,
+          pricesScale,
+          tradeBoardPreset.priceColumn,
+          warnings,
+          "",
+        );
+        if (tradeBoardPreset.priceColumn === "right") {
+          leftValues = Array.from({ length: tradeBoardPreset.rowCount }, () => null);
+          rightValues = singleOutcome.values;
+        } else {
+          leftValues = singleOutcome.values;
+          rightValues = Array.from({ length: tradeBoardPreset.rowCount }, () => null);
+        }
+        rawPriceSection = singleOutcome.rawText;
+        rawPriceTsvSection = singleOutcome.tsvText;
+      }
+
+      const tradeRows: WorkshopOcrExtractTextResult["tradeRows"] = [];
+      for (let index = 0; index < tradeBoardPreset.rowCount; index += 1) {
+        const itemName = nameRows[index];
+        if (!itemName) {
+          continue;
+        }
+        const leftPrice = leftValues[index] ?? null;
+        const rightPrice = rightValues[index] ?? null;
+        const serverPrice =
+          effectiveLeftRole === "server"
+            ? leftPrice
+            : effectiveRightRole === "server"
+              ? rightPrice
+              : null;
+        const worldPrice =
+          effectiveLeftRole === "world"
+            ? leftPrice
+            : effectiveRightRole === "world"
+              ? rightPrice
+              : null;
+        if (serverPrice === null && worldPrice === null) {
+          continue;
+        }
+        tradeRows.push({
+          lineNumber: index + 1,
+          itemName,
+          serverPrice,
+          worldPrice,
+        });
+      }
+
+      const textLines = tradeRows
+        .map((row) => {
+          const primary =
+            tradeBoardPreset.priceColumn === "right"
+              ? effectiveRightRole === "server"
+                ? row.serverPrice ?? row.worldPrice
+                : row.worldPrice ?? row.serverPrice
+              : effectiveLeftRole === "server"
+                ? row.serverPrice ?? row.worldPrice
+                : row.worldPrice ?? row.serverPrice;
+          if (primary === null) {
+            return null;
+          }
+          return `${row.itemName} ${primary}`;
+        })
+        .filter((entry): entry is string => entry !== null);
+      if (tradeRows.length < tradeBoardPreset.rowCount) {
+        warnings.push(`识别行不足：有效行 ${tradeRows.length}/${tradeBoardPreset.rowCount}。`);
+      }
+      const text = textLines.join("\n");
+      return {
+        rawText: `${namesExtract.stdout}\n\n---PRICE---\n\n${rawPriceSection}\n\n---NAMES_TSV---\n\n${namesTsv.stdout}\n\n---PRICES_TSV---\n\n${rawPriceTsvSection}`,
+        text,
+        lineCount: tradeRows.length,
+        warnings,
+        engine: `tesseract(names=${namesLanguage}, prices=eng, psm=${psm}, trade-board-roi)`,
+        tradeRows,
+      };
+    } finally {
+      cleanupTempFile(namesTempPath);
+    }
+  }
+
+  const primary = runTesseractExtract(imagePath, language, psm);
+  if (primary.error && (primary.error as NodeJS.ErrnoException).code === "ENOENT") {
+    throw new Error("未检测到 tesseract 命令。请确认已安装 Tesseract 并加入系统 PATH。");
+  }
+
+  let usedLanguage = language;
+  let final = primary;
+  if (!primary.ok && language !== "eng") {
+    const fallback = runTesseractExtract(imagePath, "eng", psm);
+    if (fallback.ok) {
+      warnings.push(`语言包 ${language} 识别失败，已自动回退到 eng。`);
+      usedLanguage = "eng";
+      final = fallback;
+    }
+  }
+
+  if (!final.ok) {
+    const reason = final.stderr.trim() || final.error?.message || "未知错误";
+    throw new Error(`OCR 识别失败：${reason}`);
+  }
+
+  const rawText = final.stdout;
+  const text = normalizeOcrText(rawText);
+  const lineCount = text ? text.split(/\n/u).length : 0;
+  if (lineCount === 0) {
+    warnings.push("OCR 返回为空，请检查截图裁切范围、清晰度或语言包。");
+  }
+
+  return {
+    rawText,
+    text,
+    lineCount,
+    warnings,
+    engine: `tesseract(${usedLanguage}, psm=${psm})`,
   };
 }
 
@@ -1053,12 +2332,14 @@ export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopSt
 
   const category = payload.category ?? "material";
   const existing = payload.id ? state.items.find((item) => item.id === payload.id) : undefined;
+  const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
+  const resolvedIcon = resolveItemIconWithCache(iconCache, name, category, payload.icon?.trim() || existing?.icon);
   const nextItem: WorkshopItem = existing
     ? {
         ...existing,
         name,
         category,
-        icon: payload.icon?.trim() || existing.icon || inferItemIcon(name, category),
+        icon: resolvedIcon,
         notes: payload.notes?.trim() || undefined,
         updatedAt: nowIso,
       }
@@ -1066,7 +2347,7 @@ export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopSt
         id: randomUUID(),
         name,
         category,
-        icon: payload.icon?.trim() || inferItemIcon(name, category),
+        icon: resolvedIcon,
         notes: payload.notes?.trim() || undefined,
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -1178,12 +2459,14 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
 
   const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
   const source = payload.source === "import" ? "import" : "manual";
+  const market = sanitizePriceMarket(payload.market);
   const nextSnapshot: WorkshopPriceSnapshot = {
     id: randomUUID(),
     itemId: payload.itemId,
     unitPrice,
     capturedAt,
     source,
+    market,
     note: payload.note?.trim() || undefined,
   };
 
@@ -1209,25 +2492,91 @@ export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
 export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): WorkshopOcrPriceImportResult {
   const state = readWorkshopState();
   const sanitized = sanitizeOcrImportPayload(payload);
-  if (!sanitized.text.trim()) {
+  const hasStructuredTradeRows = Array.isArray(sanitized.tradeRows) && sanitized.tradeRows.length > 0;
+  if (!sanitized.text.trim() && !hasStructuredTradeRows) {
     throw new Error("OCR 导入内容为空，请先粘贴文本。");
   }
 
-  const { parsedLines, invalidLines } = parseOcrPriceLines(sanitized.text);
+  const tradeRowsParsed = parseOcrTradeRows(sanitized.tradeRows);
+  const parsedFromTradeRows = tradeRowsParsed.parsedLines.length > 0;
+  const { parsedLines, invalidLines } = parsedFromTradeRows ? tradeRowsParsed : parseOcrPriceLines(sanitized.text);
   const items = [...state.items];
   const prices = [...state.prices];
+  const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
   const itemByLookupName = new Map<string, WorkshopItem>();
   items.forEach((item) => {
     itemByLookupName.set(normalizeLookupName(item.name), item);
   });
+  const iconCaptureOutcome = sanitized.iconCapture
+    ? captureOcrLineIcons(parsedLines, sanitized.iconCapture)
+    : {
+        iconByLineNumber: new Map<number, string>(),
+        iconCapturedCount: 0,
+        iconSkippedCount: 0,
+        warnings: [] as string[],
+      };
+  const iconCaptureWarnings = [...sanitized.iconCaptureWarnings, ...iconCaptureOutcome.warnings];
 
   const unknownItemNameSet = new Set<string>();
+  const importedEntries: WorkshopOcrPriceImportResult["importedEntries"] = [];
   let importedCount = 0;
   let createdItemCount = 0;
 
   parsedLines.forEach((line) => {
     const key = normalizeLookupName(line.itemName);
-    let item = itemByLookupName.get(key);
+    const capturedIcon = iconCaptureOutcome.iconByLineNumber.get(line.lineNumber);
+    const exactMatchedItem = itemByLookupName.get(key);
+    let item = exactMatchedItem;
+    let matchedByExactName = Boolean(exactMatchedItem);
+    if (!item && !sanitized.strictIconMatch) {
+      item = resolveItemByOcrName(itemByLookupName, line.itemName);
+      if (item) {
+        itemByLookupName.set(key, item);
+      }
+    }
+    const iconMatchedItem = resolveUniqueItemByIcon(items, capturedIcon);
+
+    if (sanitized.strictIconMatch) {
+      if (!capturedIcon) {
+        unknownItemNameSet.add(`${line.itemName}（严格模式需开启图标抓取）`);
+        return;
+      }
+      if (!item && iconMatchedItem) {
+        item = iconMatchedItem;
+        itemByLookupName.set(key, item);
+      }
+      if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
+        unknownItemNameSet.add(`${line.itemName}（名称与图标冲突）`);
+        return;
+      }
+      if (item && item.icon && item.icon !== capturedIcon) {
+        unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
+        return;
+      }
+      if (item && !item.icon) {
+        unknownItemNameSet.add(`${line.itemName}（严格模式缺少图标基线）`);
+        return;
+      }
+      if (item && !isExactOcrNameMatch(item, line.itemName) && !iconMatchedItem) {
+        unknownItemNameSet.add(`${line.itemName}（严格模式下名称不精确）`);
+        return;
+      }
+    } else {
+      if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
+        unknownItemNameSet.add(`${line.itemName}（名称与图标冲突）`);
+        return;
+      }
+      if (!item && iconMatchedItem) {
+        item = iconMatchedItem;
+        itemByLookupName.set(key, item);
+      }
+      if (item && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, line.itemName, items)) {
+        unknownItemNameSet.add(`${line.itemName}（名称歧义，已跳过）`);
+        return;
+      }
+    }
+
+    let createdItem = false;
     if (!item) {
       if (!sanitized.autoCreateMissingItems) {
         unknownItemNameSet.add(line.itemName);
@@ -1238,13 +2587,38 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
         id: randomUUID(),
         name: line.itemName,
         category: sanitized.defaultCategory,
-        icon: inferItemIcon(line.itemName, sanitized.defaultCategory),
+        icon: resolveItemIconWithCache(iconCache, line.itemName, sanitized.defaultCategory, capturedIcon),
         createdAt: nowIso,
         updatedAt: nowIso,
       };
       items.push(item);
       itemByLookupName.set(key, item);
       createdItemCount += 1;
+      createdItem = true;
+    } else if (capturedIcon && item) {
+      const currentItem = item;
+      if (sanitized.strictIconMatch && currentItem.icon && currentItem.icon !== capturedIcon) {
+        unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
+        return;
+      }
+      const canRefreshIcon =
+        !sanitized.strictIconMatch && (matchedByExactName || (iconMatchedItem !== undefined && iconMatchedItem.id === currentItem.id));
+      if (canRefreshIcon) {
+        const resolvedIcon = resolveItemIconWithCache(iconCache, currentItem.name, currentItem.category, capturedIcon);
+        if (resolvedIcon !== currentItem.icon) {
+          const nextItem: WorkshopItem = {
+            ...currentItem,
+            icon: resolvedIcon,
+            updatedAt: new Date().toISOString(),
+          };
+          const index = items.findIndex((entry) => entry.id === currentItem.id);
+          if (index >= 0) {
+            items[index] = nextItem;
+          }
+          itemByLookupName.set(key, nextItem);
+          item = nextItem;
+        }
+      }
     }
 
     prices.push({
@@ -1253,7 +2627,18 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       unitPrice: line.unitPrice,
       capturedAt: sanitized.capturedAt,
       source: sanitized.source,
-      note: `ocr-import#line-${line.lineNumber}`,
+      market: line.market,
+      note: `ocr-import#${line.market}#line-${line.lineNumber}`,
+    });
+    importedEntries.push({
+      lineNumber: line.lineNumber,
+      itemId: item.id,
+      itemName: item.name,
+      unitPrice: line.unitPrice,
+      market: line.market,
+      capturedAt: sanitized.capturedAt,
+      source: sanitized.source,
+      createdItem,
     });
     importedCount += 1;
   });
@@ -1272,6 +2657,10 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     parsedLineCount: parsedLines.length,
     unknownItemNames: Array.from(unknownItemNameSet).sort((left, right) => left.localeCompare(right, "zh-CN")),
     invalidLines,
+    iconCapturedCount: iconCaptureOutcome.iconCapturedCount,
+    iconSkippedCount: iconCaptureOutcome.iconSkippedCount,
+    iconCaptureWarnings,
+    importedEntries,
   };
 }
 
@@ -1320,6 +2709,7 @@ function applyCatalogData(
 ): WorkshopCatalogImportResult {
   const nowIso = new Date().toISOString();
   const items = [...baseState.items];
+  const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
   const itemByLookup = new Map<string, WorkshopItem>();
   items.forEach((item) => {
     itemByLookup.set(normalizeCatalogLookupName(item.name), item);
@@ -1347,7 +2737,7 @@ function applyCatalogData(
       id: randomUUID(),
       name: normalized,
       category: fallbackCategory,
-      icon: inferItemIcon(normalized, fallbackCategory),
+      icon: resolveItemIconWithCache(iconCache, normalized, fallbackCategory),
       notes: note,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -1370,10 +2760,11 @@ function applyCatalogData(
     const existing = itemByLookup.get(key);
     if (existing) {
       const shouldRefreshNote = !existing.notes || existing.notes.includes("來源:");
+      const resolvedIcon = resolveItemIconWithCache(iconCache, existing.name, mappedCategory, existing.icon);
       const nextExisting: WorkshopItem = {
         ...existing,
         category: mappedCategory,
-        icon: existing.icon ?? inferItemIcon(existing.name, mappedCategory),
+        icon: resolvedIcon,
         notes: shouldRefreshNote ? note : existing.notes,
         updatedAt: nowIso,
       };
@@ -1382,20 +2773,28 @@ function applyCatalogData(
         items[index] = nextExisting;
       }
       itemByLookup.set(key, nextExisting);
+      cacheIconByName(iconCache, row.name, resolvedIcon);
+      if (row.alias) {
+        cacheIconByName(iconCache, row.alias, resolvedIcon);
+      }
       importedItemCount += 1;
       return;
     }
+    const createdIcon = resolveItemIconWithCache(iconCache, row.name, mappedCategory);
     const created: WorkshopItem = {
       id: randomUUID(),
       name: row.name,
       category: mappedCategory,
-      icon: inferItemIcon(row.name, mappedCategory),
+      icon: createdIcon,
       notes: note,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
     items.push(created);
     itemByLookup.set(key, created);
+    if (row.alias) {
+      cacheIconByName(iconCache, row.alias, createdIcon);
+    }
     importedItemCount += 1;
   });
 
@@ -1653,10 +3052,17 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       history.latestPrice === null || weekdayAveragePrice === null || weekdayAveragePrice <= 0
         ? null
         : (history.latestPrice - weekdayAveragePrice) / weekdayAveragePrice;
-    const triggered =
-      state.signalRule.enabled &&
-      deviationRatioFromWeekdayAverage !== null &&
-      deviationRatioFromWeekdayAverage <= -thresholdRatio;
+    const deviationRatioFromMa7 =
+      history.latestPrice === null || history.ma7Latest === null || history.ma7Latest <= 0
+        ? null
+        : (history.latestPrice - history.ma7Latest) / history.ma7Latest;
+    const trendTag = resolvePriceTrendTag(
+      history.sampleCount,
+      deviationRatioFromWeekdayAverage,
+      deviationRatioFromMa7,
+      thresholdRatio,
+    );
+    const triggered = state.signalRule.enabled && trendTag === "buy-zone";
 
     return {
       itemId: item.id,
@@ -1666,6 +3072,9 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       latestWeekday,
       weekdayAveragePrice,
       deviationRatioFromWeekdayAverage,
+      ma7Price: history.ma7Latest,
+      deviationRatioFromMa7,
+      trendTag,
       sampleCount: history.sampleCount,
       triggered,
     };
@@ -1675,9 +3084,17 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     if (left.triggered !== right.triggered) {
       return left.triggered ? -1 : 1;
     }
+    const leftTrendRank = left.trendTag === "buy-zone" ? 0 : left.trendTag === "sell-zone" ? 1 : 2;
+    const rightTrendRank = right.trendTag === "buy-zone" ? 0 : right.trendTag === "sell-zone" ? 1 : 2;
+    if (leftTrendRank !== rightTrendRank) {
+      return leftTrendRank - rightTrendRank;
+    }
     const leftDeviation = left.deviationRatioFromWeekdayAverage;
     const rightDeviation = right.deviationRatioFromWeekdayAverage;
     if (leftDeviation !== null && rightDeviation !== null && leftDeviation !== rightDeviation) {
+      if (left.trendTag === "sell-zone" && right.trendTag === "sell-zone") {
+        return rightDeviation - leftDeviation;
+      }
       return leftDeviation - rightDeviation;
     }
     if (leftDeviation === null && rightDeviation !== null) {
@@ -1698,6 +3115,8 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     thresholdRatio,
     ruleEnabled: state.signalRule.enabled,
     triggeredCount: rows.filter((row) => row.triggered).length,
+    buyZoneCount: rows.filter((row) => row.trendTag === "buy-zone").length,
+    sellZoneCount: rows.filter((row) => row.trendTag === "sell-zone").length,
     rows,
   };
 }

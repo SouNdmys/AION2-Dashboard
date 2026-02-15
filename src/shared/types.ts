@@ -164,6 +164,7 @@ export interface AppBuildInfo {
 
 export type WorkshopItemCategory = "material" | "equipment" | "component" | "other";
 export type WorkshopPriceSource = "manual" | "import";
+export type WorkshopPriceMarket = "single" | "server" | "world";
 
 export interface WorkshopItem {
   id: string;
@@ -194,6 +195,7 @@ export interface WorkshopPriceSnapshot {
   unitPrice: number;
   capturedAt: string;
   source: WorkshopPriceSource;
+  market?: WorkshopPriceMarket;
   note?: string;
 }
 
@@ -243,6 +245,8 @@ export interface WorkshopPriceSignalQuery {
   thresholdRatio?: number;
 }
 
+export type WorkshopPriceTrendTag = "buy-zone" | "sell-zone" | "watch";
+
 export interface WorkshopPriceSignalRow {
   itemId: string;
   itemName: string;
@@ -251,6 +255,9 @@ export interface WorkshopPriceSignalRow {
   latestWeekday: number | null;
   weekdayAveragePrice: number | null;
   deviationRatioFromWeekdayAverage: number | null;
+  ma7Price: number | null;
+  deviationRatioFromMa7: number | null;
+  trendTag: WorkshopPriceTrendTag;
   sampleCount: number;
   triggered: boolean;
 }
@@ -261,15 +268,140 @@ export interface WorkshopPriceSignalResult {
   thresholdRatio: number;
   ruleEnabled: boolean;
   triggeredCount: number;
+  buyZoneCount: number;
+  sellZoneCount: number;
   rows: WorkshopPriceSignalRow[];
+}
+
+export interface WorkshopOcrIconCaptureConfig {
+  screenshotPath: string;
+  firstRowTop: number;
+  rowHeight: number;
+  nameAnchorX: number;
+  iconOffsetX: number;
+  iconTopOffset: number;
+  iconWidth: number;
+  iconHeight: number;
+}
+
+export interface WorkshopOcrExtractTextInput {
+  imagePath: string;
+  language?: string;
+  psm?: number;
+  tradeBoardPreset?: WorkshopTradeBoardPreset | null;
+}
+
+export interface WorkshopOcrExtractTextResult {
+  rawText: string;
+  text: string;
+  lineCount: number;
+  warnings: string[];
+  engine: string;
+  tradeRows?: WorkshopOcrTradeRow[];
+}
+
+export type WorkshopOcrIconCaptureTemplate = Omit<WorkshopOcrIconCaptureConfig, "screenshotPath">;
+
+export interface WorkshopOcrImportedEntry {
+  lineNumber: number;
+  itemId: string;
+  itemName: string;
+  unitPrice: number;
+  market?: WorkshopPriceMarket;
+  capturedAt: string;
+  source: WorkshopPriceSource;
+  createdItem: boolean;
+}
+
+export interface WorkshopOcrTradeRow {
+  lineNumber: number;
+  itemName: string;
+  serverPrice: number | null;
+  worldPrice: number | null;
+}
+
+export interface WorkshopOcrHotkeyConfig {
+  enabled: boolean;
+  shortcut: string;
+  language?: string;
+  psm?: number;
+  captureDelayMs?: number;
+  hideAppBeforeCapture?: boolean;
+  autoCreateMissingItems?: boolean;
+  defaultCategory?: WorkshopItemCategory;
+  iconCapture?: WorkshopOcrIconCaptureTemplate | null;
+  strictIconMatch?: boolean;
+  tradeBoardPreset?: WorkshopTradeBoardPreset | null;
+}
+
+export interface WorkshopOcrHotkeyRunResult {
+  at: string;
+  success: boolean;
+  message: string;
+  screenshotPath: string | null;
+  extractedLineCount: number;
+  importedCount: number;
+  createdItemCount: number;
+  unknownItemCount: number;
+  invalidLineCount: number;
+  iconCapturedCount: number;
+  iconSkippedCount: number;
+  warnings: string[];
+  importedEntries: WorkshopOcrImportedEntry[];
+}
+
+export interface WorkshopOcrHotkeyState {
+  enabled: boolean;
+  registered: boolean;
+  shortcut: string;
+  language: string;
+  psm: number;
+  autoCreateMissingItems: boolean;
+  defaultCategory: WorkshopItemCategory;
+  iconCaptureEnabled: boolean;
+  strictIconMatch: boolean;
+  lastResult: WorkshopOcrHotkeyRunResult | null;
+}
+
+export interface WorkshopScreenPreviewResult {
+  capturedAt: string;
+  width: number;
+  height: number;
+  dataUrl: string;
+}
+
+export interface WorkshopScreenCaptureOptions {
+  delayMs?: number;
+  hideAppBeforeCapture?: boolean;
+}
+
+export interface WorkshopRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WorkshopTradeBoardPreset {
+  enabled: boolean;
+  rowCount: number;
+  namesRect: WorkshopRect;
+  pricesRect: WorkshopRect;
+  priceMode?: "single" | "dual";
+  priceColumn: "left" | "right";
+  leftPriceRole?: "server" | "world";
+  rightPriceRole?: "server" | "world";
 }
 
 export interface WorkshopOcrPriceImportInput {
   text: string;
+  tradeRows?: WorkshopOcrTradeRow[];
   capturedAt?: string;
   source?: WorkshopPriceSource;
   autoCreateMissingItems?: boolean;
   defaultCategory?: WorkshopItemCategory;
+  iconCapture?: WorkshopOcrIconCaptureConfig;
+  strictIconMatch?: boolean;
 }
 
 export interface WorkshopOcrPriceImportResult {
@@ -279,6 +411,10 @@ export interface WorkshopOcrPriceImportResult {
   parsedLineCount: number;
   unknownItemNames: string[];
   invalidLines: string[];
+  iconCapturedCount: number;
+  iconSkippedCount: number;
+  iconCaptureWarnings: string[];
+  importedEntries: WorkshopOcrImportedEntry[];
 }
 
 export interface WorkshopCatalogImportFromFileInput {
@@ -329,6 +465,7 @@ export interface AddWorkshopPriceSnapshotInput {
   unitPrice: number;
   capturedAt?: string;
   source?: WorkshopPriceSource;
+  market?: WorkshopPriceMarket;
   note?: string;
 }
 

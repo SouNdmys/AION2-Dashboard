@@ -6,6 +6,9 @@ import type {
   AppSettings,
   ApplyTaskActionInput,
   WorkshopCatalogImportFromFileInput,
+  WorkshopOcrExtractTextInput,
+  WorkshopOcrHotkeyConfig,
+  WorkshopScreenCaptureOptions,
   WorkshopOcrPriceImportInput,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
@@ -40,10 +43,17 @@ import {
   updateWeeklyCompletions,
 } from "./store";
 import {
+  captureWorkshopScreenPreview,
+  configureWorkshopOcrHotkey,
+  getWorkshopOcrHotkeyState,
+  triggerWorkshopOcrHotkeyNow,
+} from "./workshop-automation";
+import {
   addWorkshopPriceSnapshot,
   deleteWorkshopPriceSnapshot,
   deleteWorkshopItem,
   deleteWorkshopRecipe,
+  extractWorkshopOcrText,
   getWorkshopCraftOptions,
   getWorkshopPriceHistory,
   getWorkshopPriceSignals,
@@ -177,6 +187,19 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(IPC_CHANNELS.deleteWorkshopPriceSnapshot, (_event, payload: { snapshotId: string }) =>
     deleteWorkshopPriceSnapshot(payload.snapshotId),
+  );
+  ipcMain.handle(IPC_CHANNELS.extractWorkshopOcrText, (_event, payload: WorkshopOcrExtractTextInput) =>
+    extractWorkshopOcrText(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.configureWorkshopOcrHotkey, (_event, payload: WorkshopOcrHotkeyConfig) =>
+    configureWorkshopOcrHotkey(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopOcrHotkeyState, () => getWorkshopOcrHotkeyState());
+  ipcMain.handle(IPC_CHANNELS.triggerWorkshopOcrHotkeyNow, async (_event, payload?: WorkshopScreenCaptureOptions) =>
+    triggerWorkshopOcrHotkeyNow(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.captureWorkshopScreenPreview, async (_event, payload?: WorkshopScreenCaptureOptions) =>
+    captureWorkshopScreenPreview(payload),
   );
   ipcMain.handle(IPC_CHANNELS.importWorkshopOcrPrices, (_event, payload: WorkshopOcrPriceImportInput) =>
     importWorkshopOcrPrices(payload),

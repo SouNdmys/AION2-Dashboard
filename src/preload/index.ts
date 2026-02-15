@@ -10,8 +10,15 @@ import type {
   ImportDataResult,
   WorkshopCatalogImportFromFileInput,
   WorkshopCatalogImportResult,
+  WorkshopOcrExtractTextInput,
+  WorkshopOcrExtractTextResult,
+  WorkshopOcrHotkeyConfig,
+  WorkshopOcrHotkeyRunResult,
+  WorkshopOcrHotkeyState,
+  WorkshopScreenCaptureOptions,
   WorkshopOcrPriceImportInput,
   WorkshopOcrPriceImportResult,
+  WorkshopScreenPreviewResult,
   UpsertWorkshopInventoryInput,
   UpsertWorkshopItemInput,
   UpsertWorkshopRecipeInput,
@@ -119,6 +126,23 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.addWorkshopPriceSnapshot, payload),
   deleteWorkshopPriceSnapshot: (snapshotId: string): Promise<WorkshopState> =>
     ipcRenderer.invoke(IPC_CHANNELS.deleteWorkshopPriceSnapshot, { snapshotId }),
+  extractWorkshopOcrText: (payload: WorkshopOcrExtractTextInput): Promise<WorkshopOcrExtractTextResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.extractWorkshopOcrText, payload),
+  configureWorkshopOcrHotkey: (payload: WorkshopOcrHotkeyConfig): Promise<WorkshopOcrHotkeyState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.configureWorkshopOcrHotkey, payload),
+  getWorkshopOcrHotkeyState: (): Promise<WorkshopOcrHotkeyState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getWorkshopOcrHotkeyState),
+  triggerWorkshopOcrHotkeyNow: (payload?: WorkshopScreenCaptureOptions): Promise<WorkshopOcrHotkeyRunResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.triggerWorkshopOcrHotkeyNow, payload ?? {}),
+  captureWorkshopScreenPreview: (payload?: WorkshopScreenCaptureOptions): Promise<WorkshopScreenPreviewResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.captureWorkshopScreenPreview, payload ?? {}),
+  onWorkshopOcrHotkeyResult: (listener: (result: WorkshopOcrHotkeyRunResult) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: WorkshopOcrHotkeyRunResult) => listener(payload);
+    ipcRenderer.on(IPC_CHANNELS.workshopOcrHotkeyResult, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.workshopOcrHotkeyResult, handler);
+    };
+  },
   importWorkshopOcrPrices: (payload: WorkshopOcrPriceImportInput): Promise<WorkshopOcrPriceImportResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.importWorkshopOcrPrices, payload),
   importWorkshopCatalogFromFile: (payload: WorkshopCatalogImportFromFileInput): Promise<WorkshopCatalogImportResult> =>
