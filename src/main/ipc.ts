@@ -188,7 +188,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.deleteWorkshopPriceSnapshot, (_event, payload: { snapshotId: string }) =>
     deleteWorkshopPriceSnapshot(payload.snapshotId),
   );
-  ipcMain.handle(IPC_CHANNELS.extractWorkshopOcrText, (_event, payload: WorkshopOcrExtractTextInput) =>
+  ipcMain.handle(IPC_CHANNELS.extractWorkshopOcrText, async (_event, payload: WorkshopOcrExtractTextInput) =>
     extractWorkshopOcrText(payload),
   );
   ipcMain.handle(IPC_CHANNELS.configureWorkshopOcrHotkey, (_event, payload: WorkshopOcrHotkeyConfig) =>

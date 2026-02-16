@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { nativeImage } from "electron";
 import Store from "electron-store";
 import type {
@@ -49,8 +49,185 @@ const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.08;
 const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.01;
 const WORKSHOP_SIGNAL_THRESHOLD_MAX = 0.5;
 const WORKSHOP_ICON_CACHE_KEY = "iconCache";
-const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra+eng";
+const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra";
 const WORKSHOP_OCR_DEFAULT_PSM = 6;
+const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
+const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
+const ICON_CAPTURE_CALIBRATION_MAX_OFFSET_X = 16;
+const ICON_CAPTURE_CALIBRATION_MAX_OFFSET_Y = 24;
+const ICON_CAPTURE_CALIBRATION_STEP = 2;
+const ICON_CAPTURE_CALIBRATION_SAMPLE_LIMIT = 8;
+const OCR_PADDLE_CONFIDENCE_SCALE = 100;
+const OCR_PADDLE_MAX_BUFFER = 64 * 1024 * 1024;
+const OCR_PADDLE_RUNTIME_ROOT = path.join(os.tmpdir(), "aion2-paddle-runtime");
+const OCR_PADDLE_RUNTIME_USER = path.join(OCR_PADDLE_RUNTIME_ROOT, "user");
+const OCR_PADDLE_RUNTIME_CACHE = path.join(OCR_PADDLE_RUNTIME_ROOT, "cache");
+const OCR_PADDLE_RUNTIME_HOME = path.join(OCR_PADDLE_RUNTIME_ROOT, "paddle");
+const PADDLE_OCR_PYTHON_SCRIPT = String.raw`import json
+import os
+import sys
+
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
+os.environ.setdefault("FLAGS_enable_pir_in_executor", "0")
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("FLAGS_prim_all", "0")
+
+try:
+    import paddle
+    from paddleocr import PaddleOCR
+    try:
+        paddle.set_flags(
+            {
+                "FLAGS_enable_pir_api": False,
+                "FLAGS_enable_pir_in_executor": False,
+                "FLAGS_use_mkldnn": False,
+                "FLAGS_prim_all": False,
+            }
+        )
+    except Exception:
+        pass
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": f"import paddleocr failed: {exc}"}, ensure_ascii=False))
+    sys.exit(0)
+
+
+def make_engine(lang):
+    attempts = [
+        {
+            "lang": lang,
+            "device": "cpu",
+            "show_log": False,
+            "enable_mkldnn": False,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "use_angle_cls": False,
+        },
+        {
+            "lang": lang,
+            "show_log": False,
+            "enable_mkldnn": False,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "use_angle_cls": False,
+        },
+        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
+        {"lang": lang, "show_log": False, "enable_mkldnn": False},
+        {"lang": lang},
+    ]
+    errors = []
+    for kwargs in attempts:
+        try:
+            return PaddleOCR(**kwargs)
+        except Exception as exc:
+            errors.append(str(exc))
+    raise RuntimeError("create engine failed: " + " | ".join(errors))
+
+
+def parse_line(line):
+    if not isinstance(line, (list, tuple)) or len(line) < 2:
+        return None
+    box = line[0]
+    info = line[1]
+    if not isinstance(box, (list, tuple)) or len(box) == 0:
+        return None
+    xs = []
+    ys = []
+    for point in box:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            xs.append(float(point[0]))
+            ys.append(float(point[1]))
+        except Exception:
+            continue
+    if len(xs) == 0 or len(ys) == 0:
+        return None
+    text = ""
+    confidence = -1.0
+    if isinstance(info, (list, tuple)):
+        if len(info) >= 1 and info[0] is not None:
+            text = str(info[0]).strip()
+        if len(info) >= 2:
+            try:
+                confidence = float(info[1])
+            except Exception:
+                confidence = -1.0
+    else:
+        text = str(info).strip()
+    if not text:
+        return None
+    if confidence >= 0 and confidence <= 1.5:
+        confidence = confidence * 100.0
+    left = int(min(xs))
+    top = int(min(ys))
+    right = int(max(xs))
+    bottom = int(max(ys))
+    return {
+        "text": text,
+        "left": left,
+        "top": top,
+        "width": max(1, right - left),
+        "height": max(1, bottom - top),
+        "confidence": confidence,
+    }
+
+
+def collect_words(ocr_result):
+    words = []
+    texts = []
+    if not isinstance(ocr_result, list):
+        return words, texts
+    for block in ocr_result:
+        if not isinstance(block, list):
+            continue
+        for line in block:
+            parsed = parse_line(line)
+            if not parsed:
+                continue
+            words.append(parsed)
+            texts.append(parsed["text"])
+    return words, texts
+
+
+def main():
+    if len(sys.argv) < 3:
+        print(json.dumps({"ok": False, "error": "missing args"}, ensure_ascii=False))
+        return
+    image_path = sys.argv[1]
+    langs = [entry.strip() for entry in sys.argv[2].split(",") if entry.strip()]
+    if len(langs) == 0:
+        langs = ["ch"]
+    errors = []
+    for lang in langs:
+        try:
+            ocr = make_engine(lang)
+            try:
+                result = ocr.ocr(image_path, cls=False)
+            except TypeError:
+                result = ocr.ocr(image_path)
+            words, texts = collect_words(result)
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "language": lang,
+                        "raw_text": "\n".join(texts),
+                        "words": words,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+        except Exception as exc:
+            errors.append(f"{lang}: {exc}")
+    print(json.dumps({"ok": False, "error": " | ".join(errors) or "paddle ocr failed"}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+`;
 
 const DEFAULT_WORKSHOP_SIGNAL_RULE: WorkshopPriceSignalRule = {
   enabled: true,
@@ -117,21 +294,28 @@ function sanitizeIconToken(raw: unknown): string | undefined {
   return icon || undefined;
 }
 
+function isCapturedImageIcon(icon: string | undefined): boolean {
+  return typeof icon === "string" && icon.startsWith("icon-img-");
+}
+
 function normalizeLookupName(name: string): string {
   return name.trim().toLocaleLowerCase().replace(/\s+/g, "");
 }
 
 function sanitizeOcrLineItemName(raw: string): string {
-  return raw
+  const normalized = raw
+    .normalize("NFKC")
+    .replace(/[\u00A0\u3000]/g, " ")
     .replace(/[|丨]/g, " ")
     .replace(/[，]/g, ",")
     .replace(/[：]/g, ":")
     .replace(/[“”‘’"'`]/g, "")
     .replace(/[()（）[\]{}<>﹤﹥]/g, " ")
-    .replace(/^[^0-9a-zA-Z\u3400-\u9fff]+/gu, "")
-    .replace(/[^0-9a-zA-Z\u3400-\u9fff]+$/gu, "")
+    .replace(/[^0-9a-zA-Z\u3400-\u9fff]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+  const compact = normalized.replace(/\s+/g, "");
+  return compact ? normalized : "";
 }
 
 function buildOcrLookupCandidates(rawName: string): string[] {
@@ -1312,68 +1496,6 @@ function parseIntLike(raw: unknown): number | null {
   return Math.floor(raw);
 }
 
-function sanitizeOcrIconCaptureConfig(raw: unknown): { config: WorkshopOcrIconCaptureConfig | null; warnings: string[] } {
-  if (!raw || typeof raw !== "object") {
-    return { config: null, warnings: [] };
-  }
-  const entity = raw as Partial<WorkshopOcrIconCaptureConfig>;
-  const screenshotPath = typeof entity.screenshotPath === "string" ? entity.screenshotPath.trim() : "";
-  const firstRowTop = parseIntLike(entity.firstRowTop);
-  const rowHeight = parseIntLike(entity.rowHeight);
-  const nameAnchorX = parseIntLike(entity.nameAnchorX);
-  const iconOffsetX = parseIntLike(entity.iconOffsetX);
-  const iconTopOffset = parseIntLike(entity.iconTopOffset);
-  const iconWidth = parseIntLike(entity.iconWidth);
-  const iconHeight = parseIntLike(entity.iconHeight);
-
-  const warnings: string[] = [];
-  if (!screenshotPath) {
-    warnings.push("图标抓取已忽略：缺少截图路径。");
-  }
-  if (firstRowTop === null || firstRowTop < 0) {
-    warnings.push("图标抓取已忽略：firstRowTop 必须是 >= 0 的整数。");
-  }
-  if (rowHeight === null || rowHeight <= 0) {
-    warnings.push("图标抓取已忽略：rowHeight 必须是正整数。");
-  }
-  if (nameAnchorX === null || nameAnchorX < 0) {
-    warnings.push("图标抓取已忽略：nameAnchorX 必须是 >= 0 的整数。");
-  }
-  if (iconOffsetX === null) {
-    warnings.push("图标抓取已忽略：iconOffsetX 必须是整数。");
-  }
-  if (iconTopOffset === null) {
-    warnings.push("图标抓取已忽略：iconTopOffset 必须是整数。");
-  }
-  if (iconWidth === null || iconWidth <= 0) {
-    warnings.push("图标抓取已忽略：iconWidth 必须是正整数。");
-  }
-  if (iconHeight === null || iconHeight <= 0) {
-    warnings.push("图标抓取已忽略：iconHeight 必须是正整数。");
-  }
-
-  if (warnings.length > 0) {
-    return {
-      config: null,
-      warnings,
-    };
-  }
-
-  return {
-    config: {
-      screenshotPath,
-      firstRowTop: firstRowTop ?? 0,
-      rowHeight: rowHeight ?? 1,
-      nameAnchorX: nameAnchorX ?? 0,
-      iconOffsetX: iconOffsetX ?? 0,
-      iconTopOffset: iconTopOffset ?? 0,
-      iconWidth: iconWidth ?? 1,
-      iconHeight: iconHeight ?? 1,
-    },
-    warnings,
-  };
-}
-
 function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
   source: "manual" | "import";
   capturedAt: string;
@@ -1388,9 +1510,12 @@ function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
   const source = payload.source === "manual" ? "manual" : "import";
   const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
   const autoCreateMissingItems = payload.autoCreateMissingItems ?? false;
-  const strictIconMatch = payload.strictIconMatch === true;
+  const strictIconMatch = false;
   const defaultCategory = sanitizeCategory(payload.defaultCategory);
-  const iconCaptureSanitized = sanitizeOcrIconCaptureConfig(payload.iconCapture);
+  const iconCaptureWarnings: string[] = [];
+  if (payload.strictIconMatch === true || payload.iconCapture !== undefined) {
+    iconCaptureWarnings.push("图标识别已停用，当前仅按名称识别。");
+  }
   return {
     source,
     capturedAt,
@@ -1399,14 +1524,15 @@ function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
     defaultCategory,
     text: typeof payload.text === "string" ? payload.text : "",
     tradeRows: Array.isArray(payload.tradeRows) ? payload.tradeRows : undefined,
-    iconCapture: iconCaptureSanitized.config,
-    iconCaptureWarnings: iconCaptureSanitized.warnings,
+    iconCapture: null,
+    iconCaptureWarnings,
   };
 }
 
 function captureOcrLineIcons(
   parsedLines: ParsedOcrPriceLine[],
   config: WorkshopOcrIconCaptureConfig,
+  expectedIconByLineNumber?: Map<number, string>,
 ): OcrIconCaptureOutcome {
   const iconByLineNumber = new Map<number, string>();
   const warnings: string[] = [];
@@ -1451,10 +1577,25 @@ function captureOcrLineIcons(
     }
   });
 
+  const calibration = calibrateIconCaptureOffset(Array.from(uniqueLines.values()), expectedIconByLineNumber, config, image, imageSize);
+  const calibratedOffsetX = calibration.offsetX;
+  const calibratedOffsetY = calibration.offsetY;
+  if (
+    calibration.sampleCount > 0 &&
+    calibration.matchedCount > 0 &&
+    (calibratedOffsetX !== 0 || calibratedOffsetY !== 0)
+  ) {
+    addWarning(
+      `图标抓取已自动微调偏移：X ${calibratedOffsetX >= 0 ? "+" : ""}${calibratedOffsetX}px，Y ${
+        calibratedOffsetY >= 0 ? "+" : ""
+      }${calibratedOffsetY}px（命中 ${calibration.matchedCount}/${calibration.sampleCount}）。`,
+    );
+  }
+
   Array.from(uniqueLines.values()).forEach((line) => {
     const rowIndex = Math.max(0, line.lineNumber - 1);
-    const left = config.nameAnchorX + config.iconOffsetX;
-    const top = config.firstRowTop + rowIndex * config.rowHeight + config.iconTopOffset;
+    const left = config.nameAnchorX + config.iconOffsetX + calibratedOffsetX;
+    const top = config.firstRowTop + rowIndex * config.rowHeight + config.iconTopOffset + calibratedOffsetY;
     const rect = {
       x: Math.floor(left),
       y: Math.floor(top),
@@ -1489,6 +1630,109 @@ function captureOcrLineIcons(
     iconCapturedCount,
     iconSkippedCount,
     warnings,
+  };
+}
+
+function buildExpectedIconByLineNumber(
+  parsedLines: ParsedOcrPriceLine[],
+  itemByLookupName: Map<string, WorkshopItem>,
+): Map<number, string> {
+  const expected = new Map<number, string>();
+  const uniqueLines = new Map<number, ParsedOcrPriceLine>();
+  parsedLines.forEach((line) => {
+    if (!uniqueLines.has(line.lineNumber)) {
+      uniqueLines.set(line.lineNumber, line);
+    }
+  });
+  Array.from(uniqueLines.values()).forEach((line) => {
+    const key = normalizeLookupName(line.itemName);
+    const exact = itemByLookupName.get(key);
+    const resolved = exact ?? resolveItemByOcrName(itemByLookupName, line.itemName);
+    const resolvedIcon = resolved?.icon;
+    if (!resolved || !isCapturedImageIcon(resolvedIcon)) {
+      return;
+    }
+    expected.set(line.lineNumber, resolvedIcon!);
+  });
+  return expected;
+}
+
+function captureIconHashByRect(
+  image: Electron.NativeImage,
+  imageSize: { width: number; height: number },
+  rect: WorkshopRect,
+): string | null {
+  const isInside =
+    rect.x >= 0 &&
+    rect.y >= 0 &&
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.x + rect.width <= imageSize.width &&
+    rect.y + rect.height <= imageSize.height;
+  if (!isInside) {
+    return null;
+  }
+  const bitmap = image.crop(rect).toBitmap();
+  if (!bitmap || bitmap.length === 0) {
+    return null;
+  }
+  const hash = createHash("sha1").update(bitmap).digest("hex").slice(0, 16);
+  return `icon-img-${hash}`;
+}
+
+function calibrateIconCaptureOffset(
+  uniqueLines: ParsedOcrPriceLine[],
+  expectedIconByLineNumber: Map<number, string> | undefined,
+  config: WorkshopOcrIconCaptureConfig,
+  image: Electron.NativeImage,
+  imageSize: { width: number; height: number },
+): { offsetX: number; offsetY: number; matchedCount: number; sampleCount: number } {
+  if (!expectedIconByLineNumber || expectedIconByLineNumber.size === 0) {
+    return { offsetX: 0, offsetY: 0, matchedCount: 0, sampleCount: 0 };
+  }
+
+  const sampleLines = uniqueLines
+    .filter((line) => expectedIconByLineNumber.has(line.lineNumber))
+    .sort((left, right) => left.lineNumber - right.lineNumber)
+    .slice(0, ICON_CAPTURE_CALIBRATION_SAMPLE_LIMIT);
+  if (sampleLines.length === 0) {
+    return { offsetX: 0, offsetY: 0, matchedCount: 0, sampleCount: 0 };
+  }
+
+  let best = { offsetX: 0, offsetY: 0, matchedCount: 0, score: Number.POSITIVE_INFINITY };
+  for (let offsetY = -ICON_CAPTURE_CALIBRATION_MAX_OFFSET_Y; offsetY <= ICON_CAPTURE_CALIBRATION_MAX_OFFSET_Y; offsetY += ICON_CAPTURE_CALIBRATION_STEP) {
+    for (let offsetX = -ICON_CAPTURE_CALIBRATION_MAX_OFFSET_X; offsetX <= ICON_CAPTURE_CALIBRATION_MAX_OFFSET_X; offsetX += ICON_CAPTURE_CALIBRATION_STEP) {
+      let matchedCount = 0;
+      sampleLines.forEach((line) => {
+        const rowIndex = Math.max(0, line.lineNumber - 1);
+        const rect: WorkshopRect = {
+          x: Math.floor(config.nameAnchorX + config.iconOffsetX + offsetX),
+          y: Math.floor(config.firstRowTop + rowIndex * config.rowHeight + config.iconTopOffset + offsetY),
+          width: Math.floor(config.iconWidth),
+          height: Math.floor(config.iconHeight),
+        };
+        const hash = captureIconHashByRect(image, imageSize, rect);
+        const expected = expectedIconByLineNumber.get(line.lineNumber);
+        if (hash && expected && hash === expected) {
+          matchedCount += 1;
+        }
+      });
+
+      const score = Math.abs(offsetX) + Math.abs(offsetY);
+      if (matchedCount > best.matchedCount || (matchedCount === best.matchedCount && score < best.score)) {
+        best = { offsetX, offsetY, matchedCount, score };
+      }
+    }
+  }
+
+  if (best.matchedCount <= 0) {
+    return { offsetX: 0, offsetY: 0, matchedCount: 0, sampleCount: sampleLines.length };
+  }
+  return {
+    offsetX: best.offsetX,
+    offsetY: best.offsetY,
+    matchedCount: best.matchedCount,
+    sampleCount: sampleLines.length,
   };
 }
 
@@ -1612,19 +1856,36 @@ function sanitizeOcrPsm(raw: unknown): number {
   return clamp(Math.floor(raw), 3, 13);
 }
 
-function resolveTradeNameLanguage(language: string): string {
+function buildPaddleLanguageCandidates(language: string): string[] {
   const parts = language
     .split("+")
-    .map((entry) => entry.trim())
+    .map((entry) => entry.trim().toLocaleLowerCase())
     .filter(Boolean);
-  if (parts.length === 0) {
-    return language;
-  }
-  const chinese = parts.filter((entry) => entry.startsWith("chi_"));
-  if (chinese.length > 0) {
-    return Array.from(new Set(chinese)).join("+");
-  }
-  return language;
+  const candidates: string[] = [];
+  const add = (value: string): void => {
+    if (!candidates.includes(value)) {
+      candidates.push(value);
+    }
+  };
+  parts.forEach((part) => {
+    if (part === "chi_tra") {
+      add("chinese_cht");
+      add("ch");
+      return;
+    }
+    if (part === "chi_sim") {
+      add("ch");
+      return;
+    }
+    if (part === "eng") {
+      add("en");
+      return;
+    }
+    add(part);
+  });
+  add("ch");
+  add("en");
+  return candidates;
 }
 
 function sanitizeRect(raw: unknown): WorkshopRect | null {
@@ -1681,72 +1942,6 @@ function normalizeOcrText(raw: string): string {
     .join("\n");
 }
 
-function runTesseractExtract(imagePath: string, language: string, psm: number): { stdout: string; stderr: string; ok: boolean; error?: Error } {
-  const args = [imagePath, "stdout", "-l", language, "--psm", String(psm), "-c", "preserve_interword_spaces=1"];
-  const proc = spawnSync("tesseract", args, {
-    encoding: "utf8",
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
-  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
-  const ok = proc.status === 0 && !proc.error;
-  return {
-    stdout,
-    stderr,
-    ok,
-    error: proc.error ?? undefined,
-  };
-}
-
-function runTesseractExtractWithOptions(
-  imagePath: string,
-  language: string,
-  psm: number,
-  options: Array<[string, string]>,
-): { stdout: string; stderr: string; ok: boolean; error?: Error } {
-  const baseArgs = [imagePath, "stdout", "-l", language, "--psm", String(psm)];
-  const optionArgs = options.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
-  const proc = spawnSync("tesseract", [...baseArgs, ...optionArgs], {
-    encoding: "utf8",
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
-  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
-  const ok = proc.status === 0 && !proc.error;
-  return {
-    stdout,
-    stderr,
-    ok,
-    error: proc.error ?? undefined,
-  };
-}
-
-function runTesseractTsvWithOptions(
-  imagePath: string,
-  language: string,
-  psm: number,
-  options: Array<[string, string]>,
-): { stdout: string; stderr: string; ok: boolean; error?: Error } {
-  const baseArgs = [imagePath, "stdout", "-l", language, "--psm", String(psm), "tsv"];
-  const optionArgs = options.flatMap(([key, value]) => ["-c", `${key}=${value}`]);
-  const proc = spawnSync("tesseract", [...baseArgs, ...optionArgs], {
-    encoding: "utf8",
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  const stdout = typeof proc.stdout === "string" ? proc.stdout : String(proc.stdout ?? "");
-  const stderr = typeof proc.stderr === "string" ? proc.stderr : String(proc.stderr ?? "");
-  const ok = proc.status === 0 && !proc.error;
-  return {
-    stdout,
-    stderr,
-    ok,
-    error: proc.error ?? undefined,
-  };
-}
-
 interface OcrTsvWord {
   text: string;
   left: number;
@@ -1756,56 +1951,312 @@ interface OcrTsvWord {
   confidence: number;
 }
 
-function parseTsvWords(tsvText: string): OcrTsvWord[] {
-  const lines = tsvText.replace(/\r/g, "").split("\n");
-  if (lines.length <= 1) {
-    return [];
+interface PaddleOcrPayloadWord {
+  text?: unknown;
+  left?: unknown;
+  top?: unknown;
+  width?: unknown;
+  height?: unknown;
+  confidence?: unknown;
+}
+
+interface PaddleOcrPayload {
+  ok?: unknown;
+  error?: unknown;
+  language?: unknown;
+  raw_text?: unknown;
+  words?: unknown;
+}
+
+interface PaddleOcrOutcome {
+  ok: boolean;
+  language: string;
+  rawText: string;
+  words: OcrTsvWord[];
+  errorMessage?: string;
+}
+
+function normalizePaddleWord(raw: PaddleOcrPayloadWord): OcrTsvWord | null {
+  const text = typeof raw.text === "string" ? raw.text.trim() : "";
+  if (!text) {
+    return null;
   }
-  const words: OcrTsvWord[] = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (!line.trim()) {
-      continue;
+  const left = typeof raw.left === "number" && Number.isFinite(raw.left) ? Math.floor(raw.left) : 0;
+  const top = typeof raw.top === "number" && Number.isFinite(raw.top) ? Math.floor(raw.top) : 0;
+  const width = typeof raw.width === "number" && Number.isFinite(raw.width) ? Math.max(1, Math.floor(raw.width)) : 1;
+  const height = typeof raw.height === "number" && Number.isFinite(raw.height) ? Math.max(1, Math.floor(raw.height)) : 1;
+  const confidenceRaw =
+    typeof raw.confidence === "number" && Number.isFinite(raw.confidence) ? raw.confidence : -1;
+  const confidence =
+    confidenceRaw >= 0 && confidenceRaw <= 1.5 ? confidenceRaw * OCR_PADDLE_CONFIDENCE_SCALE : confidenceRaw;
+  return {
+    text,
+    left,
+    top,
+    width,
+    height,
+    confidence,
+  };
+}
+
+function parsePaddlePayload(stdout: string): PaddleOcrOutcome {
+  const stripAnsi = (input: string): string => input.replace(/\x1b\[[0-9;]*m/g, "");
+  const cleaned = stripAnsi(stdout).trim();
+  const candidates: string[] = [];
+  const pushCandidate = (value: string): void => {
+    const text = value.trim();
+    if (!text || candidates.includes(text)) {
+      return;
     }
-    const segments = line.split("\t");
-    if (segments.length < 12) {
-      continue;
+    candidates.push(text);
+  };
+  pushCandidate(cleaned);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    pushCandidate(cleaned.slice(firstBrace, lastBrace + 1));
+  }
+  const lines = cleaned
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index];
+    if (line.startsWith("{") && line.endsWith("}")) {
+      pushCandidate(line);
     }
-    const level = Number(segments[0]);
-    if (!Number.isFinite(level) || level !== 5) {
-      continue;
+  }
+
+  let parsed: PaddleOcrPayload | null = null;
+  let parseError = "";
+  for (const candidate of candidates) {
+    try {
+      parsed = JSON.parse(candidate) as PaddleOcrPayload;
+      break;
+    } catch (err) {
+      parseError = err instanceof Error ? err.message : "JSON 解析失败";
     }
-    const left = Number(segments[6]);
-    const top = Number(segments[7]);
-    const width = Number(segments[8]);
-    const height = Number(segments[9]);
-    const confidence = Number(segments[10]);
-    const text = (segments[11] ?? "").trim();
-    if (!text) {
-      continue;
-    }
-    if (!Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(width) || !Number.isFinite(height)) {
-      continue;
-    }
-    words.push({
-      text,
-      left: Math.floor(left),
-      top: Math.floor(top),
-      width: Math.max(1, Math.floor(width)),
-      height: Math.max(1, Math.floor(height)),
-      confidence: Number.isFinite(confidence) ? confidence : -1,
+  }
+  if (!parsed) {
+    return {
+      ok: false,
+      language: "",
+      rawText: "",
+      words: [],
+      errorMessage: `PaddleOCR 输出 JSON 解析失败：${parseError || "未知错误"}。`,
+    };
+  }
+  const ok = parsed.ok === true;
+  if (!ok) {
+    const errorMessage = typeof parsed.error === "string" ? parsed.error : "PaddleOCR 执行失败。";
+    return {
+      ok: false,
+      language: "",
+      rawText: "",
+      words: [],
+      errorMessage,
+    };
+  }
+  const words = Array.isArray(parsed.words)
+    ? parsed.words
+        .map((entry) => normalizePaddleWord((entry ?? {}) as PaddleOcrPayloadWord))
+        .filter((entry): entry is OcrTsvWord => entry !== null)
+    : [];
+  const rawText = typeof parsed.raw_text === "string" ? parsed.raw_text : words.map((word) => word.text).join("\n");
+  return {
+    ok: true,
+    language: typeof parsed.language === "string" ? parsed.language : "",
+    rawText,
+    words,
+  };
+}
+
+async function runPaddleWithCommand(
+  command: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string; ok: boolean; errorMessage?: string }> {
+  try {
+    fs.mkdirSync(OCR_PADDLE_RUNTIME_ROOT, { recursive: true });
+    fs.mkdirSync(OCR_PADDLE_RUNTIME_USER, { recursive: true });
+    fs.mkdirSync(OCR_PADDLE_RUNTIME_CACHE, { recursive: true });
+    fs.mkdirSync(OCR_PADDLE_RUNTIME_HOME, { recursive: true });
+  } catch {
+    // best effort; if mkdir fails, spawn will still try with current env
+  }
+  const env = {
+    ...process.env,
+    HOME: OCR_PADDLE_RUNTIME_USER,
+    USERPROFILE: OCR_PADDLE_RUNTIME_USER,
+    XDG_CACHE_HOME: OCR_PADDLE_RUNTIME_CACHE,
+    PADDLE_HOME: OCR_PADDLE_RUNTIME_HOME,
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True",
+    FLAGS_enable_pir_api: "0",
+    FLAGS_enable_pir_in_executor: "0",
+    FLAGS_use_mkldnn: "0",
+    FLAGS_prim_all: "0",
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8",
+  };
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      windowsHide: true,
+      env,
+      shell: false,
     });
+    let stdout = "";
+    let stderr = "";
+    let resolved = false;
+    const finish = (value: { stdout: string; stderr: string; ok: boolean; errorMessage?: string }): void => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      resolve(value);
+    };
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      if (stdout.length + stderr.length > OCR_PADDLE_MAX_BUFFER) {
+        child.kill();
+        finish({
+          stdout,
+          stderr,
+          ok: false,
+          errorMessage: "OCR 输出过大，已中断。",
+        });
+      }
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (stdout.length + stderr.length > OCR_PADDLE_MAX_BUFFER) {
+        child.kill();
+        finish({
+          stdout,
+          stderr,
+          ok: false,
+          errorMessage: "OCR 输出过大，已中断。",
+        });
+      }
+    });
+    child.on("error", (err) => {
+      finish({
+        stdout,
+        stderr,
+        ok: false,
+        errorMessage: err.message,
+      });
+    });
+    child.on("close", (code) => {
+      if (code !== 0 && !stdout.trim()) {
+        finish({
+          stdout,
+          stderr,
+          ok: false,
+          errorMessage: stderr.trim() || `进程退出码 ${code ?? -1}`,
+        });
+        return;
+      }
+      finish({
+        stdout,
+        stderr,
+        ok: true,
+      });
+    });
+  });
+}
+
+async function runPaddleExtract(imagePath: string, language: string): Promise<PaddleOcrOutcome> {
+  const candidates = buildPaddleLanguageCandidates(language);
+  const langArg = candidates.join(",");
+  const attempts: Array<{ command: string; args: string[] }> = [
+    { command: "py", args: ["-3.11", "-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
+    { command: "py", args: ["-3", "-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
+    { command: "python", args: ["-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
+  ];
+  const attemptErrors: string[] = [];
+
+  const isInterpreterNotAvailable = (message: string): boolean => {
+    const normalized = message.toLocaleLowerCase();
+    return normalized.includes("no suitable python runtime found") || normalized.includes("not recognized");
+  };
+
+  const isImportFailure = (message: string): boolean => {
+    return message.toLocaleLowerCase().includes("import paddleocr failed");
+  };
+
+  for (const attempt of attempts) {
+    const result = await runPaddleWithCommand(attempt.command, attempt.args);
+    if (!result.ok) {
+      const detail = (result.errorMessage ?? result.stderr.trim()) || "执行失败";
+      attemptErrors.push(`${attempt.command}: ${detail}`);
+      if (!isInterpreterNotAvailable(detail)) {
+        break;
+      }
+      continue;
+    }
+    const payload = parsePaddlePayload(result.stdout);
+    if (payload.ok) {
+      return payload;
+    }
+    const payloadError = payload.errorMessage ?? "输出无效";
+    attemptErrors.push(`${attempt.command}: ${payloadError}`);
+    if (!isImportFailure(payloadError) && !isInterpreterNotAvailable(payloadError)) {
+      return {
+        ...payload,
+        errorMessage: `${attempt.command}: ${payloadError}`,
+      };
+    }
   }
-  return words;
+
+  return {
+    ok: false,
+    language: "",
+    rawText: "",
+    words: [],
+    errorMessage: attemptErrors.join(" | ") || "PaddleOCR 调用失败。",
+  };
+}
+
+function stringifyOcrWords(words: OcrTsvWord[]): string {
+  return words
+    .map((word) => `${word.left},${word.top},${word.width},${word.height},${word.confidence.toFixed(2)}\t${word.text}`)
+    .join("\n");
+}
+
+function formatPaddleOcrError(raw: string | undefined): string {
+  const message = raw?.trim() || "未知错误";
+  const lower = message.toLocaleLowerCase();
+  if (lower.includes("convertpirattribute2runtimeattribute") || lower.includes("onednn_instruction.cc")) {
+    return `${message}。已自动尝试关闭 PIR/oneDNN。若仍失败，建议改用 Python 3.10 环境并安装：paddleocr==2.7.3、paddlepaddle==2.6.2。`;
+  }
+  if (
+    lower.includes("no model source is available") ||
+    lower.includes("proxyerror") ||
+    lower.includes("max retries exceeded") ||
+    lower.includes("connecterror")
+  ) {
+    return `${message}。PaddleOCR 模型下载失败，请确认网络/代理可访问 huggingface、modelscope 或 BOS，或先离线准备模型。`;
+  }
+  if (lower.includes("import paddleocr failed")) {
+    return `${message}。请确认当前 Python 解释器已安装 paddleocr 和 paddlepaddle。`;
+  }
+  return message;
 }
 
 function normalizeNumericToken(raw: string): number | null {
   const normalized = raw
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xff10 + 0x30))
+    .replace(/[，、]/g, ",")
+    .replace(/[。．]/g, ".")
     .replace(/[,\.\s]/g, "")
-    .replace(/[oO]/g, "0")
-    .replace(/[lI|]/g, "1")
-    .replace(/[sS]/g, "5")
+    .replace(/[oO〇○]/g, "0")
+    .replace(/[lI|!]/g, "1")
+    .replace(/[zZ]/g, "2")
+    .replace(/[sS$]/g, "5")
+    .replace(/[gG]/g, "6")
     .replace(/[bB]/g, "8")
+    .replace(/[qQ]/g, "9")
     .replace(/[^0-9]/g, "");
   if (!normalized) {
     return null;
@@ -1867,7 +2318,9 @@ function cleanupTempFile(filePath: string | null): void {
 }
 
 function parsePriceFromLine(line: string, column: "left" | "right"): number | null {
-  const matches = Array.from(line.matchAll(/([0-9oOlI|sSbB][0-9oOlI|sSbB,\.\s]*)/g)).map((entry) => entry[1] ?? "");
+  const matches = Array.from(line.matchAll(/([0-9０-９oOlI|!sSbB$zZgGqQ〇○][0-9０-９oOlI|!sSbB$zZgGqQ〇○,\.\s，。．、]*)/g)).map(
+    (entry) => entry[1] ?? "",
+  );
   if (matches.length === 0) {
     return null;
   }
@@ -1883,11 +2336,11 @@ function parseNonEmptyLines(text: string): string[] {
     .filter(Boolean);
 }
 
-function groupWordsByRow(words: OcrTsvWord[], rowCount: number, totalHeight: number): OcrTsvWord[][] {
-  const buckets: OcrTsvWord[][] = Array.from({ length: rowCount }, () => []);
+function groupWordsByRow<T extends OcrTsvWord>(words: T[], rowCount: number, totalHeight: number, startTop = 0): T[][] {
+  const buckets: T[][] = Array.from({ length: rowCount }, () => []);
   const rowHeight = totalHeight / rowCount;
   words.forEach((word) => {
-    const centerY = word.top + word.height / 2;
+    const centerY = word.top + word.height / 2 - startTop;
     const rowIndex = clamp(Math.floor(centerY / Math.max(1, rowHeight)), 0, rowCount - 1);
     buckets[rowIndex].push(word);
   });
@@ -1897,7 +2350,13 @@ function groupWordsByRow(words: OcrTsvWord[], rowCount: number, totalHeight: num
 function buildNameRowsFromWords(words: OcrTsvWord[], rowCount: number, totalHeight: number): Array<string | null> {
   const rows = groupWordsByRow(words, rowCount, totalHeight);
   return rows.map((row) => {
-    const text = row.map((word) => word.text).join("").trim();
+    const confidentWords = row.filter((word) => word.confidence < 0 || word.confidence >= OCR_TSV_NAME_CONFIDENCE_MIN);
+    const effectiveWords = confidentWords.length > 0 ? confidentWords : row;
+    const text = effectiveWords
+      .map((word) => sanitizeOcrLineItemName(word.text).replace(/\s+/g, ""))
+      .filter(Boolean)
+      .join("")
+      .trim();
     return text || null;
   });
 }
@@ -1905,24 +2364,44 @@ function buildNameRowsFromWords(words: OcrTsvWord[], rowCount: number, totalHeig
 function buildPriceRowsFromWords(
   words: OcrTsvWord[],
   rowCount: number,
-  totalHeight: number,
   column: "left" | "right",
-  warnings: string[],
+  rowWarnings: string[],
 ): Array<number | null> {
-  const rows = groupWordsByRow(words, rowCount, totalHeight);
+  const numericWordsRaw = words
+    .map((word) => ({
+      ...word,
+      value: normalizeNumericToken(word.text),
+    }))
+    .filter((entry): entry is OcrTsvWord & { value: number } => entry.value !== null);
+  const confidentNumericWords = numericWordsRaw.filter(
+    (entry) => entry.confidence < 0 || entry.confidence >= OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+  );
+  const numericWords = confidentNumericWords.length > 0 ? confidentNumericWords : numericWordsRaw;
+  if (numericWords.length === 0) {
+    return Array.from({ length: rowCount }, (_, index) => {
+      rowWarnings.push(`第 ${index + 1} 行价格解析失败（词框无数字词）。`);
+      return null;
+    });
+  }
+
+  let minTop = Number.POSITIVE_INFINITY;
+  let maxBottom = Number.NEGATIVE_INFINITY;
+  numericWords.forEach((word) => {
+    minTop = Math.min(minTop, word.top);
+    maxBottom = Math.max(maxBottom, word.top + word.height);
+  });
+  const distributionHeight = Math.max(1, maxBottom - minTop);
+  const rowSpanPadding = Math.floor(distributionHeight * 0.06);
+  const spanTop = Math.max(0, minTop - rowSpanPadding);
+  const spanBottom = maxBottom + rowSpanPadding;
+  const rows = groupWordsByRow(numericWords, rowCount, Math.max(1, spanBottom - spanTop), spanTop);
   return rows.map((row, index) => {
-    const numericWords = row
-      .map((word) => ({
-        ...word,
-        value: normalizeNumericToken(word.text),
-      }))
-      .filter((entry): entry is OcrTsvWord & { value: number } => entry.value !== null);
-    if (numericWords.length === 0) {
-      warnings.push(`第 ${index + 1} 行价格解析失败（TSV 无数字词）。`);
+    if (row.length === 0) {
+      rowWarnings.push(`第 ${index + 1} 行价格解析失败（词框无数字词）。`);
       return null;
     }
-    numericWords.sort((left, right) => left.left - right.left);
-    const picked = column === "right" ? numericWords[numericWords.length - 1] : numericWords[0];
+    row.sort((left, right) => left.left - right.left);
+    const picked = column === "right" ? row[row.length - 1] : row[0];
     return picked.value;
   });
 }
@@ -1949,15 +2428,14 @@ function detectTradePriceRoleByHeaderText(rawText: string): "server" | "world" |
   return null;
 }
 
-function resolveDualPriceRolesByHeader(
+async function resolveDualPriceRolesByHeader(
   imagePath: string,
   pricesRect: WorkshopRect,
   language: string,
-  psm: number,
   fallbackLeftRole: "server" | "world",
   fallbackRightRole: "server" | "world",
   warnings: string[],
-): { leftRole: "server" | "world"; rightRole: "server" | "world" } {
+): Promise<{ leftRole: "server" | "world"; rightRole: "server" | "world" }> {
   const headerHeight = clamp(Math.floor(pricesRect.height * 0.16), 40, 180);
   const leftWidth = Math.max(1, Math.floor(pricesRect.width / 2));
   const rightWidth = Math.max(1, pricesRect.width - leftWidth);
@@ -1973,19 +2451,18 @@ function resolveDualPriceRolesByHeader(
     width: rightWidth,
     height: headerHeight,
   };
-  const headerLanguage = resolveTradeNameLanguage(language);
+  const headerLanguage = buildPaddleLanguageCandidates(language).join("+");
 
-  const readHeaderText = (rect: WorkshopRect, label: "左列" | "右列"): string => {
+  const readHeaderText = async (rect: WorkshopRect, label: "左列" | "右列"): Promise<string> => {
     let tempPath: string | null = null;
     try {
       tempPath = cropImageToTempFile(imagePath, rect, 2);
-      const extract = runTesseractExtract(tempPath, headerLanguage, psm);
+      const extract = await runPaddleExtract(tempPath, headerLanguage);
       if (!extract.ok) {
-        const reason = extract.stderr.trim() || extract.error?.message || "未知错误";
-        warnings.push(`${label}表头识别失败：${reason}`);
+        warnings.push(`${label}表头识别失败：${extract.errorMessage ?? "未知错误"}`);
         return "";
       }
-      return extract.stdout;
+      return extract.rawText;
     } catch (err) {
       warnings.push(`${label}表头识别失败：${err instanceof Error ? err.message : "未知异常"}`);
       return "";
@@ -1994,8 +2471,10 @@ function resolveDualPriceRolesByHeader(
     }
   };
 
-  const leftHeaderText = readHeaderText(leftRect, "左列");
-  const rightHeaderText = readHeaderText(rightRect, "右列");
+  const [leftHeaderText, rightHeaderText] = await Promise.all([
+    readHeaderText(leftRect, "左列"),
+    readHeaderText(rightRect, "右列"),
+  ]);
   const leftDetected = detectTradePriceRoleByHeaderText(leftHeaderText);
   const rightDetected = detectTradePriceRoleByHeaderText(rightHeaderText);
 
@@ -2028,61 +2507,142 @@ interface PriceRowsOcrOutcome {
   values: Array<number | null>;
   rawText: string;
   tsvText: string;
+  engine: string;
 }
 
-function extractPriceRowsForRect(
+interface DualPriceRowsOcrOutcome {
+  leftValues: Array<number | null>;
+  rightValues: Array<number | null>;
+  rawText: string;
+  tsvText: string;
+  engine: string;
+}
+
+async function extractPriceRowsForRect(
   imagePath: string,
   rect: WorkshopRect,
-  psm: number,
   rowCount: number,
   scale: number,
   column: "left" | "right",
   warnings: string[],
   warningPrefix: string,
-): PriceRowsOcrOutcome {
+): Promise<PriceRowsOcrOutcome> {
   const tempPath = cropImageToTempFile(imagePath, rect, scale);
   try {
-    const extract = runTesseractExtractWithOptions(tempPath, "eng", psm, [
-      ["tessedit_char_whitelist", "0123456789,."],
-      ["preserve_interword_spaces", "1"],
-    ]);
+    const extract = await runPaddleExtract(tempPath, "en");
     if (!extract.ok) {
-      const reason = extract.stderr.trim() || extract.error?.message || "未知错误";
-      throw new Error(`${warningPrefix}OCR 失败：${reason}`);
+      throw new Error(`${warningPrefix}OCR 失败：${extract.errorMessage ?? "未知错误"}`);
     }
-    const tsv = runTesseractTsvWithOptions(tempPath, "eng", psm, [
-      ["tessedit_char_whitelist", "0123456789,."],
-      ["preserve_interword_spaces", "1"],
-    ]);
-    const tsvWords = tsv.ok ? parseTsvWords(tsv.stdout) : [];
-    const tsvRows = buildPriceRowsFromWords(tsvWords, rowCount, Math.floor(rect.height * scale), column, warnings);
-    const fallbackRows = parseNonEmptyLines(extract.stdout)
+    const rowsFromWordsWarnings: string[] = [];
+    const rowsFromWords = buildPriceRowsFromWords(extract.words, rowCount, column, rowsFromWordsWarnings);
+    const fallbackWarnings: string[] = [];
+    const fallbackRows = parseNonEmptyLines(extract.rawText)
       .slice(0, rowCount)
       .map((line, index) => {
         const parsed = parsePriceFromLine(line, column);
         if (parsed === null) {
-          warnings.push(`${warningPrefix}第 ${index + 1} 行价格解析失败：${line}`);
+          fallbackWarnings.push(`${warningPrefix}第 ${index + 1} 行价格解析失败：${line}`);
           return null;
         }
         return parsed;
       });
-    const tsvValid = tsvRows.filter((entry): entry is number => entry !== null).length;
+    const wordsValid = rowsFromWords.filter((entry): entry is number => entry !== null).length;
     const fallbackValid = fallbackRows.filter((entry): entry is number => entry !== null).length;
-    const values = tsvValid >= fallbackValid ? tsvRows : fallbackRows;
-    if (tsvValid < fallbackValid) {
-      warnings.push(`${warningPrefix}TSV 结果不足，已回退到普通文本行解析。`);
+    const values = wordsValid >= fallbackValid ? rowsFromWords : fallbackRows;
+    if (wordsValid < fallbackValid) {
+      warnings.push(`${warningPrefix}词框结果不足，已回退到普通文本行解析。`);
+      warnings.push(...fallbackWarnings);
+    } else {
+      warnings.push(...rowsFromWordsWarnings);
     }
     return {
       values,
-      rawText: extract.stdout,
-      tsvText: tsv.stdout,
+      rawText: extract.rawText,
+      tsvText: stringifyOcrWords(extract.words),
+      engine: `paddleocr(${extract.language || "auto"})`,
     };
   } finally {
     cleanupTempFile(tempPath);
   }
 }
 
-export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): WorkshopOcrExtractTextResult {
+async function extractDualPriceRowsForRect(
+  imagePath: string,
+  rect: WorkshopRect,
+  rowCount: number,
+  scale: number,
+  warnings: string[],
+): Promise<DualPriceRowsOcrOutcome> {
+  let fastModeError: string | null = null;
+  const tempPath = cropImageToTempFile(imagePath, rect, scale);
+  try {
+    const extract = await runPaddleExtract(tempPath, "en");
+    if (!extract.ok) {
+      throw new Error(extract.errorMessage ?? "未知错误");
+    }
+
+    const splitX = Math.floor((rect.width * scale) / 2);
+    const leftWords = extract.words.filter((word) => word.left + word.width / 2 <= splitX);
+    const rightWords = extract.words.filter((word) => word.left + word.width / 2 > splitX);
+    const leftWarnings: string[] = [];
+    const rightWarnings: string[] = [];
+    const leftValues = buildPriceRowsFromWords(leftWords, rowCount, "left", leftWarnings);
+    const rightValues = buildPriceRowsFromWords(rightWords, rowCount, "left", rightWarnings);
+    const leftValid = leftValues.filter((entry): entry is number => entry !== null).length;
+    const rightValid = rightValues.filter((entry): entry is number => entry !== null).length;
+    const minValid = Math.max(2, Math.floor(rowCount * 0.5));
+
+    if (leftValid >= minValid && rightValid >= minValid) {
+      leftWarnings.forEach((line) => warnings.push(`左列价格：${line}`));
+      rightWarnings.forEach((line) => warnings.push(`右列价格：${line}`));
+      return {
+        leftValues,
+        rightValues,
+        rawText: extract.rawText,
+        tsvText: stringifyOcrWords(extract.words),
+        engine: `paddleocr(${extract.language || "auto"}, dual-split)`,
+      };
+    }
+
+    warnings.push("双列价格快速解析不足，已回退到双区块 OCR。");
+  } catch (err) {
+    fastModeError = err instanceof Error ? err.message : "未知错误";
+  } finally {
+    cleanupTempFile(tempPath);
+  }
+
+  if (fastModeError) {
+    warnings.push(`双列价格快速解析失败，已回退到双区块 OCR：${fastModeError}`);
+  }
+
+  const leftWidth = Math.max(1, Math.floor(rect.width / 2));
+  const rightWidth = Math.max(1, rect.width - leftWidth);
+  const leftRect: WorkshopRect = {
+    x: rect.x,
+    y: rect.y,
+    width: leftWidth,
+    height: rect.height,
+  };
+  const rightRect: WorkshopRect = {
+    x: rect.x + leftWidth,
+    y: rect.y,
+    width: rightWidth,
+    height: rect.height,
+  };
+  const [leftOutcome, rightOutcome] = await Promise.all([
+    extractPriceRowsForRect(imagePath, leftRect, rowCount, scale, "left", warnings, "左列价格："),
+    extractPriceRowsForRect(imagePath, rightRect, rowCount, scale, "left", warnings, "右列价格："),
+  ]);
+  return {
+    leftValues: leftOutcome.values,
+    rightValues: rightOutcome.values,
+    rawText: `${leftOutcome.rawText}\n\n---RIGHT_PRICE---\n\n${rightOutcome.rawText}`,
+    tsvText: `${leftOutcome.tsvText}\n\n---RIGHT_PRICE_WORDS---\n\n${rightOutcome.tsvText}`,
+    engine: `left=${leftOutcome.engine}, right=${rightOutcome.engine}`,
+  };
+}
+
+export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Promise<WorkshopOcrExtractTextResult> {
   const imageRawPath = payload.imagePath?.trim();
   if (!imageRawPath) {
     throw new Error("OCR 识别失败：请先填写截图路径。");
@@ -2096,19 +2656,16 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
   if (tradeBoardPreset) {
     let namesTempPath: string | null = null;
     try {
-      const namesLanguage = resolveTradeNameLanguage(language);
+      const namesLanguage = buildPaddleLanguageCandidates(language).join("+");
       const namesScale = 2;
       const pricesScale = 2;
       namesTempPath = cropImageToTempFile(imagePath, tradeBoardPreset.namesRect, namesScale);
-      const namesExtract = runTesseractExtract(namesTempPath, namesLanguage, psm);
+      const namesExtract = await runPaddleExtract(namesTempPath, namesLanguage);
       if (!namesExtract.ok) {
-        const reason = namesExtract.stderr.trim() || namesExtract.error?.message || "未知错误";
-        throw new Error(`名称区 OCR 失败：${reason}`);
+        throw new Error(`名称区 OCR 失败：${formatPaddleOcrError(namesExtract.errorMessage)}`);
       }
-      const namesTsv = runTesseractTsvWithOptions(namesTempPath, namesLanguage, psm, [["preserve_interword_spaces", "1"]]);
-      const nameWords = namesTsv.ok ? parseTsvWords(namesTsv.stdout) : [];
       const nameRowsFromTsv = buildNameRowsFromWords(
-        nameWords,
+        namesExtract.words,
         tradeBoardPreset.rowCount,
         Math.floor(tradeBoardPreset.namesRect.height * namesScale),
       );
@@ -2116,7 +2673,7 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
         const cleaned = sanitizeOcrLineItemName(row ?? "");
         return cleaned || null;
       });
-      const nameLinesFallback = parseNonEmptyLines(namesExtract.stdout)
+      const nameLinesFallback = parseNonEmptyLines(namesExtract.rawText)
         .map((line) => sanitizeOcrLineItemName(line))
         .filter(Boolean)
         .slice(0, tradeBoardPreset.rowCount);
@@ -2132,67 +2689,42 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
       let rawPriceTsvSection = "";
       let effectiveLeftRole: "server" | "world" = tradeBoardPreset.leftPriceRole === "world" ? "world" : "server";
       let effectiveRightRole: "server" | "world" = tradeBoardPreset.rightPriceRole === "server" ? "server" : "world";
+      let pricesEngine = "";
 
       if (tradeBoardPreset.priceMode === "dual") {
-        const detectedRoles = resolveDualPriceRolesByHeader(
+        if (tradeBoardPreset.leftPriceRole === tradeBoardPreset.rightPriceRole) {
+          const detectedRoles = await resolveDualPriceRolesByHeader(
+            imagePath,
+            tradeBoardPreset.pricesRect,
+            namesLanguage,
+            effectiveLeftRole,
+            effectiveRightRole,
+            warnings,
+          );
+          effectiveLeftRole = detectedRoles.leftRole;
+          effectiveRightRole = detectedRoles.rightRole;
+        }
+        const dualOutcome = await extractDualPriceRowsForRect(
           imagePath,
           tradeBoardPreset.pricesRect,
-          namesLanguage,
-          psm,
-          effectiveLeftRole,
-          effectiveRightRole,
-          warnings,
-        );
-        effectiveLeftRole = detectedRoles.leftRole;
-        effectiveRightRole = detectedRoles.rightRole;
-        const leftWidth = Math.max(1, Math.floor(tradeBoardPreset.pricesRect.width / 2));
-        const rightWidth = Math.max(1, tradeBoardPreset.pricesRect.width - leftWidth);
-        const leftRect: WorkshopRect = {
-          x: tradeBoardPreset.pricesRect.x,
-          y: tradeBoardPreset.pricesRect.y,
-          width: leftWidth,
-          height: tradeBoardPreset.pricesRect.height,
-        };
-        const rightRect: WorkshopRect = {
-          x: tradeBoardPreset.pricesRect.x + leftWidth,
-          y: tradeBoardPreset.pricesRect.y,
-          width: rightWidth,
-          height: tradeBoardPreset.pricesRect.height,
-        };
-        const leftOutcome = extractPriceRowsForRect(
-          imagePath,
-          leftRect,
-          psm,
           tradeBoardPreset.rowCount,
           pricesScale,
-          "left",
           warnings,
-          "左列价格：",
         );
-        const rightOutcome = extractPriceRowsForRect(
-          imagePath,
-          rightRect,
-          psm,
-          tradeBoardPreset.rowCount,
-          pricesScale,
-          "left",
-          warnings,
-          "右列价格：",
-        );
-        leftValues = leftOutcome.values;
-        rightValues = rightOutcome.values;
-        rawPriceSection = `${leftOutcome.rawText}\n\n---RIGHT_PRICE---\n\n${rightOutcome.rawText}`;
-        rawPriceTsvSection = `${leftOutcome.tsvText}\n\n---RIGHT_PRICE_TSV---\n\n${rightOutcome.tsvText}`;
+        leftValues = dualOutcome.leftValues;
+        rightValues = dualOutcome.rightValues;
+        rawPriceSection = dualOutcome.rawText;
+        rawPriceTsvSection = dualOutcome.tsvText;
+        pricesEngine = dualOutcome.engine;
         warnings.push(
           `双价格列角色：左列=${effectiveLeftRole === "server" ? "伺服器" : "世界"}，右列=${
             effectiveRightRole === "server" ? "伺服器" : "世界"
           }。`,
         );
       } else {
-        const singleOutcome = extractPriceRowsForRect(
+        const singleOutcome = await extractPriceRowsForRect(
           imagePath,
           tradeBoardPreset.pricesRect,
-          psm,
           tradeBoardPreset.rowCount,
           pricesScale,
           tradeBoardPreset.priceColumn,
@@ -2208,6 +2740,7 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
         }
         rawPriceSection = singleOutcome.rawText;
         rawPriceTsvSection = singleOutcome.tsvText;
+        pricesEngine = singleOutcome.engine;
       }
 
       const tradeRows: WorkshopOcrExtractTextResult["tradeRows"] = [];
@@ -2262,11 +2795,13 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
       }
       const text = textLines.join("\n");
       return {
-        rawText: `${namesExtract.stdout}\n\n---PRICE---\n\n${rawPriceSection}\n\n---NAMES_TSV---\n\n${namesTsv.stdout}\n\n---PRICES_TSV---\n\n${rawPriceTsvSection}`,
+        rawText: `${namesExtract.rawText}\n\n---PRICE---\n\n${rawPriceSection}\n\n---NAMES_WORDS---\n\n${stringifyOcrWords(
+          namesExtract.words,
+        )}\n\n---PRICES_WORDS---\n\n${rawPriceTsvSection}`,
         text,
         lineCount: tradeRows.length,
         warnings,
-        engine: `tesseract(names=${namesLanguage}, prices=eng, psm=${psm}, trade-board-roi)`,
+        engine: `paddleocr(names=${namesExtract.language || namesLanguage}, prices=${pricesEngine}, psm=${psm}, trade-board-roi)`,
         tradeRows,
       };
     } finally {
@@ -2274,28 +2809,14 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
     }
   }
 
-  const primary = runTesseractExtract(imagePath, language, psm);
-  if (primary.error && (primary.error as NodeJS.ErrnoException).code === "ENOENT") {
-    throw new Error("未检测到 tesseract 命令。请确认已安装 Tesseract 并加入系统 PATH。");
+  const primary = await runPaddleExtract(imagePath, language);
+  if (!primary.ok) {
+    throw new Error(
+      `PaddleOCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}。请先使用 Python 3.10/3.11 安装：pip install paddleocr paddlepaddle`,
+    );
   }
 
-  let usedLanguage = language;
-  let final = primary;
-  if (!primary.ok && language !== "eng") {
-    const fallback = runTesseractExtract(imagePath, "eng", psm);
-    if (fallback.ok) {
-      warnings.push(`语言包 ${language} 识别失败，已自动回退到 eng。`);
-      usedLanguage = "eng";
-      final = fallback;
-    }
-  }
-
-  if (!final.ok) {
-    const reason = final.stderr.trim() || final.error?.message || "未知错误";
-    throw new Error(`OCR 识别失败：${reason}`);
-  }
-
-  const rawText = final.stdout;
+  const rawText = primary.rawText;
   const text = normalizeOcrText(rawText);
   const lineCount = text ? text.split(/\n/u).length : 0;
   if (lineCount === 0) {
@@ -2307,7 +2828,7 @@ export function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInput): Wo
     text,
     lineCount,
     warnings,
-    engine: `tesseract(${usedLanguage}, psm=${psm})`,
+    engine: `paddleocr(${primary.language || language}, psm=${psm})`,
   };
 }
 
@@ -2507,8 +3028,9 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
   items.forEach((item) => {
     itemByLookupName.set(normalizeLookupName(item.name), item);
   });
+  const expectedIconByLineNumber = sanitized.iconCapture ? buildExpectedIconByLineNumber(parsedLines, itemByLookupName) : undefined;
   const iconCaptureOutcome = sanitized.iconCapture
-    ? captureOcrLineIcons(parsedLines, sanitized.iconCapture)
+    ? captureOcrLineIcons(parsedLines, sanitized.iconCapture, expectedIconByLineNumber)
     : {
         iconByLineNumber: new Map<number, string>(),
         iconCapturedCount: 0,
@@ -2538,8 +3060,12 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
 
     if (sanitized.strictIconMatch) {
       if (!capturedIcon) {
-        unknownItemNameSet.add(`${line.itemName}（严格模式需开启图标抓取）`);
-        return;
+        const canFallbackByExactName =
+          item !== undefined && !isCapturedImageIcon(item.icon) && isExactOcrNameMatch(item, line.itemName);
+        if (!canFallbackByExactName) {
+          unknownItemNameSet.add(`${line.itemName}（严格模式需开启图标抓取）`);
+          return;
+        }
       }
       if (!item && iconMatchedItem) {
         item = iconMatchedItem;
@@ -2549,11 +3075,11 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
         unknownItemNameSet.add(`${line.itemName}（名称与图标冲突）`);
         return;
       }
-      if (item && item.icon && item.icon !== capturedIcon) {
+      if (item && capturedIcon && isCapturedImageIcon(item.icon) && item.icon !== capturedIcon) {
         unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
         return;
       }
-      if (item && !item.icon) {
+      if (item && !isCapturedImageIcon(item.icon) && !isExactOcrNameMatch(item, line.itemName)) {
         unknownItemNameSet.add(`${line.itemName}（严格模式缺少图标基线）`);
         return;
       }
@@ -2570,7 +3096,8 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
         item = iconMatchedItem;
         itemByLookupName.set(key, item);
       }
-      if (item && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, line.itemName, items)) {
+      // Only block fuzzy/heuristic matches; exact key matches should be trusted.
+      if (item && !matchedByExactName && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, line.itemName, items)) {
         unknownItemNameSet.add(`${line.itemName}（名称歧义，已跳过）`);
         return;
       }
@@ -2597,7 +3124,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       createdItem = true;
     } else if (capturedIcon && item) {
       const currentItem = item;
-      if (sanitized.strictIconMatch && currentItem.icon && currentItem.icon !== capturedIcon) {
+      if (sanitized.strictIconMatch && isCapturedImageIcon(currentItem.icon) && currentItem.icon !== capturedIcon) {
         unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
         return;
       }

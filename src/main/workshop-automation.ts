@@ -7,7 +7,6 @@ import { IPC_CHANNELS } from "../shared/ipc";
 import type {
   WorkshopItemCategory,
   WorkshopOcrHotkeyConfig,
-  WorkshopOcrIconCaptureTemplate,
   WorkshopOcrHotkeyRunResult,
   WorkshopOcrHotkeyState,
   WorkshopScreenCaptureOptions,
@@ -16,19 +15,10 @@ import type {
 } from "../shared/types";
 import { extractWorkshopOcrText, importWorkshopOcrPrices } from "./workshop-store";
 
-const DEFAULT_SHORTCUT = process.platform === "win32" ? "Shift+F8" : "CommandOrControl+Shift+F8";
-const DEFAULT_LANGUAGE = "chi_tra+eng";
+const DEFAULT_SHORTCUT = process.platform === "win32" ? "Shift+F1" : "CommandOrControl+Shift+F1";
+const DEFAULT_LANGUAGE = "chi_tra";
 const DEFAULT_PSM = 6;
 const DEFAULT_CATEGORY: WorkshopItemCategory = "material";
-const DEFAULT_ICON_CAPTURE_TEMPLATE: WorkshopOcrIconCaptureTemplate = {
-  firstRowTop: 339,
-  rowHeight: 135,
-  nameAnchorX: 530,
-  iconOffsetX: -85,
-  iconTopOffset: 0,
-  iconWidth: 85,
-  iconHeight: 85,
-};
 const DEFAULT_TRADE_BOARD_PRESET: WorkshopTradeBoardPreset = {
   enabled: true,
   rowCount: 7,
@@ -63,16 +53,15 @@ let currentState: WorkshopOcrHotkeyState = {
   lastResult: null,
 };
 
-let iconCaptureTemplate: WorkshopOcrIconCaptureTemplate | null = null;
 let tradeBoardPreset: WorkshopTradeBoardPreset | null = DEFAULT_TRADE_BOARD_PRESET;
-let defaultCaptureDelayMs = 1200;
+let defaultCaptureDelayMs = 600;
 let defaultHideAppBeforeCapture = true;
 let running = false;
 
 function sanitizeCaptureOptions(raw?: WorkshopScreenCaptureOptions): { delayMs: number; hideAppBeforeCapture: boolean } {
   const delayRaw = raw?.delayMs;
   const delayMs =
-    typeof delayRaw === "number" && Number.isFinite(delayRaw) ? Math.min(10_000, Math.max(0, Math.floor(delayRaw))) : 1200;
+    typeof delayRaw === "number" && Number.isFinite(delayRaw) ? Math.min(10_000, Math.max(0, Math.floor(delayRaw))) : 600;
   const hideAppBeforeCapture = raw?.hideAppBeforeCapture !== false;
   return {
     delayMs,
@@ -140,12 +129,20 @@ function buildShortcutCandidates(shortcut: string): string[] {
   if (process.platform === "win32") {
     add(shortcut.replace(/^CommandOrControl\+/iu, "Control+"));
     const lower = shortcut.toLowerCase();
-    if (lower === "shift+f8" || lower === "control+shift+f8" || lower === "commandorcontrol+shift+f8") {
-      add("Shift+F8");
-      add("Control+Shift+F8");
-      add("Alt+Shift+F8");
-      add("F8");
-      add("Control+F8");
+    if (
+      lower === "shift+f1" ||
+      lower === "control+shift+f1" ||
+      lower === "commandorcontrol+shift+f1" ||
+      lower === "shift+f8" ||
+      lower === "control+shift+f8" ||
+      lower === "commandorcontrol+shift+f8"
+    ) {
+      const fnKey = lower.includes("f1") ? "F1" : "F8";
+      add(`Shift+${fnKey}`);
+      add(`Control+Shift+${fnKey}`);
+      add(`Alt+Shift+${fnKey}`);
+      add(fnKey);
+      add(`Control+${fnKey}`);
     }
   }
   if (list.length === 0) {
@@ -284,7 +281,7 @@ async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<Wo
   let screenshotPath: string | null = null;
   try {
     screenshotPath = await capturePrimaryDisplayToTempFile(options);
-    const extracted = extractWorkshopOcrText({
+    const extracted = await extractWorkshopOcrText({
       imagePath: screenshotPath,
       language: currentState.language,
       psm: currentState.psm,
@@ -299,13 +296,7 @@ async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<Wo
       source: "import",
       autoCreateMissingItems: currentState.autoCreateMissingItems,
       defaultCategory: currentState.defaultCategory,
-      strictIconMatch: currentState.strictIconMatch,
-      iconCapture: currentState.iconCaptureEnabled
-        ? {
-            screenshotPath,
-            ...(iconCaptureTemplate ?? DEFAULT_ICON_CAPTURE_TEMPLATE),
-          }
-        : undefined,
+      strictIconMatch: false,
     });
     const warnings = buildImportWarnings(
       [...extracted.warnings, ...imported.iconCaptureWarnings],
@@ -393,20 +384,9 @@ export function configureWorkshopOcrHotkey(config: WorkshopOcrHotkeyConfig): Wor
     psm: sanitizePsm(config.psm),
     autoCreateMissingItems: config.autoCreateMissingItems ?? false,
     defaultCategory: config.defaultCategory ?? DEFAULT_CATEGORY,
-    iconCaptureEnabled: Boolean(config.iconCapture),
-    strictIconMatch: config.strictIconMatch ?? false,
+    iconCaptureEnabled: false,
+    strictIconMatch: false,
   };
-  iconCaptureTemplate = config.iconCapture
-    ? {
-        firstRowTop: config.iconCapture.firstRowTop,
-        rowHeight: config.iconCapture.rowHeight,
-        nameAnchorX: config.iconCapture.nameAnchorX,
-        iconOffsetX: config.iconCapture.iconOffsetX,
-        iconTopOffset: config.iconCapture.iconTopOffset,
-        iconWidth: config.iconCapture.iconWidth,
-        iconHeight: config.iconCapture.iconHeight,
-      }
-    : null;
   tradeBoardPreset = sanitizeTradeBoardPreset(config.tradeBoardPreset);
   defaultCaptureDelayMs = sanitizeCaptureOptions({ delayMs: config.captureDelayMs }).delayMs;
   defaultHideAppBeforeCapture = config.hideAppBeforeCapture !== false;
