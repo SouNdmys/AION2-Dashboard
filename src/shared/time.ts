@@ -1,9 +1,5 @@
 import { DAILY_RESET_HOUR, WEEKLY_RESET_DAY, WEEKLY_RESET_HOUR } from "./constants";
-import {
-  CORRIDOR_UNIFIED_ANCHOR_LOCAL_ISO,
-  CORRIDOR_UNIFIED_INTERVAL_HOURS,
-  CORRIDOR_UNIFIED_REFRESH_HOUR,
-} from "./constants";
+import { CORRIDOR_UNIFIED_REFRESH_DAYS, CORRIDOR_UNIFIED_REFRESH_HOUR } from "./constants";
 
 function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -118,22 +114,21 @@ export function getNextScheduledTick(from: Date, hours: readonly number[]): Date
 }
 
 export function getNextUnifiedCorridorRefresh(from = new Date()): Date {
-  const base = new Date(CORRIDOR_UNIFIED_ANCHOR_LOCAL_ISO);
-  if (Number.isNaN(base.getTime())) {
-    const fallback = new Date(from);
-    fallback.setHours(CORRIDOR_UNIFIED_REFRESH_HOUR, 0, 0, 0);
-    if (fallback <= from) {
-      fallback.setDate(fallback.getDate() + 1);
+  const refreshDays = new Set<number>(CORRIDOR_UNIFIED_REFRESH_DAYS);
+  for (let dayOffset = 0; dayOffset <= 7; dayOffset += 1) {
+    const candidate = new Date(from);
+    candidate.setDate(candidate.getDate() + dayOffset);
+    candidate.setHours(CORRIDOR_UNIFIED_REFRESH_HOUR, 0, 0, 0);
+    if (!refreshDays.has(candidate.getDay())) {
+      continue;
     }
-    return fallback;
+    if (candidate > from) {
+      return candidate;
+    }
   }
 
-  if (from < base) {
-    return base;
-  }
-
-  const intervalMs = CORRIDOR_UNIFIED_INTERVAL_HOURS * 60 * 60 * 1000;
-  const diffMs = from.getTime() - base.getTime();
-  const steps = Math.floor(diffMs / intervalMs) + 1;
-  return new Date(base.getTime() + steps * intervalMs);
+  const fallback = new Date(from);
+  fallback.setDate(fallback.getDate() + 7);
+  fallback.setHours(CORRIDOR_UNIFIED_REFRESH_HOUR, 0, 0, 0);
+  return fallback;
 }

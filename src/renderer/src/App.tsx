@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import {
+  AODE_ENERGY_SCHEDULE_HOURS,
   AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
   AODE_POINT_PER_OPERATION,
   AODE_WEEKLY_BASE_CONVERT_MAX,
@@ -26,8 +27,9 @@ import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 type ViewMode = "dashboard" | "settings" | "workshop";
 type DashboardMode = "overview" | "character";
-type OverviewSortKey = "ready" | "account" | "region";
+type OverviewSortKey = "manual" | "ready" | "account" | "region";
 type OverviewTaskFilter = "all" | "dungeon" | "weekly" | "mission";
+type QuickTaskId = TaskId | "corridor_lower" | "corridor_middle";
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const NO_REGION_FILTER = "__none__";
 const COUNT_SELECT_MAX = 100;
@@ -66,6 +68,13 @@ interface SettingsDraft {
   suppressionRunCap: string;
   expeditionWarnThreshold: string;
   transcendenceWarnThreshold: string;
+  priorityWeightAode: string;
+  priorityWeightSanctum: string;
+  priorityWeightCorridor: string;
+  priorityWeightDungeon: string;
+  priorityWeightWeekly: string;
+  priorityWeightMission: string;
+  priorityWeightLeisure: string;
 }
 
 interface CorridorDraft {
@@ -91,6 +100,21 @@ interface PriorityTodoItem {
   tone: PriorityTone;
 }
 
+type PriorityWeightKey = "aode" | "sanctum" | "corridor" | "dungeon" | "weekly" | "mission" | "leisure";
+const QUICK_CORRIDOR_TASKS: Record<"corridor_lower" | "corridor_middle", { title: string; lane: "lower" | "middle" }> = {
+  corridor_lower: { title: "回廊完成(下层)", lane: "lower" },
+  corridor_middle: { title: "回廊完成(中层)", lane: "middle" },
+};
+const PRIORITY_SETTING_FIELDS = [
+  { key: "priorityWeightAode", label: "奥德清体力" },
+  { key: "priorityWeightSanctum", label: "圣域周本" },
+  { key: "priorityWeightCorridor", label: "深渊回廊" },
+  { key: "priorityWeightDungeon", label: "远征/超越" },
+  { key: "priorityWeightWeekly", label: "周刷新项" },
+  { key: "priorityWeightMission", label: "使命任务" },
+  { key: "priorityWeightLeisure", label: "小游戏/精灵" },
+] as const;
+
 function getQuickActionsForTask(task: TaskDefinition): TaskActionKind[] {
   if (task.allowSetCompleted) {
     return ["set_completed"];
@@ -103,6 +127,24 @@ function getQuickActionsForTask(task: TaskDefinition): TaskActionKind[] {
     actions.push("use_ticket");
   }
   return actions;
+}
+
+function getPriorityWeightLevel(settings: AppSettings, key: PriorityWeightKey): number {
+  if (key === "aode") return settings.priorityWeightAode;
+  if (key === "sanctum") return settings.priorityWeightSanctum;
+  if (key === "corridor") return settings.priorityWeightCorridor;
+  if (key === "dungeon") return settings.priorityWeightDungeon;
+  if (key === "weekly") return settings.priorityWeightWeekly;
+  if (key === "mission") return settings.priorityWeightMission;
+  return settings.priorityWeightLeisure;
+}
+
+function getPriorityWeightFactor(level: number): number {
+  if (level <= 1) return 0.7;
+  if (level === 2) return 0.85;
+  if (level === 3) return 1;
+  if (level === 4) return 1.2;
+  return 1.45;
 }
 
 function toGoldText(value: number): string {
@@ -160,6 +202,13 @@ function buildSettingsDraft(settings: AppSettings): SettingsDraft {
     suppressionRunCap: settings.suppressionRunCap === null ? "" : String(settings.suppressionRunCap),
     expeditionWarnThreshold: String(settings.expeditionWarnThreshold),
     transcendenceWarnThreshold: String(settings.transcendenceWarnThreshold),
+    priorityWeightAode: String(settings.priorityWeightAode),
+    priorityWeightSanctum: String(settings.priorityWeightSanctum),
+    priorityWeightCorridor: String(settings.priorityWeightCorridor),
+    priorityWeightDungeon: String(settings.priorityWeightDungeon),
+    priorityWeightWeekly: String(settings.priorityWeightWeekly),
+    priorityWeightMission: String(settings.priorityWeightMission),
+    priorityWeightLeisure: String(settings.priorityWeightLeisure),
   };
 }
 
@@ -281,18 +330,20 @@ export function App(): JSX.Element {
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>("overview");
   const [undoSteps, setUndoSteps] = useState("2");
   const [settingsDraft, setSettingsDraft] = useState<SettingsDraft | null>(null);
-  const [corridorDraft, setCorridorDraft] = useState<CorridorDraft>(
-    buildCorridorDraft(0, 0),
-  );
+  const [corridorDraft, setCorridorDraft] = useState<CorridorDraft>(buildCorridorDraft(0, 0));
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [overviewSortKey, setOverviewSortKey] = useState<OverviewSortKey>("ready");
+  const [overviewSortKey, setOverviewSortKey] = useState<OverviewSortKey>("manual");
   const [overviewTaskFilter, setOverviewTaskFilter] = useState<OverviewTaskFilter>("all");
   const [overviewAccountFilter, setOverviewAccountFilter] = useState<string>("all");
   const [overviewRegionFilter, setOverviewRegionFilter] = useState<string>("all");
   const [quickCharacterId, setQuickCharacterId] = useState("");
-  const [quickTaskId, setQuickTaskId] = useState<TaskId>("expedition");
+  const [quickTaskId, setQuickTaskId] = useState<QuickTaskId>("expedition");
   const [quickAction, setQuickAction] = useState<TaskActionKind>("complete_once");
   const [quickAmount, setQuickAmount] = useState("1");
+  const [profileClassTagInput, setProfileClassTagInput] = useState("");
+  const [profileGearScoreInput, setProfileGearScoreInput] = useState("");
+  const [draggingCharacterId, setDraggingCharacterId] = useState<string | null>(null);
+  const [dragOverCharacterId, setDragOverCharacterId] = useState<string | null>(null);
   const [weeklyExpeditionCompletedInput, setWeeklyExpeditionCompletedInput] = useState("0");
   const [weeklyTranscendenceCompletedInput, setWeeklyTranscendenceCompletedInput] = useState("0");
   const [shopAodePurchaseUsedInput, setShopAodePurchaseUsedInput] = useState("0");
@@ -367,6 +418,11 @@ export function App(): JSX.Element {
   }, [selected?.id, selected?.name]);
 
   useEffect(() => {
+    setProfileClassTagInput(selected?.classTag ?? "");
+    setProfileGearScoreInput(selected?.gearScore === undefined ? "" : String(selected.gearScore));
+  }, [selected?.id, selected?.classTag, selected?.gearScore]);
+
+  useEffect(() => {
     setAccountEditor({
       name: selectedAccount?.name ?? "",
       regionTag: selectedAccount?.regionTag ?? "",
@@ -421,6 +477,11 @@ export function App(): JSX.Element {
   const summary = useMemo(() => {
     if (!state) return [];
     return state.characters.map((item) => buildCharacterSummary(item, state.settings));
+  }, [state]);
+
+  const characterOrderById = useMemo(() => {
+    if (!state) return new Map<string, number>();
+    return new Map(state.characters.map((item, index) => [item.id, index]));
   }, [state]);
 
   const overviewByAccount = useMemo(() => {
@@ -520,6 +581,7 @@ export function App(): JSX.Element {
             const readyBuckets = dungeonReadyBuckets + weeklyReadyBuckets + missionReadyBuckets;
             return {
               character: item,
+              manualOrder: characterOrderById.get(item.id) ?? Number.MAX_SAFE_INTEGER,
               expeditionCurrent,
               expeditionTotal,
               expeditionBossCurrent,
@@ -580,7 +642,7 @@ export function App(): JSX.Element {
         };
       })
       .filter((group) => group.characters.length > 0);
-  }, [state]);
+  }, [state, characterOrderById]);
 
   const overviewRows = useMemo(
     () => overviewByAccount.flatMap((group) => group.characters.map((entry) => ({ ...entry, account: group.account }))),
@@ -625,6 +687,9 @@ export function App(): JSX.Element {
     });
 
     return next.sort((left, right) => {
+      if (overviewSortKey === "manual") {
+        return left.manualOrder - right.manualOrder;
+      }
       if (overviewSortKey === "ready") {
         const diff = getReadyCountByTaskFilter(right) - getReadyCountByTaskFilter(left);
         if (diff !== 0) return diff;
@@ -654,27 +719,36 @@ export function App(): JSX.Element {
     return new Map(TASK_DEFINITIONS.map((task) => [task.id, task]));
   }, []);
 
-  const quickTask = taskById.get(quickTaskId) ?? null;
+  const quickTask = taskById.get(quickTaskId as TaskId) ?? null;
+  const quickCorridorTask = quickTaskId === "corridor_lower" || quickTaskId === "corridor_middle" ? QUICK_CORRIDOR_TASKS[quickTaskId] : null;
   const quickActionOptions = useMemo(() => {
+    if (quickCorridorTask) {
+      return ["set_completed"] as TaskActionKind[];
+    }
     if (!quickTask) return [] as TaskActionKind[];
     return getQuickActionsForTask(quickTask);
-  }, [quickTask]);
+  }, [quickTask, quickCorridorTask]);
 
   const quickAmountOptions = useMemo(() => {
     const min = quickAction === "set_completed" ? 0 : 1;
-    const setCompletedMax = quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX;
+    const setCompletedMax = quickCorridorTask ? 3 : quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX;
     const max = quickAction === "set_completed" ? Math.min(COUNT_SELECT_MAX, setCompletedMax) : COUNT_SELECT_MAX;
     return buildCountOptions(min, max, quickAmount);
-  }, [quickAction, quickTask?.setCompletedTotal, quickAmount]);
+  }, [quickAction, quickTask?.setCompletedTotal, quickCorridorTask, quickAmount]);
 
   useEffect(() => {
-    if (!quickTask) return;
+    if (!quickTask && !quickCorridorTask) return;
     if (!quickActionOptions.includes(quickAction)) {
       const nextAction = quickActionOptions[0] ?? "complete_once";
       setQuickAction(nextAction);
       setQuickAmount(nextAction === "set_completed" ? "0" : "1");
     }
-  }, [quickTask, quickActionOptions, quickAction]);
+  }, [quickTask, quickCorridorTask, quickActionOptions, quickAction]);
+
+  useEffect(() => {
+    setDraggingCharacterId(null);
+    setDragOverCharacterId(null);
+  }, [overviewSortKey]);
 
   const sanctumRaidTask = taskById.get("sanctum_raid");
   const sanctumBoxTask = taskById.get("sanctum_box");
@@ -729,12 +803,14 @@ export function App(): JSX.Element {
 
   const countdownItems = useMemo(() => {
     const now = new Date(nowMs);
+    const nextAodeEnergy = getNextScheduledTick(now, AODE_ENERGY_SCHEDULE_HOURS);
     const nextExpedition = getNextScheduledTick(now, EXPEDITION_SCHEDULE_HOURS);
     const nextTranscendence = getNextScheduledTick(now, TRANSCENDENCE_SCHEDULE_HOURS);
     const nextDailyReset = getNextDailyReset(now);
     const nextWeeklyReset = getNextWeeklyReset(now);
     const nextCorridorUnified = getNextUnifiedCorridorRefresh(now);
     return [
+      { key: "aode_energy", title: "奥德恢复(+15)", target: nextAodeEnergy },
       { key: "expedition", title: "远征恢复", target: nextExpedition },
       { key: "transcendence", title: "超越恢复", target: nextTranscendence },
       { key: "daily", title: "每日重置", target: nextDailyReset },
@@ -744,6 +820,7 @@ export function App(): JSX.Element {
   }, [nowMs]);
 
   const priorityTodoItems = useMemo(() => {
+    if (!state) return [];
     const now = new Date(nowMs);
     const nextWeeklyReset = getNextWeeklyReset(now);
     const weeklyRemainMs = Math.max(0, nextWeeklyReset.getTime() - now.getTime());
@@ -756,14 +833,16 @@ export function App(): JSX.Element {
       title: string,
       score: number,
       tone: PriorityTone,
+      weightKey: PriorityWeightKey,
       detail: string,
     ): void => {
+      const weightFactor = getPriorityWeightFactor(getPriorityWeightLevel(state.settings, weightKey));
       items.push({
         id: `${entry.character.id}-${taskKey}`,
         title,
         subtitle: `${entry.character.name} · ${entry.account.name}`,
         detail,
-        score,
+        score: Math.round(score * weightFactor),
         tone,
       });
     };
@@ -776,6 +855,7 @@ export function App(): JSX.Element {
           "奥德能量（接近满溢）",
           980 + entry.aodeBaseEnergyCurrent,
           "high",
+          "aode",
           `当前 ${entry.aodeBaseEnergyCurrent}/${entry.aodeBaseEnergyCap}（阈值>${AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD}），建议优先清体力`,
         );
       }
@@ -788,6 +868,7 @@ export function App(): JSX.Element {
           "圣域（周本）",
           1000 + sanctumPending,
           "high",
+          "sanctum",
           `挑战 ${entry.sanctumRaidCurrent}/4，开箱 ${entry.sanctumBoxCurrent}/2`,
         );
       }
@@ -800,6 +881,7 @@ export function App(): JSX.Element {
           "深渊回廊",
           950 + corridorPending,
           "high",
+          "corridor",
           `下层 ${entry.corridorLowerCurrent}/3，中层 ${entry.corridorMiddleCurrent}/3`,
         );
       }
@@ -811,6 +893,7 @@ export function App(): JSX.Element {
           "每日 5 个使命任务",
           950 + entry.dailyMissionCurrent,
           "high",
+          "mission",
           `剩余 ${formatCounter(entry.dailyMissionCurrent, entry.dailyMissionTotal)}`,
         );
       }
@@ -822,6 +905,7 @@ export function App(): JSX.Element {
           "觉醒战（周刷新前）",
           1000 + entry.awakeningCurrent,
           "high",
+          "weekly",
           `剩余 ${formatCounter(entry.awakeningCurrent, entry.awakeningTotal)}，48 小时内优先清理`,
         );
       }
@@ -833,6 +917,7 @@ export function App(): JSX.Element {
           "讨伐战（周刷新前）",
           995 + entry.suppressionCurrent,
           "high",
+          "weekly",
           `剩余 ${formatCounter(entry.suppressionCurrent, entry.suppressionTotal)}，48 小时内优先清理`,
         );
       }
@@ -845,6 +930,7 @@ export function App(): JSX.Element {
           nearCap ? "远征（接近满次）" : "远征（清体力收益）",
           (nearCap ? 860 : 820) + entry.expeditionCurrent,
           nearCap ? "high" : "medium",
+          "dungeon",
           `剩余 ${formatCounter(entry.expeditionCurrent, entry.expeditionTotal)}`,
         );
       }
@@ -857,6 +943,7 @@ export function App(): JSX.Element {
           nearOverflow ? "超越（溢出提醒）" : "超越",
           (nearOverflow ? 790 : 760) + entry.transcendenceCurrent,
           "medium",
+          "dungeon",
           `剩余 ${formatCounter(entry.transcendenceCurrent, entry.transcendenceTotal)}`,
         );
       }
@@ -870,6 +957,7 @@ export function App(): JSX.Element {
             "恶梦（溢出提醒）",
             780 + entry.nightmareCurrent,
             "medium",
+            "weekly",
             `剩余 ${formatCounter(entry.nightmareCurrent, entry.nightmareTotal)}`,
           );
         }
@@ -882,6 +970,7 @@ export function App(): JSX.Element {
           "每日副本（周刷新前）",
           990 + entry.dailyDungeonCurrent,
           "high",
+          "weekly",
           `剩余 ${formatCounter(entry.dailyDungeonCurrent, entry.dailyDungeonTotal)}，48 小时内优先清理`,
         );
       }
@@ -893,6 +982,7 @@ export function App(): JSX.Element {
           "每周指令（周刷新前）",
           985 + entry.weeklyMissionCurrent,
           "high",
+          "weekly",
           `剩余 ${formatCounter(entry.weeklyMissionCurrent, entry.weeklyMissionTotal)}，48 小时内优先完成`,
         );
       }
@@ -904,6 +994,7 @@ export function App(): JSX.Element {
           "商店-奥德（周刷新前）",
           980 + entry.aodeShopAodePurchaseRemaining,
           "high",
+          "weekly",
           `剩余可用 ${formatCounter(entry.aodeShopAodePurchaseRemaining, entry.aodeShopPurchaseLimit)}`,
         );
       }
@@ -914,6 +1005,7 @@ export function App(): JSX.Element {
           "商店-副本券（周刷新前）",
           978 + entry.aodeShopDailyDungeonTicketPurchaseRemaining,
           "high",
+          "weekly",
           `剩余可用 ${formatCounter(entry.aodeShopDailyDungeonTicketPurchaseRemaining, entry.aodeShopPurchaseLimit)}`,
         );
       }
@@ -924,20 +1016,37 @@ export function App(): JSX.Element {
           "变换-奥德（周刷新前）",
           976 + entry.aodeTransformAodeRemaining,
           "high",
+          "weekly",
           `剩余可用 ${formatCounter(entry.aodeTransformAodeRemaining, entry.aodeTransformLimit)}`,
         );
       }
 
       if (entry.miniGameCurrent > 0) {
-        pushItem(entry, "mini-game", "小游戏（低优先）", 240 + entry.miniGameCurrent, "low", `剩余 ${formatCounter(entry.miniGameCurrent, entry.miniGameTotal)}`);
+        pushItem(
+          entry,
+          "mini-game",
+          "小游戏（低优先）",
+          240 + entry.miniGameCurrent,
+          "low",
+          "leisure",
+          `剩余 ${formatCounter(entry.miniGameCurrent, entry.miniGameTotal)}`,
+        );
       }
       if (entry.spiritCurrent > 0) {
-        pushItem(entry, "spirit-invasion", "精灵入侵（低优先）", 220 + entry.spiritCurrent, "low", `剩余 ${formatCounter(entry.spiritCurrent, entry.spiritTotal)}`);
+        pushItem(
+          entry,
+          "spirit-invasion",
+          "精灵入侵（低优先）",
+          220 + entry.spiritCurrent,
+          "low",
+          "leisure",
+          `剩余 ${formatCounter(entry.spiritCurrent, entry.spiritTotal)}`,
+        );
       }
     }
 
     return items.sort((left, right) => right.score - left.score).slice(0, 8);
-  }, [overviewRows, nowMs]);
+  }, [overviewRows, nowMs, state]);
 
   const isWeeklyCriticalWindow = useMemo(() => {
     const now = new Date(nowMs);
@@ -1043,6 +1152,24 @@ export function App(): JSX.Element {
     void sync(window.aionApi.renameCharacter(selected.id, next));
   }
 
+  function onSaveCharacterProfile(): void {
+    if (!selected) return;
+    const classTag = profileClassTagInput.trim();
+    const gearScoreText = profileGearScoreInput.trim();
+    const gearScoreRaw = gearScoreText ? toInt(gearScoreText) : null;
+    if (gearScoreText && (gearScoreRaw === null || gearScoreRaw < 0)) {
+      setError("装分必须为大于等于 0 的整数");
+      return;
+    }
+    void sync(
+      window.aionApi.updateCharacterProfile(selected.id, {
+        classTag: classTag || null,
+        gearScore: gearScoreRaw === null ? null : gearScoreRaw,
+      }),
+      "已更新角色职业与装分",
+    );
+  }
+
   function onDeleteCharacter(): void {
     if (!selected) return;
     const ok = window.confirm(`确认删除角色「${selected.name}」？`);
@@ -1053,6 +1180,54 @@ export function App(): JSX.Element {
   function onSelectCharacter(characterId: string): void {
     setDashboardMode("character");
     void sync(window.aionApi.selectCharacter(characterId));
+  }
+
+  function onOverviewCardDragStart(characterId: string): void {
+    if (overviewSortKey !== "manual" || busy) return;
+    setDraggingCharacterId(characterId);
+    setDragOverCharacterId(characterId);
+  }
+
+  function onOverviewCardDragOver(event: DragEvent<HTMLElement>, characterId: string): void {
+    if (overviewSortKey !== "manual" || !draggingCharacterId || draggingCharacterId === characterId) {
+      return;
+    }
+    event.preventDefault();
+    if (dragOverCharacterId !== characterId) {
+      setDragOverCharacterId(characterId);
+    }
+  }
+
+  function onOverviewCardDrop(event: DragEvent<HTMLElement>, targetCharacterId: string): void {
+    event.preventDefault();
+    if (overviewSortKey !== "manual" || !state || !draggingCharacterId) {
+      setDraggingCharacterId(null);
+      setDragOverCharacterId(null);
+      return;
+    }
+    if (draggingCharacterId === targetCharacterId) {
+      setDraggingCharacterId(null);
+      setDragOverCharacterId(null);
+      return;
+    }
+    const ids = state.characters.map((item) => item.id);
+    const fromIndex = ids.indexOf(draggingCharacterId);
+    const toIndex = ids.indexOf(targetCharacterId);
+    if (fromIndex < 0 || toIndex < 0) {
+      setDraggingCharacterId(null);
+      setDragOverCharacterId(null);
+      return;
+    }
+    const [moved] = ids.splice(fromIndex, 1);
+    ids.splice(toIndex, 0, moved);
+    setDraggingCharacterId(null);
+    setDragOverCharacterId(null);
+    void sync(window.aionApi.reorderCharacters(ids), "角色卡片排序已更新");
+  }
+
+  function onOverviewCardDragEnd(): void {
+    setDraggingCharacterId(null);
+    setDragOverCharacterId(null);
   }
 
   function onSwitchToOverview(): void {
@@ -1066,7 +1241,31 @@ export function App(): JSX.Element {
       setError("请选择角色");
       return;
     }
-    const task = taskById.get(quickTaskId);
+    const rawAmount = toInt(quickAmount);
+    if (rawAmount === null) {
+      setError("请输入有效次数");
+      return;
+    }
+    const characterName = characterNameById.get(characterId) ?? "角色";
+
+    if (quickCorridorTask) {
+      if (quickAction !== "set_completed") {
+        setError("回廊快速录入仅支持输入已完成次数");
+        return;
+      }
+      if (rawAmount < 0) {
+        setError("已完成次数不能小于 0");
+        return;
+      }
+      const completed = Math.min(rawAmount, 3);
+      void sync(
+        window.aionApi.setCorridorCompleted(characterId, quickCorridorTask.lane, completed),
+        `${characterName} ${quickCorridorTask.title} 已录入`,
+      );
+      return;
+    }
+
+    const task = taskById.get(quickTaskId as TaskId);
     if (!task) {
       setError("请选择有效内容");
       return;
@@ -1074,12 +1273,6 @@ export function App(): JSX.Element {
     const allowedActions = getQuickActionsForTask(task);
     if (!allowedActions.includes(quickAction)) {
       setError("该内容不支持当前动作");
-      return;
-    }
-
-    const rawAmount = toInt(quickAmount);
-    if (rawAmount === null) {
-      setError("请输入有效次数");
       return;
     }
 
@@ -1097,7 +1290,6 @@ export function App(): JSX.Element {
       return;
     }
 
-    const characterName = characterNameById.get(characterId) ?? "角色";
     void sync(
       window.aionApi.applyTaskAction({
         characterId,
@@ -1397,6 +1589,13 @@ export function App(): JSX.Element {
     const nightmareRunCap = parseOptionalCap(settingsDraft.nightmareRunCap);
     const awakeningRunCap = parseOptionalCap(settingsDraft.awakeningRunCap);
     const suppressionRunCap = parseOptionalCap(settingsDraft.suppressionRunCap);
+    const priorityWeightAode = toInt(settingsDraft.priorityWeightAode);
+    const priorityWeightSanctum = toInt(settingsDraft.priorityWeightSanctum);
+    const priorityWeightCorridor = toInt(settingsDraft.priorityWeightCorridor);
+    const priorityWeightDungeon = toInt(settingsDraft.priorityWeightDungeon);
+    const priorityWeightWeekly = toInt(settingsDraft.priorityWeightWeekly);
+    const priorityWeightMission = toInt(settingsDraft.priorityWeightMission);
+    const priorityWeightLeisure = toInt(settingsDraft.priorityWeightLeisure);
 
     if (expeditionGoldPerRun === null || expeditionGoldPerRunWan === null || expeditionGoldPerRunWan < 0) {
       setError("远征金币收益参数无效（单位: 万）");
@@ -1424,6 +1623,32 @@ export function App(): JSX.Element {
       setError("次数上限参数无效，请填写正整数或留空");
       return;
     }
+    if (
+      priorityWeightAode === null ||
+      priorityWeightSanctum === null ||
+      priorityWeightCorridor === null ||
+      priorityWeightDungeon === null ||
+      priorityWeightWeekly === null ||
+      priorityWeightMission === null ||
+      priorityWeightLeisure === null ||
+      priorityWeightAode < 1 ||
+      priorityWeightAode > 5 ||
+      priorityWeightSanctum < 1 ||
+      priorityWeightSanctum > 5 ||
+      priorityWeightCorridor < 1 ||
+      priorityWeightCorridor > 5 ||
+      priorityWeightDungeon < 1 ||
+      priorityWeightDungeon > 5 ||
+      priorityWeightWeekly < 1 ||
+      priorityWeightWeekly > 5 ||
+      priorityWeightMission < 1 ||
+      priorityWeightMission > 5 ||
+      priorityWeightLeisure < 1 ||
+      priorityWeightLeisure > 5
+    ) {
+      setError("优先级偏好需填写 1-5 的整数");
+      return;
+    }
 
     void sync(
       window.aionApi.updateSettings({
@@ -1436,6 +1661,13 @@ export function App(): JSX.Element {
         suppressionRunCap,
         expeditionWarnThreshold: expeditionWarn,
         transcendenceWarnThreshold: transcendenceWarn,
+        priorityWeightAode,
+        priorityWeightSanctum,
+        priorityWeightCorridor,
+        priorityWeightDungeon,
+        priorityWeightWeekly,
+        priorityWeightMission,
+        priorityWeightLeisure,
       }),
       "设置已保存",
     );
@@ -1982,7 +2214,7 @@ export function App(): JSX.Element {
                   <select
                     className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
                     value={quickTaskId}
-                    onChange={(event) => setQuickTaskId(event.target.value as TaskId)}
+                    onChange={(event) => setQuickTaskId(event.target.value as QuickTaskId)}
                     disabled={busy}
                   >
                     {TASK_DEFINITIONS.map((task) => (
@@ -1990,6 +2222,8 @@ export function App(): JSX.Element {
                         {task.title}
                       </option>
                     ))}
+                    <option value="corridor_lower">回廊完成(下层)</option>
+                    <option value="corridor_middle">回廊完成(中层)</option>
                   </select>
                   <select
                     className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
@@ -2019,12 +2253,18 @@ export function App(): JSX.Element {
                       </option>
                     ))}
                   </select>
-                  <button className="task-btn px-4" onClick={onApplyQuickAction} disabled={busy || !quickCharacterId || !quickTask}>
+                  <button
+                    className="task-btn px-4"
+                    onClick={onApplyQuickAction}
+                    disabled={busy || !quickCharacterId || (!quickTask && !quickCorridorTask)}
+                  >
                     提交录入
                   </button>
                 </div>
-                {quickTask?.setCompletedTotal && quickAction === "set_completed" ? (
-                  <p className="mt-2 text-xs text-slate-300">当前内容总量 {quickTask.setCompletedTotal}，输入超过将自动按上限处理。</p>
+                {quickAction === "set_completed" ? (
+                  <p className="mt-2 text-xs text-slate-300">
+                    当前内容总量 {quickCorridorTask ? 3 : quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。
+                  </p>
                 ) : null}
               </div>
               <div className="grid grid-cols-2 gap-2 2xl:grid-cols-4">
@@ -2034,6 +2274,7 @@ export function App(): JSX.Element {
                   onChange={(event) => setOverviewSortKey(event.target.value as OverviewSortKey)}
                   disabled={busy}
                 >
+                  <option value="manual">按手动排序</option>
                   <option value="ready">按可执行项排序</option>
                   <option value="account">按账号排序</option>
                   <option value="region">按大区排序</option>
@@ -2077,7 +2318,10 @@ export function App(): JSX.Element {
                   ))}
                 </select>
               </div>
-              <p className="mt-2 text-xs text-slate-300">当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页。</p>
+              <p className="mt-2 text-xs text-slate-300">
+                当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页。
+                {overviewSortKey === "manual" ? " 当前支持拖拽卡片调整顺序。" : " 切到“按手动排序”后可拖拽调整顺序。"}
+              </p>
               <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
                 {overviewRowsFiltered.map((entry) => {
                   const filteredReadyCount =
@@ -2088,10 +2332,24 @@ export function App(): JSX.Element {
                         : overviewTaskFilter === "mission"
                           ? entry.missionReadyBuckets
                           : entry.readyBuckets;
+                  const dragEnabled = overviewSortKey === "manual" && !busy;
+                  const dragging = draggingCharacterId === entry.character.id;
+                  const dragOver = dragOverCharacterId === entry.character.id && draggingCharacterId !== entry.character.id;
                   return (
                     <article
                       key={entry.character.id}
-                      className="rounded-2xl border border-white/15 bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10"
+                      draggable={dragEnabled}
+                      onDragStart={() => onOverviewCardDragStart(entry.character.id)}
+                      onDragOver={(event) => onOverviewCardDragOver(event, entry.character.id)}
+                      onDrop={(event) => onOverviewCardDrop(event, entry.character.id)}
+                      onDragEnd={onOverviewCardDragEnd}
+                      className={`rounded-2xl border bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10 ${
+                        dragging
+                          ? "border-cyan-300/70 opacity-65"
+                          : dragOver
+                            ? "border-cyan-200/70 bg-cyan-500/10"
+                            : "border-white/15"
+                      } ${dragEnabled ? "cursor-move" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -2099,6 +2357,10 @@ export function App(): JSX.Element {
                           <p className="text-xs text-slate-300">
                             {entry.account.name}
                             {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            职业: {entry.character.classTag?.trim() || "未填写"} | 装分:{" "}
+                            {entry.character.gearScore === undefined ? "未填写" : numberFormatter.format(entry.character.gearScore)}
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -2233,6 +2495,10 @@ export function App(): JSX.Element {
                 <p className="mt-2 text-sm text-slate-300">
                   当前清空奥德预估: {toGoldText(estimateCharacterGold(selected, state.settings))}
                 </p>
+                <p className="mt-1 text-sm text-slate-300">
+                  职业: {selected.classTag?.trim() || "未填写"} | 装分:{" "}
+                  {selected.gearScore === undefined ? "未填写" : numberFormatter.format(selected.gearScore)}
+                </p>
                 <p className="mt-1 text-sm text-slate-300">本周已记录收益: {toGoldText(selected.stats.goldEarned)}</p>
                 <p className="mt-1 text-sm text-slate-300">
                   下层回廊剩余: {selected.activities.corridorLowerAvailable} 次 | 中层回廊剩余: {selected.activities.corridorMiddleAvailable} 次
@@ -2248,6 +2514,23 @@ export function App(): JSX.Element {
                   onChange={(event) => setRenameName(event.target.value)}
                   disabled={busy}
                 />
+                <input
+                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={profileClassTagInput}
+                  onChange={(event) => setProfileClassTagInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="职业(示例: 剑星)"
+                />
+                <input
+                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                  value={profileGearScoreInput}
+                  onChange={(event) => setProfileGearScoreInput(event.target.value)}
+                  disabled={busy}
+                  placeholder="装分(整数)"
+                />
+                <button className="pill-btn w-full" onClick={onSaveCharacterProfile} disabled={busy}>
+                  保存职业/装分
+                </button>
                 <button className="pill-btn w-full" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
                   重命名当前角色
                 </button>
@@ -2579,7 +2862,7 @@ export function App(): JSX.Element {
           {viewMode === "settings" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
             <h3 className="text-sm font-semibold tracking-wide">设置页</h3>
-            <p className="mt-2 text-xs text-slate-300">金币收益参数 / 次数上限参数（可选） / 提示阈值参数 / 数据导入导出</p>
+            <p className="mt-2 text-xs text-slate-300">金币收益参数 / 次数上限参数（可选） / 提示阈值参数 / 优先级偏好 / 数据导入导出</p>
             <div className="mt-3 grid grid-cols-3 gap-3">
               <div className="space-y-2">
                 <p className="text-xs text-slate-300">远征单次金币（万）</p>
@@ -2656,6 +2939,34 @@ export function App(): JSX.Element {
                   disabled={busy}
                 />
               </div>
+              <div className="col-span-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                <p className="text-xs font-semibold text-slate-200">优先级偏好(1-5，默认 3)</p>
+                <p className="mt-1 text-xs text-slate-400">数值越高，在“优先级待办”里的排序越靠前。</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  {PRIORITY_SETTING_FIELDS.map((item) => (
+                    <label key={item.key} className="space-y-1 text-xs text-slate-300">
+                      <span>{item.label}</span>
+                      <select
+                        className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                        value={settingsDraft[item.key]}
+                        onChange={(event) =>
+                          setSettingsDraft({
+                            ...settingsDraft,
+                            [item.key]: event.target.value,
+                          })
+                        }
+                        disabled={busy}
+                      >
+                        {[1, 2, 3, 4, 5].map((level) => (
+                          <option key={`${item.key}-${level}`} value={String(level)}>
+                            {level}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
               <button className="task-btn" onClick={onSaveSettings} disabled={busy}>
                 保存设置
               </button>
@@ -2679,7 +2990,7 @@ export function App(): JSX.Element {
             <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
               <h4 className="text-sm font-semibold">深渊回廊参数（当前账号同步）</h4>
               <p className="mt-1 text-xs text-slate-300">
-                规则: 上层/下层按统一刷新节奏运行（固定 21:00 锚点，每 48 小时），这里只需录入当前可打数量并同步到当前账号。
+                规则: 回廊统一在每周二、周四、周六 21:00 刷新，这里只需录入当前可打数量并同步到当前账号。
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="space-y-1">
@@ -2815,7 +3126,7 @@ export function App(): JSX.Element {
           {viewMode === "dashboard" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
               <h3 className="text-sm font-semibold tracking-wide">优先级待办</h3>
-              <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新临近提醒综合排序（Top 8）。</p>
+              <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新提醒综合排序（Top 8），可在设置页调整偏好权重。</p>
               {priorityTodoItems.length === 0 ? (
                 <p className="mt-3 text-xs text-slate-400">当前没有待处理高优先任务。</p>
               ) : (

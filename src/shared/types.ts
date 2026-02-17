@@ -107,6 +107,7 @@ export interface CharacterState {
   accountId: string;
   name: string;
   classTag?: string;
+  gearScore?: number;
   avatarSeed: string;
   energy: EnergyState;
   aodePlan: AodeEnergyPlanState;
@@ -126,6 +127,13 @@ export interface AppSettings {
   suppressionRunCap: number | null;
   expeditionWarnThreshold: number;
   transcendenceWarnThreshold: number;
+  priorityWeightAode: number;
+  priorityWeightSanctum: number;
+  priorityWeightCorridor: number;
+  priorityWeightDungeon: number;
+  priorityWeightWeekly: number;
+  priorityWeightMission: number;
+  priorityWeightLeisure: number;
 }
 
 export interface AppStateSnapshot {

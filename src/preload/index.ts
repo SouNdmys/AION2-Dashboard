@@ -59,10 +59,18 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.deleteCharacter, { characterId }),
   selectCharacter: (characterId: string): Promise<AppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.selectCharacter, { characterId }),
+  updateCharacterProfile: (
+    characterId: string,
+    payload: { classTag?: string | null; gearScore?: number | null },
+  ): Promise<AppState> => ipcRenderer.invoke(IPC_CHANNELS.updateCharacterProfile, { characterId, ...payload }),
+  reorderCharacters: (characterIds: string[]): Promise<AppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.reorderCharacters, { characterIds }),
   applyTaskAction: (input: ApplyTaskActionInput): Promise<AppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.applyTaskAction, input),
   applyCorridorCompletion: (characterId: string, lane: "lower" | "middle", completed: number): Promise<AppState> =>
     ipcRenderer.invoke(IPC_CHANNELS.applyCorridorCompletion, { characterId, lane, completed }),
+  setCorridorCompleted: (characterId: string, lane: "lower" | "middle", completed: number): Promise<AppState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setCorridorCompleted, { characterId, lane, completed }),
   updateArtifactStatus: (
     accountId: string,
     lowerAvailable: number,

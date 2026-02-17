@@ -1,9 +1,9 @@
 import {
+  AODE_ENERGY_SCHEDULE_HOURS,
   AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
   ENERGY_BASE_CAP,
   ENERGY_BONUS_CAP,
   ENERGY_PER_TICK,
-  ENERGY_TICK_HOURS,
   EXPEDITION_BOSS_MAX,
   EXPEDITION_REWARD_MAX,
   EXPEDITION_SCHEDULE_HOURS,
@@ -27,8 +27,6 @@ import type {
   MissionCounterKey,
   TaskDefinition,
 } from "./types";
-
-const HOUR_MS = 60 * 60 * 1000;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -245,8 +243,7 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
     return next;
   }
 
-  const elapsedMs = now.getTime() - previous.getTime();
-  const energyTicks = Math.floor(elapsedMs / (ENERGY_TICK_HOURS * HOUR_MS));
+  const energyTicks = countScheduledTicks(previous, now, AODE_ENERGY_SCHEDULE_HOURS);
   if (energyTicks > 0) {
     increaseBaseEnergy(next, energyTicks * ENERGY_PER_TICK);
   }

@@ -30,12 +30,15 @@ import {
   exportDataToFile,
   getAppState,
   importDataFromFile,
+  reorderCharacters,
   renameAccount,
   renameCharacter,
   resetWeeklyStats,
+  setCorridorCompleted,
   selectAccount,
   selectCharacter,
   undoOperations,
+  updateCharacterProfile,
   updateSettings,
   updateArtifactStatus,
   updateAodePlan,
@@ -104,11 +107,24 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.selectCharacter, (_event, payload: { characterId: string }) =>
     selectCharacter(payload.characterId),
   );
+  ipcMain.handle(
+    IPC_CHANNELS.updateCharacterProfile,
+    (_event, payload: { characterId: string; classTag?: string | null; gearScore?: number | null }) =>
+      updateCharacterProfile(payload.characterId, payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.reorderCharacters, (_event, payload: { characterIds: string[] }) =>
+    reorderCharacters(payload.characterIds),
+  );
   ipcMain.handle(IPC_CHANNELS.applyTaskAction, (_event, payload: ApplyTaskActionInput) => applyAction(payload));
   ipcMain.handle(
     IPC_CHANNELS.applyCorridorCompletion,
     (_event, payload: { characterId: string; lane: "lower" | "middle"; completed: number }) =>
       applyCorridorCompletion(payload.characterId, payload.lane, payload.completed),
+  );
+  ipcMain.handle(
+    IPC_CHANNELS.setCorridorCompleted,
+    (_event, payload: { characterId: string; lane: "lower" | "middle"; completed: number }) =>
+      setCorridorCompleted(payload.characterId, payload.lane, payload.completed),
   );
   ipcMain.handle(
     IPC_CHANNELS.updateArtifactStatus,

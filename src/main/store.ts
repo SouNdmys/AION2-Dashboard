@@ -94,6 +94,13 @@ function toPositiveInteger(value: unknown, fallback: number): number {
   return clamp(Math.floor(value), 1, SETTINGS_MAX_THRESHOLD);
 }
 
+function toPriorityWeight(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return clamp(Math.floor(value), 1, 5);
+}
+
 function normalizeSettings(raw: unknown): AppSettings {
   const entity = raw as Record<string, unknown> | undefined;
   return {
@@ -109,6 +116,13 @@ function normalizeSettings(raw: unknown): AppSettings {
       entity?.transcendenceWarnThreshold,
       DEFAULT_SETTINGS.transcendenceWarnThreshold,
     ),
+    priorityWeightAode: toPriorityWeight(entity?.priorityWeightAode, DEFAULT_SETTINGS.priorityWeightAode),
+    priorityWeightSanctum: toPriorityWeight(entity?.priorityWeightSanctum, DEFAULT_SETTINGS.priorityWeightSanctum),
+    priorityWeightCorridor: toPriorityWeight(entity?.priorityWeightCorridor, DEFAULT_SETTINGS.priorityWeightCorridor),
+    priorityWeightDungeon: toPriorityWeight(entity?.priorityWeightDungeon, DEFAULT_SETTINGS.priorityWeightDungeon),
+    priorityWeightWeekly: toPriorityWeight(entity?.priorityWeightWeekly, DEFAULT_SETTINGS.priorityWeightWeekly),
+    priorityWeightMission: toPriorityWeight(entity?.priorityWeightMission, DEFAULT_SETTINGS.priorityWeightMission),
+    priorityWeightLeisure: toPriorityWeight(entity?.priorityWeightLeisure, DEFAULT_SETTINGS.priorityWeightLeisure),
   };
 }
 
@@ -209,7 +223,11 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
     id,
     accountId: typeof entity.accountId === "string" ? entity.accountId : fallbackAccountId,
     name: typeof entity.name === "string" ? entity.name : fallbackName,
-    classTag: typeof entity.classTag === "string" ? entity.classTag : undefined,
+    classTag: typeof entity.classTag === "string" && entity.classTag.trim() ? entity.classTag.trim() : undefined,
+    gearScore:
+      typeof entity.gearScore === "number" && Number.isFinite(entity.gearScore)
+        ? clamp(Math.floor(entity.gearScore), 0, SETTINGS_MAX_THRESHOLD)
+        : undefined,
     avatarSeed: typeof entity.avatarSeed === "string" ? entity.avatarSeed : base.avatarSeed,
     energy: {
       baseCurrent,
@@ -849,6 +867,65 @@ export function selectCharacter(characterId: string): AppState {
   );
 }
 
+export function updateCharacterProfile(
+  characterId: string,
+  payload: { classTag?: string | null; gearScore?: number | null },
+): AppState {
+  return commitMutation(
+    { action: "更新角色档案", characterId },
+    (draft) => {
+      const index = draft.characters.findIndex((item) => item.id === characterId);
+      if (index < 0) {
+        throw new Error("角色不存在");
+      }
+      const target = draft.characters[index];
+      const classTag =
+        payload.classTag === undefined
+          ? target.classTag
+          : typeof payload.classTag === "string" && payload.classTag.trim()
+            ? payload.classTag.trim()
+            : undefined;
+      const gearScore =
+        payload.gearScore === undefined
+          ? target.gearScore
+          : typeof payload.gearScore === "number" && Number.isFinite(payload.gearScore)
+            ? clamp(Math.floor(payload.gearScore), 0, SETTINGS_MAX_THRESHOLD)
+            : undefined;
+      draft.characters[index] = {
+        ...target,
+        classTag,
+        gearScore,
+      };
+      return draft;
+    },
+  );
+}
+
+export function reorderCharacters(characterIds: string[]): AppState {
+  return commitMutation(
+    { action: "调整角色排序", description: `${characterIds.length} 个角色` },
+    (draft) => {
+      if (characterIds.length !== draft.characters.length) {
+        throw new Error("排序数据与角色数量不一致");
+      }
+      const idSet = new Set(characterIds);
+      if (idSet.size !== characterIds.length) {
+        throw new Error("排序数据存在重复角色");
+      }
+      const byId = new Map(draft.characters.map((item) => [item.id, item]));
+      const reordered = characterIds.map((id) => {
+        const found = byId.get(id);
+        if (!found) {
+          throw new Error("排序数据包含未知角色");
+        }
+        return found;
+      });
+      draft.characters = reordered;
+      return draft;
+    },
+  );
+}
+
 export function applyAction(input: ApplyTaskActionInput): AppState {
   return commitMutation(
     {
@@ -930,6 +1007,30 @@ export function applyCorridorCompletion(characterId: string, lane: "lower" | "mi
               lane === "middle"
                 ? clamp(item.activities.corridorMiddleAvailable - amount, 0, 3)
                 : item.activities.corridorMiddleAvailable,
+          },
+        };
+      });
+      return draft;
+    },
+  );
+}
+
+export function setCorridorCompleted(characterId: string, lane: "lower" | "middle", completed: number): AppState {
+  return commitMutation(
+    { action: "设置深渊回廊已完成", characterId, description: `${lane === "lower" ? "下层" : "中层"} 已完成 ${completed}` },
+    (draft) => {
+      const safeCompleted = clamp(Math.floor(completed), 0, 3);
+      const nextAvailable = clamp(3 - safeCompleted, 0, 3);
+      draft.characters = draft.characters.map((item) => {
+        if (item.id !== characterId) {
+          return item;
+        }
+        return {
+          ...item,
+          activities: {
+            ...item.activities,
+            corridorLowerAvailable: lane === "lower" ? nextAvailable : item.activities.corridorLowerAvailable,
+            corridorMiddleAvailable: lane === "middle" ? nextAvailable : item.activities.corridorMiddleAvailable,
           },
         };
       });
