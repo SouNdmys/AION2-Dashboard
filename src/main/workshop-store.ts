@@ -5,6 +5,8 @@ import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { nativeImage } from "electron";
 import Store from "electron-store";
+import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
+import { tify } from "chinese-conv";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopCatalogImportFromFileInput,
@@ -55,6 +57,14 @@ const WORKSHOP_PRICE_ANOMALY_SOFT_UPPER_RATIO = 2.2;
 const WORKSHOP_PRICE_ANOMALY_SOFT_LOWER_RATIO = 0.45;
 const WORKSHOP_PRICE_ANOMALY_HARD_UPPER_RATIO = 8;
 const WORKSHOP_PRICE_ANOMALY_HARD_LOWER_RATIO = 0.125;
+const WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_SUSPECT = 500_000;
+const WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_HARD = 100_000;
+const WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_SUSPECT = 1_000_000_000;
+const WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_HARD = 2_000_000_000;
+const WORKSHOP_PRICE_RULE_MATERIAL_MAX_SUSPECT = 10_000_000;
+const WORKSHOP_PRICE_RULE_MATERIAL_MAX_HARD = 100_000_000;
+const WORKSHOP_PRICE_RULE_COMPONENT_MAX_SUSPECT = 10_000_000;
+const WORKSHOP_PRICE_RULE_COMPONENT_MAX_HARD = 100_000_000;
 const WORKSHOP_PRICE_NOTE_TAG_SUSPECT = "qa:suspect:auto";
 const WORKSHOP_PRICE_NOTE_TAG_HARD = "qa:hard-outlier:auto";
 const WORKSHOP_ICON_CACHE_KEY = "iconCache";
@@ -64,10 +74,14 @@ const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
   "高純度的奧里哈康磐石",
   "新鮮的金盒花",
 ]);
+const LEGACY_BUILTIN_ITEM_NAME_REDIRECTS: Record<string, string> = {
+  達人閃耀的法珠: "達人閃耀的真實法珠",
+};
 const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra";
 const WORKSHOP_OCR_DEFAULT_PSM = 6;
 const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
+const OCR_TRADE_BOARD_NAME_SCALE = 3;
 const ICON_CAPTURE_CALIBRATION_MAX_OFFSET_X = 16;
 const ICON_CAPTURE_CALIBRATION_MAX_OFFSET_Y = 24;
 const ICON_CAPTURE_CALIBRATION_STEP = 2;
@@ -75,6 +89,7 @@ const ICON_CAPTURE_CALIBRATION_SAMPLE_LIMIT = 8;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_PADDLE_MAX_BUFFER = 64 * 1024 * 1024;
 const OCR_PADDLE_REQUEST_TIMEOUT_MS = 20_000;
+const OCR_ENABLE_PYTHON_FALLBACK = false;
 const OCR_PADDLE_RUNTIME_ROOT = path.join(os.tmpdir(), "aion2-paddle-runtime");
 const OCR_PADDLE_RUNTIME_USER = path.join(OCR_PADDLE_RUNTIME_ROOT, "user");
 const OCR_PADDLE_RUNTIME_CACHE = path.join(OCR_PADDLE_RUNTIME_ROOT, "cache");
@@ -536,6 +551,7 @@ interface PriceAnomalyAssessment {
   sampleCount: number;
   median: number | null;
   ratio: number | null;
+  reason: string | null;
 }
 
 interface SnapshotQualityTag {
@@ -610,6 +626,7 @@ function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceA
       sampleCount: baselinePrices.length,
       median: null,
       ratio: null,
+      reason: null,
     };
   }
   const median = computeMedian(baselinePrices);
@@ -619,6 +636,7 @@ function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceA
       sampleCount: baselinePrices.length,
       median: null,
       ratio: null,
+      reason: null,
     };
   }
   const ratio = unitPrice / median;
@@ -628,6 +646,7 @@ function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceA
       sampleCount: baselinePrices.length,
       median,
       ratio,
+      reason: null,
     };
   }
   if (ratio >= WORKSHOP_PRICE_ANOMALY_SOFT_UPPER_RATIO || ratio <= WORKSHOP_PRICE_ANOMALY_SOFT_LOWER_RATIO) {
@@ -636,6 +655,7 @@ function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceA
       sampleCount: baselinePrices.length,
       median,
       ratio,
+      reason: null,
     };
   }
   return {
@@ -643,11 +663,104 @@ function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceA
     sampleCount: baselinePrices.length,
     median,
     ratio,
+    reason: null,
   };
 }
 
+function anomalyKindSeverity(kind: PriceAnomalyKind): number {
+  if (kind === "hard") {
+    return 2;
+  }
+  if (kind === "suspect") {
+    return 1;
+  }
+  return 0;
+}
+
+function assessCategoryPriceAnomaly(unitPrice: number, category: WorkshopItemCategory): PriceAnomalyAssessment {
+  const asRule = (kind: PriceAnomalyKind, reason: string): PriceAnomalyAssessment => ({
+    kind,
+    sampleCount: 0,
+    median: null,
+    ratio: null,
+    reason,
+  });
+
+  if (category === "equipment") {
+    if (unitPrice < WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_HARD) {
+      return asRule("hard", `低于装备最低价护栏（${WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_HARD}）`);
+    }
+    if (unitPrice < WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_SUSPECT) {
+      return asRule("suspect", `低于装备可疑阈值（${WORKSHOP_PRICE_RULE_EQUIPMENT_MIN_SUSPECT}）`);
+    }
+    if (unitPrice > WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_HARD) {
+      return asRule("hard", `高于装备最高价护栏（${WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_HARD}）`);
+    }
+    if (unitPrice > WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_SUSPECT) {
+      return asRule("suspect", `高于装备可疑阈值（${WORKSHOP_PRICE_RULE_EQUIPMENT_MAX_SUSPECT}）`);
+    }
+    return asRule("normal", "");
+  }
+
+  if (category === "material") {
+    if (unitPrice > WORKSHOP_PRICE_RULE_MATERIAL_MAX_HARD) {
+      return asRule("hard", `高于材料最高价护栏（${WORKSHOP_PRICE_RULE_MATERIAL_MAX_HARD}）`);
+    }
+    if (unitPrice > WORKSHOP_PRICE_RULE_MATERIAL_MAX_SUSPECT) {
+      return asRule("suspect", `高于材料可疑阈值（${WORKSHOP_PRICE_RULE_MATERIAL_MAX_SUSPECT}）`);
+    }
+    return asRule("normal", "");
+  }
+
+  if (category === "component") {
+    if (unitPrice > WORKSHOP_PRICE_RULE_COMPONENT_MAX_HARD) {
+      return asRule("hard", `高于製作材料最高价护栏（${WORKSHOP_PRICE_RULE_COMPONENT_MAX_HARD}）`);
+    }
+    if (unitPrice > WORKSHOP_PRICE_RULE_COMPONENT_MAX_SUSPECT) {
+      return asRule("suspect", `高于製作材料可疑阈值（${WORKSHOP_PRICE_RULE_COMPONENT_MAX_SUSPECT}）`);
+    }
+    return asRule("normal", "");
+  }
+
+  return asRule("normal", "");
+}
+
+function mergePriceAnomalyAssessment(
+  baseline: PriceAnomalyAssessment,
+  categoryRule: PriceAnomalyAssessment,
+): PriceAnomalyAssessment {
+  const baselineScore = anomalyKindSeverity(baseline.kind);
+  const ruleScore = anomalyKindSeverity(categoryRule.kind);
+  if (ruleScore > baselineScore) {
+    return categoryRule;
+  }
+  if (ruleScore === baselineScore && ruleScore > 0 && categoryRule.reason && !baseline.reason) {
+    return {
+      ...baseline,
+      reason: categoryRule.reason,
+    };
+  }
+  return baseline;
+}
+
+function assessPriceAnomalyWithCategory(
+  unitPrice: number,
+  baselinePrices: number[],
+  category: WorkshopItemCategory,
+): PriceAnomalyAssessment {
+  const baseline = assessPriceAnomaly(unitPrice, baselinePrices);
+  const categoryRule = assessCategoryPriceAnomaly(unitPrice, category);
+  return mergePriceAnomalyAssessment(baseline, categoryRule);
+}
+
 function formatAnomalyReason(assessment: PriceAnomalyAssessment): string {
-  if (assessment.kind === "normal" || assessment.median === null || assessment.ratio === null) {
+  if (assessment.kind === "normal") {
+    return assessment.reason ?? "";
+  }
+  if (assessment.reason) {
+    return assessment.reason;
+  }
+  if (assessment.median === null || assessment.ratio === null) {
     return "";
   }
   const ratioText = `${assessment.ratio >= 1 ? "高于" : "低于"}中位数 ${assessment.ratio.toFixed(2)}x`;
@@ -697,8 +810,19 @@ function isCapturedImageIcon(icon: string | undefined): boolean {
 const LOOKUP_CJK_VARIANT_MAP: Record<string, string> = {
   纯: "純",
   純: "純",
+  强: "強",
+  強: "強",
   净: "淨",
+  凈: "淨",
   淨: "淨",
+  奥: "奧",
+  奧: "奧",
+  灿: "燦",
+  燦: "燦",
+  烂: "爛",
+  爛: "爛",
+  龙: "龍",
+  龍: "龍",
   头: "頭",
   頭: "頭",
   台: "臺",
@@ -720,6 +844,8 @@ const LOOKUP_CJK_VARIANT_MAP: Record<string, string> = {
 };
 
 const OCR_QUALIFIER_PREFIXES = [
+  "燦爛的",
+  "燦爛",
   "純淨的",
   "純淨",
   "高純度",
@@ -731,12 +857,64 @@ const OCR_QUALIFIER_PREFIXES = [
   "優質",
 ];
 
+type OcrQualifierFamily = "brilliant" | "pure" | "highPure";
+
+interface OcrQualifierRule {
+  family: OcrQualifierFamily;
+  canonicalPrefix: string;
+  pattern: RegExp;
+}
+
+const OCR_QUALIFIER_RULES: OcrQualifierRule[] = [
+  {
+    family: "brilliant",
+    canonicalPrefix: "燦爛的",
+    pattern: /^(?:燦爛的|燦爛|燦的|燦|灿烂的|灿烂|灿的|灿)/u,
+  },
+  {
+    family: "pure",
+    canonicalPrefix: "純淨的",
+    pattern: /^(?:純淨的|純淨|純凈的|純凈|純净的|純净|純的|纯淨的|纯淨|纯凈的|纯凈|纯净的|纯净|纯的|淨的|凈的|净的)/u,
+  },
+  {
+    family: "highPure",
+    canonicalPrefix: "高純度的",
+    pattern: /^(?:高純度的|高純度|高纯度的|高纯度)/u,
+  },
+];
+
+const OCR_DOMAIN_NAME_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/慎怒/gu, "憤怒"],
+  [/憤怒望/gu, "憤怒願望"],
+  [/憤怒願$/gu, "憤怒願望"],
+  [/愤怒望/gu, "憤怒願望"],
+  [/^(?:純|纯)的/u, "純淨的"],
+  [/^珂尼$/u, "珂尼玳"],
+  [/提石/gu, "提煉石"],
+  [/提烦/gu, "提煉"],
+  [/(奧[里裡]哈康)石/gu, "$1礦石"],
+  [/龍族片/gu, "龍族鱗片"],
+];
+
+function normalizeLookupScriptVariant(value: string): string {
+  const source = value.trim();
+  if (!source) {
+    return "";
+  }
+  try {
+    return tify(source);
+  } catch {
+    return source;
+  }
+}
+
 function normalizeLookupCjkVariants(value: string): string {
-  return value.replace(/[纯純净淨头頭台臺后後里裡矿礦铁鐵锭錠级級制製]/gu, (char) => LOOKUP_CJK_VARIANT_MAP[char] ?? char);
+  return value.replace(/[纯純强強净凈淨奥奧灿燦烂爛龙龍头頭台臺后後里裡矿礦铁鐵锭錠级級制製]/gu, (char) => LOOKUP_CJK_VARIANT_MAP[char] ?? char);
 }
 
 function normalizeLookupName(name: string): string {
-  return normalizeLookupCjkVariants(name.trim().toLocaleLowerCase().replace(/\s+/g, ""));
+  const scriptNormalized = normalizeLookupScriptVariant(name);
+  return normalizeLookupCjkVariants(scriptNormalized.trim().toLocaleLowerCase().replace(/\s+/g, ""));
 }
 
 function sanitizeOcrLineItemName(raw: string): string {
@@ -755,6 +933,59 @@ function sanitizeOcrLineItemName(raw: string): string {
   return compact ? normalized : "";
 }
 
+function normalizeOcrDomainName(rawName: string): string {
+  let value = sanitizeOcrLineItemName(rawName).replace(/\s+/g, "");
+  if (!value) {
+    return "";
+  }
+  value = normalizeLookupScriptVariant(value);
+  OCR_DOMAIN_NAME_REPLACEMENTS.forEach(([pattern, replacement]) => {
+    value = value.replace(pattern, replacement);
+  });
+  return value;
+}
+
+function shouldIgnoreOcrItemName(rawName: string): boolean {
+  const normalized = normalizeOcrDomainName(rawName);
+  if (!normalized) {
+    return false;
+  }
+  const withoutLevelPrefix = normalized.replace(/^道具(?:等級|等级)\d+/u, "");
+  return withoutLevelPrefix.startsWith("閃耀的");
+}
+
+function findOcrQualifierRule(rawName: string): OcrQualifierRule | undefined {
+  const compact = normalizeOcrDomainName(rawName);
+  if (!compact) {
+    return undefined;
+  }
+  return OCR_QUALIFIER_RULES.find((rule) => rule.pattern.test(compact));
+}
+
+function resolveOcrQualifierFamily(rawName: string): OcrQualifierFamily | undefined {
+  return findOcrQualifierRule(rawName)?.family;
+}
+
+function normalizeOcrQualifierPrefix(rawName: string): string {
+  const compact = normalizeOcrDomainName(rawName);
+  if (!compact) {
+    return "";
+  }
+  const rule = findOcrQualifierRule(compact);
+  if (!rule) {
+    return compact;
+  }
+  const matched = compact.match(rule.pattern)?.[0] ?? "";
+  if (!matched || matched === rule.canonicalPrefix) {
+    return compact;
+  }
+  const rest = compact.slice(matched.length);
+  if (!rest) {
+    return compact;
+  }
+  return `${rule.canonicalPrefix}${rest}`;
+}
+
 function buildOcrLookupCandidates(rawName: string): string[] {
   const candidates = new Set<string>();
   const add = (value: string): void => {
@@ -764,8 +995,15 @@ function buildOcrLookupCandidates(rawName: string): string[] {
     }
   };
   add(rawName);
+  const domainNormalized = normalizeOcrDomainName(rawName);
+  add(domainNormalized);
   const cleaned = sanitizeOcrLineItemName(rawName).replace(/[^0-9a-zA-Z\u3400-\u9fff]/gu, "");
   add(cleaned);
+  add(normalizeOcrDomainName(cleaned));
+  const normalizedQualifier = normalizeOcrQualifierPrefix(cleaned || rawName);
+  if (normalizedQualifier && normalizedQualifier !== cleaned) {
+    add(normalizedQualifier);
+  }
   const normalizedCleaned = normalizeLookupName(cleaned);
   // Keep limited tolerance for OCR leading numeric noise, but do not trim arbitrary prefixes.
   const trimmedLeadingDigits = normalizedCleaned.replace(/^[0-9]+/u, "");
@@ -779,6 +1017,9 @@ function hasQualifiedPrefix(name: string): boolean {
   const key = normalizeLookupName(sanitizeOcrLineItemName(name));
   if (!key) {
     return false;
+  }
+  if (resolveOcrQualifierFamily(name)) {
+    return true;
   }
   return OCR_QUALIFIER_PREFIXES.some((prefix) => key.startsWith(normalizeLookupName(prefix)));
 }
@@ -844,36 +1085,57 @@ function commonSuffixLength(left: string, right: string): number {
 
 function tryCorrectOcrNameByKnownItems(rawOcrName: string, items: WorkshopItem[]): string {
   const sanitized = sanitizeOcrLineItemName(rawOcrName);
-  const ocrKey = normalizeLookupName(sanitized);
-  if (!ocrKey || ocrKey.length < 3) {
-    return sanitized || rawOcrName;
+  const domainNormalized = normalizeOcrDomainName(sanitized || rawOcrName) || sanitized;
+  const normalizedQualifierName = normalizeOcrQualifierPrefix(domainNormalized);
+  const normalizedQualifierKey = normalizeLookupName(normalizedQualifierName);
+  const ocrKey = normalizeLookupName(domainNormalized);
+  const ocrQualifierFamily = resolveOcrQualifierFamily(domainNormalized) ?? resolveOcrQualifierFamily(normalizedQualifierName);
+  const fallbackName = domainNormalized || rawOcrName;
+  const seedKey = normalizedQualifierKey || ocrKey;
+  if (!seedKey || seedKey.length < 3) {
+    return fallbackName;
   }
-  const hasExact = items.some((item) => normalizeLookupName(item.name) === ocrKey);
-  if (hasExact) {
-    return sanitized || rawOcrName;
+  const exactItem = items.find((item) => {
+    const itemKey = normalizeLookupName(item.name);
+    return itemKey === seedKey || itemKey === ocrKey;
+  });
+  if (exactItem) {
+    return exactItem.name;
   }
 
   const candidates: Array<{ itemName: string; score: number }> = [];
   items.forEach((item) => {
+    const itemQualifierFamily = resolveOcrQualifierFamily(item.name);
+    if (ocrQualifierFamily && itemQualifierFamily !== ocrQualifierFamily) {
+      return;
+    }
     const itemKey = normalizeLookupName(item.name);
-    if (!itemKey || Math.abs(itemKey.length - ocrKey.length) > 1) {
+    const maxLengthGap = ocrQualifierFamily ? 2 : 1;
+    if (!itemKey || Math.abs(itemKey.length - seedKey.length) > maxLengthGap) {
       return;
     }
-    const distance = levenshteinDistance(ocrKey, itemKey);
-    if (distance !== 1) {
+    const distance = levenshteinDistance(seedKey, itemKey);
+    const maxDistance = ocrQualifierFamily ? 2 : 1;
+    if (distance <= 0 || distance > maxDistance) {
       return;
     }
-    const prefix = commonPrefixLength(ocrKey, itemKey);
-    const suffix = commonSuffixLength(ocrKey, itemKey);
+    const prefix = commonPrefixLength(seedKey, itemKey);
+    const suffix = commonSuffixLength(seedKey, itemKey);
+    if (ocrQualifierFamily && suffix < 2) {
+      return;
+    }
     // Require at least a stable 2-char anchor (prefix or suffix) to avoid over-correction.
     if (prefix < 2 && suffix < 2) {
       return;
     }
-    const score = prefix * 3 + suffix * 2 - Math.abs(itemKey.length - ocrKey.length);
+    let score = prefix * 3 + suffix * 2 - Math.abs(itemKey.length - seedKey.length) - distance * 2;
+    if (ocrQualifierFamily && itemQualifierFamily === ocrQualifierFamily) {
+      score += 5;
+    }
     candidates.push({ itemName: item.name, score });
   });
   if (candidates.length === 0) {
-    return sanitized || rawOcrName;
+    return fallbackName;
   }
   candidates.sort((left, right) => {
     if (right.score !== left.score) {
@@ -884,16 +1146,23 @@ function tryCorrectOcrNameByKnownItems(rawOcrName: string, items: WorkshopItem[]
   const best = candidates[0];
   const second = candidates[1];
   if (second && second.score >= best.score - 1) {
-    return sanitized || rawOcrName;
+    return fallbackName;
   }
   return best.itemName;
 }
 
 function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawName: string): WorkshopItem | undefined {
   const candidates = buildOcrLookupCandidates(rawName);
+  const ocrQualifierFamily = resolveOcrQualifierFamily(rawName) ?? resolveOcrQualifierFamily(normalizeOcrQualifierPrefix(rawName));
+  const isQualifierCompatible = (itemName: string): boolean => {
+    if (!ocrQualifierFamily) {
+      return true;
+    }
+    return resolveOcrQualifierFamily(itemName) === ocrQualifierFamily;
+  };
   for (const candidate of candidates) {
     const exact = itemByLookupName.get(candidate);
-    if (exact) {
+    if (exact && isQualifierCompatible(exact.name)) {
       return exact;
     }
   }
@@ -902,6 +1171,9 @@ function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawNa
   let bestContainOverlap = -1;
   let bestContainScore = -1;
   itemByLookupName.forEach((item, lookup) => {
+    if (!isQualifierCompatible(item.name)) {
+      return;
+    }
     if (lookup.length < 4) {
       return;
     }
@@ -930,6 +1202,9 @@ function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawNa
 
   const fuzzy: Array<{ item: WorkshopItem; ratio: number; maxLen: number }> = [];
   itemByLookupName.forEach((item, lookup) => {
+    if (!isQualifierCompatible(item.name)) {
+      return;
+    }
     candidates.forEach((candidate) => {
       if (candidate.length < 4 || lookup.length < 4) {
         return;
@@ -1562,11 +1837,21 @@ function remapRuntimeStateToBuiltin(previous: WorkshopState, builtin: WorkshopSt
   builtin.items.forEach((item) => {
     builtinByLookup.set(normalizeCatalogLookupName(item.name), item);
   });
+  const legacyRedirectByLookup = new Map<string, string>();
+  Object.entries(LEGACY_BUILTIN_ITEM_NAME_REDIRECTS).forEach(([legacyName, nextName]) => {
+    legacyRedirectByLookup.set(normalizeCatalogLookupName(legacyName), normalizeCatalogLookupName(nextName));
+  });
 
   const mappedItemIdByLegacyId = new Map<string, string>();
   previous.items.forEach((item) => {
     const key = normalizeCatalogLookupName(item.name);
-    const hit = builtinByLookup.get(key);
+    let hit = builtinByLookup.get(key);
+    if (!hit) {
+      const redirectedLookup = legacyRedirectByLookup.get(key);
+      if (redirectedLookup) {
+        hit = builtinByLookup.get(redirectedLookup);
+      }
+    }
     if (!hit) {
       return;
     }
@@ -2009,6 +2294,7 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
   const { from, to } = resolveHistoryRange(payload);
   const includeSuspect = payload.includeSuspect === true;
   const targetMarket = payload.market === undefined ? undefined : sanitizePriceMarket(payload.market);
+  const itemById = new Map(state.items.map((item) => [item.id, item] as const));
   const snapshots = state.prices
     .filter((entry) => entry.itemId === payload.itemId)
     .filter((entry) =>
@@ -2029,7 +2315,10 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     const baseline = baselineByMarket.get(market) ?? [];
     const baselineInWindow = baseline.filter((row) => row.ts >= entry.ts - anomalyWindowMs);
     const qualityTag = resolveSnapshotQualityTag(entry.note);
-    const anomaly = qualityTag.isSuspect ? null : assessPriceAnomaly(entry.unitPrice, baselineInWindow.map((row) => row.unitPrice));
+    const itemCategory = itemById.get(entry.itemId)?.category ?? "other";
+    const anomaly = qualityTag.isSuspect
+      ? null
+      : assessPriceAnomalyWithCategory(entry.unitPrice, baselineInWindow.map((row) => row.unitPrice), itemCategory);
     const isSuspect = qualityTag.isSuspect || (anomaly !== null && anomaly.kind !== "normal");
     const suspectReason = qualityTag.reason ?? (anomaly ? formatAnomalyReason(anomaly) || null : null);
     if (!isSuspect) {
@@ -2734,11 +3023,18 @@ interface PaddleWorkerPendingRequest {
   timeoutId: NodeJS.Timeout;
 }
 
+interface OnnxOcrEngine {
+  detect: (imagePath: string, options?: unknown) => Promise<OnnxOcrLine[]>;
+  destroy?: () => void | Promise<void>;
+}
+
 let paddleWorkerProcess: ChildProcessWithoutNullStreams | null = null;
 let paddleWorkerStartPromise: Promise<void> | null = null;
 let paddleWorkerStdoutBuffer = "";
 let paddleWorkerStderrBuffer = "";
 const paddleWorkerPendingRequests = new Map<string, PaddleWorkerPendingRequest>();
+let onnxOcrEngine: OnnxOcrEngine | null = null;
+let onnxOcrEnginePromise: Promise<OnnxOcrEngine> | null = null;
 
 function normalizePaddleWord(raw: PaddleOcrPayloadWord): OcrTsvWord | null {
   const text = typeof raw.text === "string" ? raw.text.trim() : "";
@@ -2807,7 +3103,7 @@ function parsePaddlePayload(stdout: string): PaddleOcrOutcome {
       language: "",
       rawText: "",
       words: [],
-      errorMessage: `PaddleOCR 输出 JSON 解析失败：${parseError || "未知错误"}。`,
+      errorMessage: `OCR 输出 JSON 解析失败：${parseError || "未知错误"}。`,
     };
   }
   return parsePaddlePayloadObject(parsed);
@@ -2816,7 +3112,7 @@ function parsePaddlePayload(stdout: string): PaddleOcrOutcome {
 function parsePaddlePayloadObject(parsed: PaddleOcrPayload): PaddleOcrOutcome {
   const ok = parsed.ok === true;
   if (!ok) {
-    const errorMessage = typeof parsed.error === "string" ? parsed.error : "PaddleOCR 执行失败。";
+    const errorMessage = typeof parsed.error === "string" ? parsed.error : "OCR 执行失败。";
     return {
       ok: false,
       language: "",
@@ -3129,10 +3425,126 @@ async function runPaddleWithCommand(
   });
 }
 
+function normalizeOnnxLineWord(raw: OnnxOcrLine): OcrTsvWord | null {
+  const text = typeof raw.text === "string" ? raw.text.trim() : "";
+  if (!text) {
+    return null;
+  }
+  const box = raw.box;
+  if (!Array.isArray(box) || box.length === 0) {
+    return {
+      text,
+      left: 0,
+      top: 0,
+      width: 1,
+      height: 1,
+      confidence:
+        typeof raw.mean === "number" && Number.isFinite(raw.mean) && raw.mean >= 0 && raw.mean <= 1.5
+          ? raw.mean * OCR_PADDLE_CONFIDENCE_SCALE
+          : typeof raw.mean === "number" && Number.isFinite(raw.mean)
+            ? raw.mean
+            : -1,
+    };
+  }
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const point of box) {
+    if (!Array.isArray(point) || point.length < 2) {
+      continue;
+    }
+    const xRaw = point[0];
+    const yRaw = point[1];
+    if (typeof xRaw !== "number" || !Number.isFinite(xRaw) || typeof yRaw !== "number" || !Number.isFinite(yRaw)) {
+      continue;
+    }
+    xs.push(xRaw);
+    ys.push(yRaw);
+  }
+  if (xs.length === 0 || ys.length === 0) {
+    return null;
+  }
+  const left = Math.floor(Math.min(...xs));
+  const top = Math.floor(Math.min(...ys));
+  const right = Math.ceil(Math.max(...xs));
+  const bottom = Math.ceil(Math.max(...ys));
+  const confidenceRaw = typeof raw.mean === "number" && Number.isFinite(raw.mean) ? raw.mean : -1;
+  return {
+    text,
+    left,
+    top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top),
+    confidence:
+      confidenceRaw >= 0 && confidenceRaw <= 1.5 ? confidenceRaw * OCR_PADDLE_CONFIDENCE_SCALE : confidenceRaw,
+  };
+}
+
+async function ensureOnnxOcrEngine(_safeMode = true): Promise<OnnxOcrEngine> {
+  if (onnxOcrEngine) {
+    return onnxOcrEngine;
+  }
+  if (onnxOcrEnginePromise) {
+    return onnxOcrEnginePromise;
+  }
+  onnxOcrEnginePromise = (async () => {
+    const created = (await OcrNode.create({
+      onnxOptions: {
+        executionMode: "sequential",
+        graphOptimizationLevel: "all",
+      },
+    })) as OnnxOcrEngine;
+    onnxOcrEngine = created;
+    return created;
+  })();
+  try {
+    return await onnxOcrEnginePromise;
+  } finally {
+    onnxOcrEnginePromise = null;
+  }
+}
+
+async function runOnnxExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
+  try {
+    const engine = await ensureOnnxOcrEngine(safeMode);
+    const lines = await engine.detect(imagePath);
+    const words = lines
+      .map((line) => normalizeOnnxLineWord(line))
+      .filter((line): line is OcrTsvWord => line !== null);
+    const rawText = lines
+      .map((line) => (typeof line.text === "string" ? line.text.trim() : ""))
+      .filter(Boolean)
+      .join("\n");
+    return {
+      ok: true,
+      language,
+      rawText,
+      words,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "ONNX 引擎异常";
+    return {
+      ok: false,
+      language,
+      rawText: "",
+      words: [],
+      errorMessage: `ONNX OCR 执行失败：${message}`,
+    };
+  }
+}
+
 async function runPaddleExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
+  const onnxResult = await runOnnxExtract(imagePath, language, safeMode);
+  if (onnxResult.ok) {
+    return onnxResult;
+  }
+
+  if (!OCR_ENABLE_PYTHON_FALLBACK) {
+    return onnxResult;
+  }
+
   const candidates = buildPaddleLanguageCandidates(language);
   const langArg = candidates.join(",");
-  const attemptErrors: string[] = [];
+  const attemptErrors: string[] = [onnxResult.errorMessage ?? "ONNX OCR 失败"];
 
   const isInterpreterNotAvailable = (message: string): boolean => {
     const normalized = message.toLocaleLowerCase();
@@ -3191,15 +3603,28 @@ async function runPaddleExtract(imagePath: string, language: string, safeMode = 
     language: "",
     rawText: "",
     words: [],
-    errorMessage: attemptErrors.join(" | ") || "PaddleOCR 调用失败。",
+    errorMessage: attemptErrors.join(" | ") || "ONNX OCR 调用失败。",
   };
 }
 
 export function cleanupWorkshopOcrEngine(): void {
-  if (!paddleWorkerProcess && paddleWorkerPendingRequests.size === 0) {
-    return;
+  if (onnxOcrEngine && typeof onnxOcrEngine.destroy === "function") {
+    try {
+      const maybePromise = onnxOcrEngine.destroy();
+      if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
+        void (maybePromise as Promise<void>).catch(() => {
+          // ignore onnx cleanup error
+        });
+      }
+    } catch {
+      // ignore onnx cleanup error
+    }
   }
-  resetPaddleWorkerState("应用退出");
+  onnxOcrEngine = null;
+  onnxOcrEnginePromise = null;
+  if (paddleWorkerProcess || paddleWorkerPendingRequests.size > 0) {
+    resetPaddleWorkerState("应用退出");
+  }
 }
 
 function stringifyOcrWords(words: OcrTsvWord[]): string {
@@ -3212,7 +3637,7 @@ function formatPaddleOcrError(raw: string | undefined): string {
   const message = raw?.trim() || "未知错误";
   const lower = message.toLocaleLowerCase();
   if (lower.includes("convertpirattribute2runtimeattribute") || lower.includes("onednn_instruction.cc")) {
-    return `${message}。已自动尝试关闭 PIR/oneDNN。若仍失败，建议改用 Python 3.10 环境并安装：paddleocr==2.7.3、paddlepaddle==2.6.2。`;
+    return `${message}。ONNX 推理初始化失败，请重启后重试。`;
   }
   if (
     lower.includes("no model source is available") ||
@@ -3220,10 +3645,10 @@ function formatPaddleOcrError(raw: string | undefined): string {
     lower.includes("max retries exceeded") ||
     lower.includes("connecterror")
   ) {
-    return `${message}。PaddleOCR 模型下载失败，请确认网络/代理可访问 huggingface、modelscope 或 BOS，或先离线准备模型。`;
+    return `${message}。ONNX 模型加载失败，请检查安装包完整性。`;
   }
-  if (lower.includes("import paddleocr failed")) {
-    return `${message}。请确认当前 Python 解释器已安装 paddleocr 和 paddlepaddle。`;
+  if (lower.includes("onnx") || lower.includes("inference")) {
+    return `${message}。请确认系统可加载 ONNX Runtime（首次启动可能稍慢）。`;
   }
   return message;
 }
@@ -3609,7 +4034,7 @@ async function extractPriceRowsForRect(
       values,
       rawText: extract.rawText,
       tsvText: stringifyOcrWords(extract.words),
-      engine: `paddleocr(${extract.language || "auto"})`,
+      engine: `onnx-ocr(${extract.language || "auto"})`,
     };
   } finally {
     cleanupTempFile(tempPath);
@@ -3651,7 +4076,7 @@ async function extractDualPriceRowsForRect(
         rightValues,
         rawText: extract.rawText,
         tsvText: stringifyOcrWords(extract.words),
-        engine: `paddleocr(${extract.language || "auto"}, dual-split)`,
+        engine: `onnx-ocr(${extract.language || "auto"}, dual-split)`,
       };
     }
 
@@ -3709,7 +4134,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
     let namesTempPath: string | null = null;
     try {
       const namesLanguage = buildPaddleLanguageCandidates(language).join("+");
-      const namesScale = 2;
+      const namesScale = OCR_TRADE_BOARD_NAME_SCALE;
       const pricesScale = 2;
       namesTempPath = cropImageToTempFile(imagePath, tradeBoardPreset.namesRect, namesScale);
       const namesExtract = await runPaddleExtract(namesTempPath, namesLanguage, safeMode);
@@ -3860,7 +4285,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
         text,
         lineCount: tradeRows.length,
         warnings,
-        engine: `paddleocr(names=${namesExtract.language || namesLanguage}, prices=${pricesEngine}, psm=${psm}, trade-board-roi)`,
+        engine: `onnx-ocr(names=${namesExtract.language || namesLanguage}, prices=${pricesEngine}, psm=${psm}, trade-board-roi)`,
         tradeRows,
       };
     } finally {
@@ -3871,7 +4296,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
   const primary = await runPaddleExtract(imagePath, language, safeMode);
   if (!primary.ok) {
     throw new Error(
-      `PaddleOCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}。请先使用 Python 3.10/3.11 安装：pip install paddleocr paddlepaddle`,
+      `ONNX OCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}`,
     );
   }
 
@@ -3887,7 +4312,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
     text,
     lineCount,
     warnings,
-    engine: `paddleocr(${primary.language || language}, psm=${psm})`,
+    engine: `onnx-ocr(${primary.language || language}, psm=${psm})`,
   };
 }
 
@@ -4032,6 +4457,7 @@ export function deleteWorkshopRecipe(recipeId: string): WorkshopState {
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
   const state = readWorkshopState();
   ensureItemExists(state, payload.itemId);
+  const item = state.items.find((entry) => entry.id === payload.itemId);
   const unitPrice = toNonNegativeInt(payload.unitPrice, -1);
   if (unitPrice <= 0) {
     throw new Error("价格必须是大于 0 的整数。");
@@ -4041,7 +4467,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
   const source = payload.source === "import" ? "import" : "manual";
   const market = sanitizePriceMarket(payload.market);
   const baselinePrices = collectBaselinePricesForItem(state.prices, payload.itemId, market, capturedAt);
-  const anomaly = assessPriceAnomaly(unitPrice, baselinePrices);
+  const anomaly = assessPriceAnomalyWithCategory(unitPrice, baselinePrices, item?.category ?? "other");
   let note = payload.note?.trim() || undefined;
   if (anomaly.kind === "hard") {
     note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_HARD);
@@ -4153,6 +4579,13 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
   let createdItemCount = 0;
 
   parsedLines.forEach((line) => {
+    if (shouldIgnoreOcrItemName(line.itemName)) {
+      const ignoredName = normalizeOcrDomainName(line.itemName) || line.itemName;
+      if (priceQualityWarnings.length < 40) {
+        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${ignoredName}」已忽略：閃耀前綴道具不納入導入。`);
+      }
+      return;
+    }
     const correctedLineName = tryCorrectOcrNameByKnownItems(line.itemName, items);
     const normalizedLineName = correctedLineName || line.itemName;
     if (normalizedLineName !== line.itemName && nameCorrectionWarnings.length < 20) {
@@ -4272,7 +4705,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     }
 
     const anomalyBaseline = collectBaselinePricesForItem(prices, item.id, line.market, sanitized.capturedAt);
-    const anomaly = assessPriceAnomaly(line.unitPrice, anomalyBaseline);
+    const anomaly = assessPriceAnomalyWithCategory(line.unitPrice, anomalyBaseline, item.category);
     if (anomaly.kind === "hard") {
       unknownItemNameSet.add(`${normalizedLineName}（价格异常偏离，已自动过滤）`);
       if (priceQualityWarnings.length < 40) {
