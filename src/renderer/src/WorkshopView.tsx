@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationResult,
   WorkshopItemCategory,
+  WorkshopOcrAutoRunState,
   WorkshopOcrHotkeyRunResult,
   WorkshopOcrHotkeyState,
+  WorkshopPriceMarket,
   WorkshopPriceHistoryResult,
   WorkshopPriceSignalResult,
   WorkshopScreenPreviewResult,
@@ -91,19 +93,196 @@ function formatMarketLabel(market: "single" | "server" | "world" | undefined): s
   return "单列";
 }
 
-function buildNullableLinePath(points: Array<{ x: number; y: number | null }>): string {
-  let path = "";
-  let drawing = false;
-  points.forEach((point) => {
-    if (point.y === null) {
-      drawing = false;
+interface HistoryInsightModel {
+  latestPoint: WorkshopPriceHistoryResult["points"][number];
+  latestWeekdayAverage: number | null;
+  deviationFromWeekday: number | null;
+}
+
+type DualHistoryChartPointModel = WorkshopPriceHistoryResult["points"][number] & {
+  market: "server" | "world";
+  ts: number;
+  x: number;
+  y: number;
+  dateKey: string;
+};
+
+interface DualHistoryChartModel {
+  width: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  serverPricePath: string;
+  worldPricePath: string;
+  serverPoints: DualHistoryChartPointModel[];
+  worldPoints: DualHistoryChartPointModel[];
+  yTicks: Array<{ value: number; y: number }>;
+  xTicks: Array<{ x: number; label: string }>;
+  wednesdayMarkers: Array<{ date: string; x: number }>;
+  latestServerPoint: DualHistoryChartPointModel | null;
+  latestWorldPoint: DualHistoryChartPointModel | null;
+}
+
+interface LatestPriceValue {
+  price: number;
+  capturedAt: number;
+}
+
+interface LatestPriceMetaByMarket {
+  server: LatestPriceValue | null;
+  world: LatestPriceValue | null;
+  single: LatestPriceValue | null;
+}
+
+interface ReverseCraftSuggestionRow {
+  recipeId: string;
+  outputItemId: string;
+  outputItemName: string;
+  relatedByFocusMaterial: boolean;
+  focusMaterialRequired: number;
+  focusMaterialOwned: number;
+  totalMaterialCount: number;
+  matchedOwnedMaterialCount: number;
+  coverageRatio: number;
+  craftableCount: number;
+  requiredMaterialCostPerRun: number | null;
+  estimatedProfitPerRun: number | null;
+  missingRows: WorkshopCraftOption["missingRowsForOneRun"];
+  unknownPriceRows: WorkshopCraftOption["missingRowsForOneRun"];
+  missingPurchaseCostPerRun: number | null;
+  suggestedRunsByBudget: number;
+  estimatedBudgetProfit: number | null;
+  relevanceScore: number;
+}
+
+type ReverseScoreMode = "balanced" | "coverage" | "profit" | "craftable";
+
+function buildHistoryInsightModel(historyResult: WorkshopPriceHistoryResult | null): HistoryInsightModel | null {
+  if (!historyResult || historyResult.sampleCount <= 0) {
+    return null;
+  }
+  const latestPoint = historyResult.points[historyResult.points.length - 1] ?? null;
+  if (!latestPoint) {
+    return null;
+  }
+  const latestWeekdayAverage = historyResult.weekdayAverages.find((entry) => entry.weekday === latestPoint.weekday)?.averagePrice ?? null;
+  const deviationFromWeekday =
+    historyResult.latestPrice === null || latestWeekdayAverage === null || latestWeekdayAverage === 0
+      ? null
+      : (historyResult.latestPrice - latestWeekdayAverage) / latestWeekdayAverage;
+  return {
+    latestPoint,
+    latestWeekdayAverage,
+    deviationFromWeekday,
+  };
+}
+
+function buildDualHistoryChartModel(
+  historyServerResult: WorkshopPriceHistoryResult | null,
+  historyWorldResult: WorkshopPriceHistoryResult | null,
+): DualHistoryChartModel | null {
+  const serverRows = (historyServerResult?.points ?? [])
+    .map((point) => ({
+      ...point,
+      market: "server" as const,
+      ts: new Date(point.capturedAt).getTime(),
+      dateKey: point.capturedAt.slice(0, 10),
+    }))
+    .filter((point) => Number.isFinite(point.ts))
+    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
+  const worldRows = (historyWorldResult?.points ?? [])
+    .map((point) => ({
+      ...point,
+      market: "world" as const,
+      ts: new Date(point.capturedAt).getTime(),
+      dateKey: point.capturedAt.slice(0, 10),
+    }))
+    .filter((point) => Number.isFinite(point.ts))
+    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
+
+  const allRows = [...serverRows, ...worldRows];
+  if (allRows.length === 0) {
+    return null;
+  }
+  const width = 960;
+  const height = 320;
+  const left = 56;
+  const right = 20;
+  const top = 18;
+  const bottom = 38;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const values = allRows.map((point) => point.unitPrice);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const times = allRows.map((point) => point.ts);
+  const minTs = Math.min(...times);
+  const rawMaxTs = Math.max(...times);
+  const maxTs = rawMaxTs === minTs ? minTs + 1 : rawMaxTs;
+
+  const valuePadding = minValue === maxValue ? Math.max(1, Math.round(maxValue * 0.06)) : 0;
+  const lowerBound = Math.max(0, minValue - valuePadding);
+  const upperBound = maxValue + valuePadding;
+  const valueSpan = Math.max(1, upperBound - lowerBound);
+  const toChartPoint = (point: (typeof allRows)[number]): DualHistoryChartPointModel => {
+    const xRatio = (point.ts - minTs) / (maxTs - minTs);
+    const x = left + xRatio * plotWidth;
+    const y = top + ((upperBound - point.unitPrice) / valueSpan) * plotHeight;
+    return {
+      ...point,
+      x,
+      y,
+    };
+  };
+  const serverPoints = serverRows.map(toChartPoint);
+  const worldPoints = worldRows.map(toChartPoint);
+  const serverPricePath = serverPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
+  const worldPricePath = worldPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
+  const yTicks = Array.from({ length: 4 }, (_, index) => {
+    const ratio = index / 3;
+    const value = upperBound - ratio * valueSpan;
+    const y = top + ratio * plotHeight;
+    return {
+      value,
+      y,
+    };
+  });
+  const xTickTimes = [minTs, Math.floor((minTs + maxTs) / 2), maxTs];
+  const xTicks = xTickTimes.map((ts) => ({
+    x: left + ((ts - minTs) / (maxTs - minTs)) * plotWidth,
+    label: formatDateLabel(new Date(ts).toISOString()),
+  }));
+  const wednesdayByDate = new Map<string, number>();
+  [...serverPoints, ...worldPoints].forEach((point) => {
+    if (point.weekday !== 3 || wednesdayByDate.has(point.dateKey)) {
       return;
     }
-    const command = drawing ? "L" : "M";
-    path += `${command} ${point.x.toFixed(2)} ${point.y.toFixed(2)} `;
-    drawing = true;
+    wednesdayByDate.set(point.dateKey, point.x);
   });
-  return path.trim();
+
+  return {
+    width,
+    height,
+    left,
+    right,
+    top,
+    bottom,
+    serverPricePath,
+    worldPricePath,
+    serverPoints,
+    worldPoints,
+    yTicks,
+    xTicks,
+    wednesdayMarkers: Array.from(wednesdayByDate.entries()).map(([date, x]) => ({ date, x })),
+    latestServerPoint: serverPoints[serverPoints.length - 1] ?? null,
+    latestWorldPoint: worldPoints[worldPoints.length - 1] ?? null,
+  };
 }
 
 const HISTORY_QUICK_DAY_OPTIONS = [7, 14, 30, 90] as const;
@@ -138,10 +317,15 @@ const OCR_HOTKEY_DEFAULT_LANGUAGE = "chi_tra";
 const OCR_HOTKEY_DEFAULT_PSM = 6;
 const OCR_CAPTURE_DELAY_STORAGE_KEY = "workshop.ocr.captureDelayMs";
 const OCR_HIDE_APP_STORAGE_KEY = "workshop.ocr.hideAppBeforeCapture";
+const OCR_SAFE_MODE_STORAGE_KEY = "workshop.ocr.safeMode";
 const OCR_TRADE_PRESET_STORAGE_KEY = "workshop.ocr.tradePreset";
+const OCR_AUTO_INTERVAL_STORAGE_KEY = "workshop.ocr.autoRunIntervalSeconds";
+const OCR_AUTO_OVERLAY_STORAGE_KEY = "workshop.ocr.autoRunOverlay";
+const OCR_AUTO_FAIL_LIMIT_STORAGE_KEY = "workshop.ocr.autoRunFailLimit";
+const WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY = "workshop.starItemIds";
 
 const DEFAULT_TRADE_BOARD_PRESET = {
-  rowCount: "7",
+  rowCount: "0",
   namesX: "426",
   namesY: "310",
   namesWidth: "900",
@@ -220,6 +404,62 @@ function readStoredHideAppBeforeCapture(): boolean {
     return window.localStorage.getItem(OCR_HIDE_APP_STORAGE_KEY) !== "0";
   } catch {
     return true;
+  }
+}
+
+function readStoredOcrSafeMode(): boolean {
+  try {
+    return window.localStorage.getItem(OCR_SAFE_MODE_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function readStoredAutoRunIntervalSeconds(): string {
+  try {
+    const raw = window.localStorage.getItem(OCR_AUTO_INTERVAL_STORAGE_KEY);
+    if (raw && raw.trim()) {
+      return raw.trim();
+    }
+  } catch {
+    // ignore local storage read failures
+  }
+  return "8";
+}
+
+function readStoredAutoRunOverlayEnabled(): boolean {
+  try {
+    return window.localStorage.getItem(OCR_AUTO_OVERLAY_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function readStoredAutoRunFailLimit(): string {
+  try {
+    const raw = window.localStorage.getItem(OCR_AUTO_FAIL_LIMIT_STORAGE_KEY);
+    if (raw && raw.trim()) {
+      return raw.trim();
+    }
+  } catch {
+    // ignore local storage read failures
+  }
+  return "3";
+}
+
+function readStoredWorkshopStarItemIds(): string[] {
+  try {
+    const raw = window.localStorage.getItem(WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return Array.from(new Set(parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)));
+  } catch {
+    return [];
   }
 }
 
@@ -402,7 +642,13 @@ interface ClassifiedItemOption {
   subCategory: string;
 }
 
-export function WorkshopView(): JSX.Element {
+interface WorkshopViewProps {
+  onJumpToHistoryManager?: (payload: { itemId: string; snapshotId?: string }) => void;
+  externalPriceChangeNonce?: number;
+}
+
+export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
+  const { onJumpToHistoryManager, externalPriceChangeNonce = 0 } = props;
   const [state, setState] = useState<WorkshopState | null>(null);
   const [craftOptions, setCraftOptions] = useState<WorkshopCraftOption[]>([]);
   const [simulation, setSimulation] = useState<WorkshopCraftSimulationResult | null>(null);
@@ -412,7 +658,9 @@ export function WorkshopView(): JSX.Element {
 
   const [itemMainCategory, setItemMainCategory] = useState("鐵匠");
   const [itemSubCategory, setItemSubCategory] = useState<"all" | string>("all");
+  const [itemKeyword, setItemKeyword] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
+  const [selectedItemPriceMarket, setSelectedItemPriceMarket] = useState<"server" | "world">("server");
   const [selectedItemPrice, setSelectedItemPrice] = useState("0");
   const [selectedItemInventory, setSelectedItemInventory] = useState("0");
 
@@ -421,26 +669,40 @@ export function WorkshopView(): JSX.Element {
   const [simulateSubCategory, setSimulateSubCategory] = useState<"all" | string>("all");
   const [simulateRuns, setSimulateRuns] = useState("1");
   const [taxMode, setTaxMode] = useState<"0.1" | "0.2">("0.1");
-  const [nearCraftBudgetInput, setNearCraftBudgetInput] = useState("50000");
-  const [nearCraftSortMode, setNearCraftSortMode] = useState<"max_budget_profit" | "min_gap_cost">("max_budget_profit");
+  const [reverseCraftBudgetInput, setReverseCraftBudgetInput] = useState("50000");
+  const [reverseMaterialKeyword, setReverseMaterialKeyword] = useState("");
+  const [reverseFocusMaterialId, setReverseFocusMaterialId] = useState("");
+  const [reverseScoreMode, setReverseScoreMode] = useState<ReverseScoreMode>("balanced");
   const [historyItemId, setHistoryItemId] = useState("");
   const [historyMainCategory, setHistoryMainCategory] = useState("鐵匠");
   const [historySubCategory, setHistorySubCategory] = useState<"all" | string>("all");
   const [historyKeyword, setHistoryKeyword] = useState("");
   const [historyDaysInput, setHistoryDaysInput] = useState("30");
-  const [historyResult, setHistoryResult] = useState<WorkshopPriceHistoryResult | null>(null);
+  const [historyIncludeSuspect, setHistoryIncludeSuspect] = useState(false);
+  const [historyServerResult, setHistoryServerResult] = useState<WorkshopPriceHistoryResult | null>(null);
+  const [historyWorldResult, setHistoryWorldResult] = useState<WorkshopPriceHistoryResult | null>(null);
+  const [historyHasLoaded, setHistoryHasLoaded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [starItemIds, setStarItemIds] = useState<string[]>(() => readStoredWorkshopStarItemIds());
+  const [focusStarOnly, setFocusStarOnly] = useState(false);
   const [signalRuleEnabled, setSignalRuleEnabled] = useState(true);
   const [signalLookbackDaysInput, setSignalLookbackDaysInput] = useState("30");
-  const [signalThresholdPercentInput, setSignalThresholdPercentInput] = useState("8");
+  const [signalThresholdPercentInput, setSignalThresholdPercentInput] = useState("15");
   const [signalResult, setSignalResult] = useState<WorkshopPriceSignalResult | null>(null);
   const [ocrHotkeyShortcut, setOcrHotkeyShortcut] = useState(
     navigator.userAgent.includes("Windows") ? "Shift+F1" : "CommandOrControl+Shift+F1",
   );
   const [ocrHotkeyState, setOcrHotkeyState] = useState<WorkshopOcrHotkeyState | null>(null);
   const [ocrHotkeyLastResult, setOcrHotkeyLastResult] = useState<WorkshopOcrHotkeyRunResult | null>(null);
+  const [ocrAutoRunState, setOcrAutoRunState] = useState<WorkshopOcrAutoRunState | null>(null);
+  const [ocrAutoRunIntervalSeconds, setOcrAutoRunIntervalSeconds] = useState(() => readStoredAutoRunIntervalSeconds());
+  const [ocrAutoRunOverlayEnabled, setOcrAutoRunOverlayEnabled] = useState(() => readStoredAutoRunOverlayEnabled());
+  const [ocrAutoRunFailLimit, setOcrAutoRunFailLimit] = useState(() => readStoredAutoRunFailLimit());
+  const [ocrAutoRunNowMs, setOcrAutoRunNowMs] = useState(Date.now());
   const [ocrScreenPreview, setOcrScreenPreview] = useState<WorkshopScreenPreviewResult | null>(null);
   const [ocrCaptureDelayMs, setOcrCaptureDelayMs] = useState(() => readStoredCaptureDelayMs());
   const [ocrHideAppBeforeCapture, setOcrHideAppBeforeCapture] = useState(() => readStoredHideAppBeforeCapture());
+  const [ocrSafeMode, setOcrSafeMode] = useState(() => readStoredOcrSafeMode());
   const [ocrTradePresetKey, setOcrTradePresetKey] = useState<OcrTradePresetKey>(() => readStoredTradePreset());
   const [ocrTradeRowCount, setOcrTradeRowCount] = useState(DEFAULT_TRADE_BOARD_PRESET.rowCount);
   const [ocrTradeNamesX, setOcrTradeNamesX] = useState(DEFAULT_TRADE_BOARD_PRESET.namesX);
@@ -457,10 +719,16 @@ export function WorkshopView(): JSX.Element {
   const [ocrTradeRightPriceRole, setOcrTradeRightPriceRole] = useState<"server" | "world">(DEFAULT_TRADE_BOARD_PRESET.rightPriceRole);
   const [ocrCalibrationTarget, setOcrCalibrationTarget] = useState<"names" | "prices">("names");
   const [ocrDragStart, setOcrDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [ocrDragMode, setOcrDragMode] = useState<"draw" | "move" | null>(null);
+  const [ocrDragOffset, setOcrDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [ocrDragRect, setOcrDragRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [simulationMaterialDraft, setSimulationMaterialDraft] = useState<Record<string, { unitPrice: string; owned: string }>>({});
+  const [simulationOutputPriceDraft, setSimulationOutputPriceDraft] = useState("");
+  const historyQuerySeqRef = useRef(0);
+  const historyChartAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const taxRate = Number(taxMode);
+  const starItemIdSet = useMemo(() => new Set(starItemIds), [starItemIds]);
 
   const itemById = useMemo(() => {
     if (!state) return new Map<string, { name: string; category: WorkshopItemCategory; notes?: string }>();
@@ -487,6 +755,12 @@ export function WorkshopView(): JSX.Element {
       });
   }, [state]);
 
+  const starredHistoryItems = useMemo(() => {
+    return classifiedItemOptions
+      .filter((entry) => starItemIdSet.has(entry.id))
+      .sort((left, right) => left.name.localeCompare(right.name, "zh-CN"));
+  }, [classifiedItemOptions, starItemIdSet]);
+
   const itemMainCategoryOptions = useMemo(() => {
     const unique = Array.from(new Set(classifiedItemOptions.map((entry) => entry.mainCategory).filter(Boolean)));
     if (unique.length === 0) {
@@ -505,13 +779,18 @@ export function WorkshopView(): JSX.Element {
   }, [classifiedItemOptions, itemMainCategory]);
 
   const filteredItems = useMemo(() => {
-    return itemsByMainCategory.filter((entry) => {
-      if (itemSubCategory !== "all" && entry.subCategory !== itemSubCategory) {
+    const keyword = itemKeyword.trim();
+    const base = keyword ? classifiedItemOptions : itemsByMainCategory;
+    return base.filter((entry) => {
+      if (!keyword && itemSubCategory !== "all" && entry.subCategory !== itemSubCategory) {
+        return false;
+      }
+      if (keyword && !entry.name.includes(keyword)) {
         return false;
       }
       return true;
     });
-  }, [itemsByMainCategory, itemSubCategory]);
+  }, [classifiedItemOptions, itemsByMainCategory, itemSubCategory, itemKeyword]);
 
   const itemSubCategoryOptions = useMemo(() => {
     const unique = Array.from(new Set(itemsByMainCategory.map((entry) => entry.subCategory).filter(Boolean)));
@@ -542,16 +821,29 @@ export function WorkshopView(): JSX.Element {
 
   const filteredHistoryItems = useMemo(() => {
     const keyword = historyKeyword.trim();
-    return historyItemsByMainCategory.filter((entry) => {
-      if (historySubCategory !== "all" && entry.subCategory !== historySubCategory) {
-        return false;
-      }
-      if (keyword && !entry.name.includes(keyword)) {
-        return false;
-      }
-      return true;
-    });
-  }, [historyItemsByMainCategory, historySubCategory, historyKeyword]);
+    const base = keyword ? classifiedItemOptions : historyItemsByMainCategory;
+    return base
+      .filter((entry) => {
+        if (!keyword && historySubCategory !== "all" && entry.subCategory !== historySubCategory) {
+          return false;
+        }
+        if (keyword && !entry.name.includes(keyword)) {
+          return false;
+        }
+        if (focusStarOnly && !starItemIdSet.has(entry.id)) {
+          return false;
+        }
+        return true;
+      })
+      .sort((left, right) => {
+        const leftStar = starItemIdSet.has(left.id) ? 1 : 0;
+        const rightStar = starItemIdSet.has(right.id) ? 1 : 0;
+        if (leftStar !== rightStar) {
+          return rightStar - leftStar;
+        }
+        return left.name.localeCompare(right.name, "zh-CN");
+      });
+  }, [classifiedItemOptions, historyItemsByMainCategory, historySubCategory, historyKeyword, focusStarOnly, starItemIdSet]);
 
   const simulationRecipeOptions = useMemo<SimulationRecipeOption[]>(() => {
     if (!state) {
@@ -606,99 +898,176 @@ export function WorkshopView(): JSX.Element {
   }, [simulationRecipesByMainCategory]);
 
   const latestPriceMetaByItemId = useMemo(() => {
-    if (!state) return new Map<string, { price: number; capturedAt: number }>();
-    const map = new Map<string, { price: number; capturedAt: number }>();
+    if (!state) return new Map<string, LatestPriceMetaByMarket>();
+    const map = new Map<string, LatestPriceMetaByMarket>();
     state.prices.forEach((snapshot) => {
+      const market: WorkshopPriceMarket = snapshot.market ?? "single";
       const ts = new Date(snapshot.capturedAt).getTime();
-      const prev = map.get(snapshot.itemId);
+      if (!Number.isFinite(ts)) {
+        return;
+      }
+      const current = map.get(snapshot.itemId) ?? { server: null, world: null, single: null };
+      const prev = current[market];
       if (!prev || ts >= prev.capturedAt) {
-        map.set(snapshot.itemId, { price: snapshot.unitPrice, capturedAt: ts });
+        current[market] = { price: snapshot.unitPrice, capturedAt: ts };
+        map.set(snapshot.itemId, current);
       }
     });
     return map;
   }, [state]);
-
-  const latestPriceByItemId = useMemo(() => {
-    return new Map(Array.from(latestPriceMetaByItemId.entries()).map(([itemId, value]) => [itemId, value.price]));
-  }, [latestPriceMetaByItemId]);
 
   const inventoryByItemId = useMemo(() => {
     if (!state) return new Map<string, number>();
     return new Map(state.inventory.map((row) => [row.itemId, row.quantity]));
   }, [state]);
 
-  const nearCraftBudget = useMemo(() => {
-    const parsed = toInt(nearCraftBudgetInput);
+  const reverseCraftBudget = useMemo(() => {
+    const parsed = toInt(reverseCraftBudgetInput);
     if (parsed === null || parsed < 0) {
       return 0;
     }
     return parsed;
-  }, [nearCraftBudgetInput]);
+  }, [reverseCraftBudgetInput]);
 
-  const nearCraftSuggestions = useMemo(() => {
+  const reverseMaterialOptions = useMemo(() => {
+    const keyword = reverseMaterialKeyword.trim().toLocaleLowerCase();
+    const matched = classifiedItemOptions.filter((item) => {
+      if (!keyword) {
+        return true;
+      }
+      return item.name.toLocaleLowerCase().includes(keyword);
+    });
+    matched.sort((left, right) => {
+      const leftOwned = inventoryByItemId.get(left.id) ?? 0;
+      const rightOwned = inventoryByItemId.get(right.id) ?? 0;
+      if (leftOwned !== rightOwned) {
+        return rightOwned - leftOwned;
+      }
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+    if (reverseFocusMaterialId && !matched.some((item) => item.id === reverseFocusMaterialId)) {
+      const selected = classifiedItemOptions.find((item) => item.id === reverseFocusMaterialId);
+      if (selected) {
+        matched.unshift(selected);
+      }
+    }
+    return matched.slice(0, 500);
+  }, [classifiedItemOptions, inventoryByItemId, reverseMaterialKeyword, reverseFocusMaterialId]);
+
+  const reverseFocusMaterialName = useMemo(() => {
+    if (!reverseFocusMaterialId) {
+      return null;
+    }
+    return itemById.get(reverseFocusMaterialId)?.name ?? reverseFocusMaterialId;
+  }, [reverseFocusMaterialId, itemById]);
+
+  const reverseScoreModeLabel = useMemo(() => {
+    if (reverseScoreMode === "coverage") {
+      return "覆盖率优先";
+    }
+    if (reverseScoreMode === "profit") {
+      return "利润优先";
+    }
+    if (reverseScoreMode === "craftable") {
+      return "可直接制作优先";
+    }
+    return "平衡模式";
+  }, [reverseScoreMode]);
+
+  const reverseCraftSuggestions = useMemo(() => {
+    const focusMaterialId = reverseFocusMaterialId || null;
     return craftOptions
       .map((option) => {
-        const missingRows = option.missingRowsForOneRun.filter((row) => row.missing > 0);
-        if (missingRows.length === 0) {
+        const materialRows = option.materialRowsForOneRun;
+        if (materialRows.length === 0) {
           return null;
         }
+        const focusRow = focusMaterialId ? materialRows.find((row) => row.itemId === focusMaterialId) ?? null : null;
+        if (focusMaterialId && !focusRow) {
+          return null;
+        }
+        const matchedOwnedMaterialCount = materialRows.filter((row) => row.owned > 0).length;
+        if (!focusMaterialId && matchedOwnedMaterialCount <= 0 && option.craftableCount <= 0) {
+          return null;
+        }
+        const totalRequired = materialRows.reduce((acc, row) => acc + Math.max(0, row.required), 0);
+        const coveredRequired = materialRows.reduce((acc, row) => acc + Math.min(Math.max(0, row.owned), Math.max(0, row.required)), 0);
+        const coverageRatio = totalRequired <= 0 ? 0 : coveredRequired / totalRequired;
+        const missingRows = materialRows.filter((row) => row.missing > 0);
         const unknownPriceRows = missingRows.filter((row) => row.missingCost === null || row.latestUnitPrice === null);
         const missingPurchaseCostPerRun =
           unknownPriceRows.length > 0 ? null : missingRows.reduce((acc, row) => acc + (row.missingCost ?? 0), 0);
-        const affordableRuns =
-          missingPurchaseCostPerRun === null || missingPurchaseCostPerRun <= 0
-            ? 0
-            : Math.max(0, Math.floor(nearCraftBudget / missingPurchaseCostPerRun));
-        const estimatedProfitPerRun = option.estimatedProfitPerRun;
+        let suggestedRunsByBudget = 0;
+        if (missingPurchaseCostPerRun !== null) {
+          if (missingPurchaseCostPerRun <= 0) {
+            suggestedRunsByBudget = Math.max(1, option.craftableCount);
+          } else {
+            suggestedRunsByBudget = Math.max(0, Math.floor(reverseCraftBudget / missingPurchaseCostPerRun));
+          }
+        }
         const estimatedBudgetProfit =
-          estimatedProfitPerRun === null || affordableRuns <= 0 ? null : estimatedProfitPerRun * affordableRuns;
+          option.estimatedProfitPerRun === null || suggestedRunsByBudget <= 0 ? null : option.estimatedProfitPerRun * suggestedRunsByBudget;
+        const coverageScore = coverageRatio * 100;
+        const ownedScore = matchedOwnedMaterialCount * 3;
+        const craftableScore = Math.min(option.craftableCount, 30);
+        const focusBoost = focusRow ? 24 : 0;
+        const gapPenalty = missingRows.length;
+        const perRunProfitPositive = Math.max(0, option.estimatedProfitPerRun ?? 0);
+        const budgetProfitPositive = Math.max(0, estimatedBudgetProfit ?? 0);
+        let relevanceScore = 0;
+        if (reverseScoreMode === "coverage") {
+          relevanceScore = coverageScore * 1.35 + ownedScore + focusBoost + craftableScore - gapPenalty;
+        } else if (reverseScoreMode === "profit") {
+          relevanceScore = perRunProfitPositive / 8000 + budgetProfitPositive / 15000 + coverageScore * 0.45 + focusBoost - gapPenalty;
+        } else if (reverseScoreMode === "craftable") {
+          relevanceScore = craftableScore * 6 + coverageScore * 0.4 + focusBoost + perRunProfitPositive / 20000 - gapPenalty;
+        } else {
+          relevanceScore = coverageScore + ownedScore + craftableScore * 2 + focusBoost + perRunProfitPositive / 20000 - gapPenalty;
+        }
         return {
-          ...option,
+          recipeId: option.recipeId,
+          outputItemId: option.outputItemId,
+          outputItemName: option.outputItemName,
+          relatedByFocusMaterial: Boolean(focusRow),
+          focusMaterialRequired: focusRow?.required ?? 0,
+          focusMaterialOwned: focusRow?.owned ?? 0,
+          totalMaterialCount: materialRows.length,
+          matchedOwnedMaterialCount,
+          coverageRatio,
+          craftableCount: option.craftableCount,
+          requiredMaterialCostPerRun: option.requiredMaterialCostPerRun,
+          estimatedProfitPerRun: option.estimatedProfitPerRun,
           missingRows,
-          missingPurchaseCostPerRun,
-          affordableRuns,
-          estimatedBudgetProfit,
           unknownPriceRows,
-        };
+          missingPurchaseCostPerRun,
+          suggestedRunsByBudget,
+          estimatedBudgetProfit,
+          relevanceScore,
+        } satisfies ReverseCraftSuggestionRow;
       })
-      .filter((entry) => entry !== null)
-      .filter((entry) => entry.affordableRuns > 0 || entry.unknownPriceRows.length > 0)
+      .filter((entry): entry is ReverseCraftSuggestionRow => entry !== null)
       .sort((left, right) => {
-        const leftCost = left.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
-        const rightCost = right.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
+        if (right.relevanceScore !== left.relevanceScore) {
+          return right.relevanceScore - left.relevanceScore;
+        }
         const leftProfit = left.estimatedBudgetProfit ?? Number.NEGATIVE_INFINITY;
         const rightProfit = right.estimatedBudgetProfit ?? Number.NEGATIVE_INFINITY;
-        const leftPerRunProfit = left.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
-        const rightPerRunProfit = right.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
-
-        if (nearCraftSortMode === "min_gap_cost") {
-          if (leftCost !== rightCost) {
-            return leftCost - rightCost;
-          }
-          if (right.affordableRuns !== left.affordableRuns) {
-            return right.affordableRuns - left.affordableRuns;
-          }
-          if (rightProfit !== leftProfit) {
-            return rightProfit - leftProfit;
-          }
-          if (rightPerRunProfit !== leftPerRunProfit) {
-            return rightPerRunProfit - leftPerRunProfit;
-          }
-          return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
-        }
-
         if (rightProfit !== leftProfit) {
           return rightProfit - leftProfit;
         }
+        const leftPerRunProfit = left.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
+        const rightPerRunProfit = right.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
         if (rightPerRunProfit !== leftPerRunProfit) {
           return rightPerRunProfit - leftPerRunProfit;
         }
+        const leftCost = left.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
+        const rightCost = right.missingPurchaseCostPerRun ?? Number.MAX_SAFE_INTEGER;
         if (leftCost !== rightCost) {
           return leftCost - rightCost;
         }
         return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
       });
-  }, [craftOptions, nearCraftBudget, nearCraftSortMode]);
+  }, [craftOptions, reverseFocusMaterialId, reverseCraftBudget, reverseScoreMode]);
 
   const activeHistoryQuickDays = useMemo(() => {
     const current = toInt(historyDaysInput);
@@ -708,34 +1077,30 @@ export function WorkshopView(): JSX.Element {
     return HISTORY_QUICK_DAY_OPTIONS.find((days) => days === current) ?? null;
   }, [historyDaysInput]);
 
-  const historyInsight = useMemo(() => {
-    if (!historyResult || historyResult.sampleCount <= 0) {
-      return null;
-    }
-    const latestPoint = historyResult.points[historyResult.points.length - 1] ?? null;
-    if (!latestPoint) {
-      return null;
-    }
-    const latestWeekdayAverage =
-      historyResult.weekdayAverages.find((entry) => entry.weekday === latestPoint.weekday)?.averagePrice ?? null;
-    const deviationFromWeekday =
-      historyResult.latestPrice === null || latestWeekdayAverage === null || latestWeekdayAverage === 0
-        ? null
-        : (historyResult.latestPrice - latestWeekdayAverage) / latestWeekdayAverage;
-
-    return {
-      latestPoint,
-      latestWeekdayAverage,
-      deviationFromWeekday,
-    };
-  }, [historyResult]);
+  const historyServerInsight = useMemo(() => buildHistoryInsightModel(historyServerResult), [historyServerResult]);
+  const historyWorldInsight = useMemo(() => buildHistoryInsightModel(historyWorldResult), [historyWorldResult]);
 
   const triggeredSignalRows = useMemo(() => {
     if (!signalResult) {
       return [];
     }
-    return signalResult.rows.filter((row) => row.triggered);
-  }, [signalResult]);
+    return signalResult.rows
+      .filter((row) => row.triggered)
+      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
+      .sort((left, right) => {
+        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
+        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
+        if (leftStar !== rightStar) {
+          return rightStar - leftStar;
+        }
+        const leftDeviation = Math.abs(left.deviationRatioFromWeekdayAverage ?? 0);
+        const rightDeviation = Math.abs(right.deviationRatioFromWeekdayAverage ?? 0);
+        if (rightDeviation !== leftDeviation) {
+          return rightDeviation - leftDeviation;
+        }
+        return right.sampleCount - left.sampleCount;
+      });
+  }, [signalResult, focusStarOnly, starItemIdSet]);
 
   const recentOcrImportedEntries = useMemo(() => {
     return (ocrHotkeyLastResult?.importedEntries ?? [])
@@ -749,13 +1114,30 @@ export function WorkshopView(): JSX.Element {
       .slice(0, 20);
   }, [ocrHotkeyLastResult]);
 
+  const ocrAutoRunCountdownSeconds = useMemo(() => {
+    if (!ocrAutoRunState?.enabled || !ocrAutoRunState.nextRunAt) {
+      return null;
+    }
+    const diff = new Date(ocrAutoRunState.nextRunAt).getTime() - ocrAutoRunNowMs;
+    if (!Number.isFinite(diff)) {
+      return null;
+    }
+    return Math.max(0, Math.ceil(diff / 1000));
+  }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt, ocrAutoRunNowMs]);
+
   const buyZoneRows = useMemo(() => {
     if (!signalResult) {
       return [];
     }
     return [...signalResult.rows]
       .filter((row) => row.trendTag === "buy-zone")
+      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
       .sort((left, right) => {
+        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
+        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
+        if (leftStar !== rightStar) {
+          return rightStar - leftStar;
+        }
         const leftDeviation = left.deviationRatioFromWeekdayAverage ?? Number.POSITIVE_INFINITY;
         const rightDeviation = right.deviationRatioFromWeekdayAverage ?? Number.POSITIVE_INFINITY;
         if (leftDeviation !== rightDeviation) {
@@ -763,7 +1145,7 @@ export function WorkshopView(): JSX.Element {
         }
         return right.sampleCount - left.sampleCount;
       });
-  }, [signalResult]);
+  }, [signalResult, focusStarOnly, starItemIdSet]);
 
   const sellZoneRows = useMemo(() => {
     if (!signalResult) {
@@ -771,7 +1153,13 @@ export function WorkshopView(): JSX.Element {
     }
     return [...signalResult.rows]
       .filter((row) => row.trendTag === "sell-zone")
+      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
       .sort((left, right) => {
+        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
+        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
+        if (leftStar !== rightStar) {
+          return rightStar - leftStar;
+        }
         const leftDeviation = left.deviationRatioFromWeekdayAverage ?? Number.NEGATIVE_INFINITY;
         const rightDeviation = right.deviationRatioFromWeekdayAverage ?? Number.NEGATIVE_INFINITY;
         if (leftDeviation !== rightDeviation) {
@@ -779,85 +1167,12 @@ export function WorkshopView(): JSX.Element {
         }
         return right.sampleCount - left.sampleCount;
       });
-  }, [signalResult]);
+  }, [signalResult, focusStarOnly, starItemIdSet]);
 
-  const historyChartModel = useMemo(() => {
-    if (!historyResult || historyResult.points.length === 0) {
-      return null;
-    }
-    const width = 960;
-    const height = 320;
-    const left = 56;
-    const right = 20;
-    const top = 18;
-    const bottom = 38;
-    const plotWidth = width - left - right;
-    const plotHeight = height - top - bottom;
-    const values = historyResult.points.map((point) => point.unitPrice);
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
-
-    const valuePadding = minValue === maxValue ? Math.max(1, Math.round(maxValue * 0.06)) : 0;
-    const lowerBound = Math.max(0, minValue - valuePadding);
-    const upperBound = maxValue + valuePadding;
-    const valueSpan = Math.max(1, upperBound - lowerBound);
-
-    const points = historyResult.points.map((point, index) => {
-      const xRatio = historyResult.points.length <= 1 ? 0.5 : index / (historyResult.points.length - 1);
-      const x = left + xRatio * plotWidth;
-      const y = top + ((upperBound - point.unitPrice) / valueSpan) * plotHeight;
-      const ma7Y = point.ma7 === null ? null : top + ((upperBound - point.ma7) / valueSpan) * plotHeight;
-      return {
-        ...point,
-        x,
-        y,
-        ma7Y,
-        dateKey: point.capturedAt.slice(0, 10),
-      };
-    });
-
-    const pricePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
-    const ma7Path = buildNullableLinePath(points.map((point) => ({ x: point.x, y: point.ma7Y })));
-    const yTicks = Array.from({ length: 4 }, (_, index) => {
-      const ratio = index / 3;
-      const value = upperBound - ratio * valueSpan;
-      const y = top + ratio * plotHeight;
-      return {
-        value,
-        y,
-      };
-    });
-    const xTickIndexes = Array.from(new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])).sort(
-      (leftIndex, rightIndex) => leftIndex - rightIndex,
-    );
-    const xTicks = xTickIndexes.map((index) => ({
-      x: points[index].x,
-      label: formatDateLabel(points[index].capturedAt),
-    }));
-    const wednesdayByDate = new Map<string, number>();
-    points.forEach((point) => {
-      if (point.weekday !== 3 || wednesdayByDate.has(point.dateKey)) {
-        return;
-      }
-      wednesdayByDate.set(point.dateKey, point.x);
-    });
-
-    return {
-      width,
-      height,
-      left,
-      right,
-      top,
-      bottom,
-      pricePath,
-      ma7Path,
-      points,
-      yTicks,
-      xTicks,
-      wednesdayMarkers: Array.from(wednesdayByDate.entries()).map(([date, x]) => ({ date, x })),
-      latestPoint: points[points.length - 1] ?? null,
-    };
-  }, [historyResult]);
+  const dualHistoryChartModel = useMemo(
+    () => buildDualHistoryChartModel(historyServerResult, historyWorldResult),
+    [historyServerResult, historyWorldResult],
+  );
 
   const ocrTradeNamesRect = useMemo(() => {
     const x = toInt(ocrTradeNamesX);
@@ -892,7 +1207,26 @@ export function WorkshopView(): JSX.Element {
   }
 
   async function loadSignals(): Promise<void> {
-    const next = await window.aionApi.getWorkshopPriceSignals();
+    const [serverResult, worldResult] = await Promise.all([
+      window.aionApi.getWorkshopPriceSignals({ market: "server" }),
+      window.aionApi.getWorkshopPriceSignals({ market: "world" }),
+    ]);
+    const rows = [
+      ...serverResult.rows.map((row) => ({ ...row, market: row.market ?? "server" })),
+      ...worldResult.rows.map((row) => ({ ...row, market: row.market ?? "world" })),
+    ];
+    const next: WorkshopPriceSignalResult = {
+      generatedAt: new Date().toISOString(),
+      market: undefined,
+      lookbackDays: serverResult.lookbackDays,
+      thresholdRatio: serverResult.thresholdRatio,
+      effectiveThresholdRatio: serverResult.effectiveThresholdRatio,
+      ruleEnabled: serverResult.ruleEnabled,
+      triggeredCount: rows.filter((row) => row.triggered).length,
+      buyZoneCount: rows.filter((row) => row.trendTag === "buy-zone").length,
+      sellZoneCount: rows.filter((row) => row.trendTag === "sell-zone").length,
+      rows,
+    };
     setSignalResult(next);
   }
 
@@ -903,11 +1237,19 @@ export function WorkshopView(): JSX.Element {
     setOcrHotkeyLastResult(next.lastResult);
   }
 
+  async function loadOcrAutoRunState(): Promise<void> {
+    const next = await window.aionApi.getWorkshopOcrAutoRunState();
+    setOcrAutoRunState(next);
+    setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
+    setOcrAutoRunOverlayEnabled(next.showOverlay);
+    setOcrAutoRunFailLimit(String(next.maxConsecutiveFailures));
+  }
+
   async function bootstrap(): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      await Promise.all([loadState(), loadCraftOptions(), loadSignals(), loadOcrHotkeyState()]);
+      await Promise.all([loadState(), loadCraftOptions(), loadSignals(), loadOcrHotkeyState(), loadOcrAutoRunState()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "工坊初始化失败");
     } finally {
@@ -955,7 +1297,7 @@ export function WorkshopView(): JSX.Element {
     const pricesHeight = toInt(ocrTradePricesHeight);
     if (
       rowCount === null ||
-      rowCount <= 0 ||
+      rowCount < 0 ||
       namesX === null ||
       namesY === null ||
       namesWidth === null ||
@@ -966,6 +1308,9 @@ export function WorkshopView(): JSX.Element {
       pricesHeight === null
     ) {
       return { preset: null, error: "交易行框选参数必须为整数。" };
+    }
+    if (rowCount > 30) {
+      return { preset: null, error: "交易行可见行数需为 0~30 的整数（0=自动识别）。" };
     }
     if (namesX < 0 || namesY < 0 || namesWidth <= 0 || namesHeight <= 0) {
       return { preset: null, error: "名称框参数无效（坐标需 >=0，宽高需 >0）。" };
@@ -1005,6 +1350,34 @@ export function WorkshopView(): JSX.Element {
     };
   }
 
+  function parseAutoRunIntervalSecondsOrError(): { intervalSeconds: number | null; error: string | null } {
+    const intervalSeconds = toInt(ocrAutoRunIntervalSeconds);
+    if (intervalSeconds === null || intervalSeconds < 2 || intervalSeconds > 120) {
+      return {
+        intervalSeconds: null,
+        error: "自动抓价间隔需为 2~120 秒的整数。",
+      };
+    }
+    return {
+      intervalSeconds,
+      error: null,
+    };
+  }
+
+  function parseAutoRunFailLimitOrError(): { failLimit: number | null; error: string | null } {
+    const failLimit = toInt(ocrAutoRunFailLimit);
+    if (failLimit === null || failLimit < 1 || failLimit > 10) {
+      return {
+        failLimit: null,
+        error: "连续失败暂停阈值需为 1~10 的整数。",
+      };
+    }
+    return {
+      failLimit,
+      error: null,
+    };
+  }
+
   function applyCalibrationRectToTarget(rect: { x: number; y: number; width: number; height: number }): void {
     if (ocrTradePresetKey !== "custom") {
       setOcrTradePresetKey("custom");
@@ -1030,17 +1403,58 @@ export function WorkshopView(): JSX.Element {
     };
   }
 
+  function pointInRect(point: { x: number; y: number }, rect: { x: number; y: number; width: number; height: number }): boolean {
+    return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+  }
+
   function onPreviewMouseDown(event: ReactMouseEvent<HTMLDivElement>): void {
     const point = pointInPreview(event);
+    const targetRect = ocrCalibrationTarget === "names" ? ocrTradeNamesRect : ocrTradePricesRect;
+    if (targetRect && pointInRect(point, targetRect)) {
+      setOcrDragMode("move");
+      setOcrDragOffset({
+        x: point.x - targetRect.x,
+        y: point.y - targetRect.y,
+      });
+      setOcrDragRect({
+        x: targetRect.x,
+        y: targetRect.y,
+        width: targetRect.width,
+        height: targetRect.height,
+      });
+      return;
+    }
+    setOcrDragMode("draw");
+    setOcrDragOffset(null);
     setOcrDragStart(point);
     setOcrDragRect({ x: point.x, y: point.y, width: 1, height: 1 });
   }
 
   function onPreviewMouseMove(event: ReactMouseEvent<HTMLDivElement>): void {
-    if (!ocrDragStart) {
+    if (!ocrDragMode) {
       return;
     }
     const point = pointInPreview(event);
+    if (ocrDragMode === "move") {
+      const baseRect = ocrDragRect ?? (ocrCalibrationTarget === "names" ? ocrTradeNamesRect : ocrTradePricesRect);
+      if (!baseRect || !ocrDragOffset || !ocrScreenPreview) {
+        return;
+      }
+      const maxX = Math.max(0, ocrScreenPreview.width - baseRect.width);
+      const maxY = Math.max(0, ocrScreenPreview.height - baseRect.height);
+      const nextX = Math.max(0, Math.min(maxX, point.x - ocrDragOffset.x));
+      const nextY = Math.max(0, Math.min(maxY, point.y - ocrDragOffset.y));
+      setOcrDragRect({
+        x: Math.floor(nextX),
+        y: Math.floor(nextY),
+        width: baseRect.width,
+        height: baseRect.height,
+      });
+      return;
+    }
+    if (!ocrDragStart) {
+      return;
+    }
     const left = Math.min(ocrDragStart.x, point.x);
     const top = Math.min(ocrDragStart.y, point.y);
     const width = Math.max(1, Math.abs(point.x - ocrDragStart.x));
@@ -1053,6 +1467,8 @@ export function WorkshopView(): JSX.Element {
       applyCalibrationRectToTarget(ocrDragRect);
     }
     setOcrDragStart(null);
+    setOcrDragMode(null);
+    setOcrDragOffset(null);
     setOcrDragRect(null);
   }
 
@@ -1081,6 +1497,7 @@ export function WorkshopView(): JSX.Element {
         shortcut,
         language: OCR_HOTKEY_DEFAULT_LANGUAGE,
         psm: OCR_HOTKEY_DEFAULT_PSM,
+        safeMode: ocrSafeMode,
         captureDelayMs: captureParsed.options?.delayMs,
         hideAppBeforeCapture: captureParsed.options?.hideAppBeforeCapture,
         autoCreateMissingItems: false,
@@ -1090,6 +1507,7 @@ export function WorkshopView(): JSX.Element {
       });
       setOcrHotkeyState(next);
       setOcrHotkeyShortcut(next.shortcut);
+      setOcrSafeMode(next.safeMode);
       setOcrHotkeyLastResult(next.lastResult);
       if (next.enabled && !next.registered) {
         setError(`快捷键未注册成功：${next.shortcut}。建议改用 Ctrl+Shift+F1 或避免与游戏内热键冲突。`);
@@ -1144,6 +1562,53 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
+  async function onConfigureOcrAutoRun(nextEnabled: boolean): Promise<void> {
+    const intervalParsed = parseAutoRunIntervalSecondsOrError();
+    if (intervalParsed.error) {
+      setError(intervalParsed.error);
+      return;
+    }
+    const failLimitParsed = parseAutoRunFailLimitOrError();
+    if (failLimitParsed.error) {
+      setError(failLimitParsed.error);
+      return;
+    }
+    const tradePresetParsed = parseTradeBoardPresetOrError();
+    if (tradePresetParsed.error) {
+      setError(tradePresetParsed.error);
+      return;
+    }
+    const captureParsed = parseScreenCaptureOptionsOrError();
+    if (captureParsed.error) {
+      setError(captureParsed.error);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const next = await window.aionApi.configureWorkshopOcrAutoRun({
+        enabled: nextEnabled,
+        intervalSeconds: intervalParsed.intervalSeconds ?? undefined,
+        showOverlay: ocrAutoRunOverlayEnabled,
+        safeMode: ocrSafeMode,
+        captureDelayMs: captureParsed.options?.delayMs,
+        hideAppBeforeCapture: captureParsed.options?.hideAppBeforeCapture,
+        maxConsecutiveFailures: failLimitParsed.failLimit ?? undefined,
+        tradeBoardPreset: tradePresetParsed.preset,
+      });
+      setOcrAutoRunState(next);
+      setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
+      setOcrAutoRunOverlayEnabled(next.showOverlay);
+      setOcrAutoRunFailLimit(String(next.maxConsecutiveFailures));
+      setMessage(next.enabled ? `自动抓价已启动（每 ${next.intervalSeconds} 秒）` : "自动抓价已停止");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "自动抓价配置失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     void bootstrap();
   }, []);
@@ -1156,6 +1621,18 @@ export function WorkshopView(): JSX.Element {
         setError(result.message);
       }
       void Promise.all([loadState(), loadCraftOptions(), loadSignals()]);
+    });
+    return () => {
+      off();
+    };
+  }, []);
+
+  useEffect(() => {
+    const off = window.aionApi.onWorkshopOcrAutoRunState((next) => {
+      setOcrAutoRunState(next);
+      setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
+      setOcrAutoRunOverlayEnabled(next.showOverlay);
+      setOcrAutoRunFailLimit(String(next.maxConsecutiveFailures));
     });
     return () => {
       off();
@@ -1191,7 +1668,9 @@ export function WorkshopView(): JSX.Element {
     if (!exists) {
       const fallback = filteredHistoryItems[0]?.id ?? "";
       setHistoryItemId(fallback);
-      setHistoryResult(null);
+      setHistoryServerResult(null);
+      setHistoryWorldResult(null);
+      setHistoryHasLoaded(false);
     }
   }, [
     historyMainCategory,
@@ -1216,6 +1695,7 @@ export function WorkshopView(): JSX.Element {
       const fallback = filteredSimulationRecipes[0]?.id ?? "";
       setSimulateRecipeId(fallback);
       setSimulation(null);
+      setSimulationOutputPriceDraft("");
     }
   }, [
     simulateMainCategory,
@@ -1225,6 +1705,16 @@ export function WorkshopView(): JSX.Element {
     simulateRecipeId,
     filteredSimulationRecipes,
   ]);
+
+  useEffect(() => {
+    if (!reverseFocusMaterialId) {
+      return;
+    }
+    const exists = classifiedItemOptions.some((item) => item.id === reverseFocusMaterialId);
+    if (!exists) {
+      setReverseFocusMaterialId("");
+    }
+  }, [reverseFocusMaterialId, classifiedItemOptions]);
 
   useEffect(() => {
     if (!state) {
@@ -1237,11 +1727,13 @@ export function WorkshopView(): JSX.Element {
 
   useEffect(() => {
     if (!selectedItemId) return;
-    const price = latestPriceByItemId.get(selectedItemId) ?? 0;
+    const latestMeta = latestPriceMetaByItemId.get(selectedItemId);
+    const priceByMarket = selectedItemPriceMarket === "server" ? latestMeta?.server : latestMeta?.world;
+    const price = priceByMarket?.price ?? latestMeta?.single?.price ?? 0;
     const inventory = inventoryByItemId.get(selectedItemId) ?? 0;
     setSelectedItemPrice(String(price));
     setSelectedItemInventory(String(inventory));
-  }, [selectedItemId, latestPriceByItemId, inventoryByItemId]);
+  }, [selectedItemId, selectedItemPriceMarket, latestPriceMetaByItemId, inventoryByItemId]);
 
   useEffect(() => {
     if (!state) return;
@@ -1292,14 +1784,107 @@ export function WorkshopView(): JSX.Element {
     }
   }, [ocrHideAppBeforeCapture]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_SAFE_MODE_STORAGE_KEY, ocrSafeMode ? "1" : "0");
+    } catch {
+      // ignore local storage write failures
+    }
+  }, [ocrSafeMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_AUTO_INTERVAL_STORAGE_KEY, ocrAutoRunIntervalSeconds);
+    } catch {
+      // ignore local storage write failures
+    }
+  }, [ocrAutoRunIntervalSeconds]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_AUTO_OVERLAY_STORAGE_KEY, ocrAutoRunOverlayEnabled ? "1" : "0");
+    } catch {
+      // ignore local storage write failures
+    }
+  }, [ocrAutoRunOverlayEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_AUTO_FAIL_LIMIT_STORAGE_KEY, ocrAutoRunFailLimit);
+    } catch {
+      // ignore local storage write failures
+    }
+  }, [ocrAutoRunFailLimit]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY, JSON.stringify(starItemIds));
+    } catch {
+      // ignore local storage write failures
+    }
+  }, [starItemIds]);
+
+  useEffect(() => {
+    if (!state) {
+      return;
+    }
+    const validItemIdSet = new Set(classifiedItemOptions.map((entry) => entry.id));
+    const sanitized = starItemIds.filter((itemId) => validItemIdSet.has(itemId));
+    if (sanitized.length !== starItemIds.length) {
+      setStarItemIds(sanitized);
+    }
+  }, [state, classifiedItemOptions, starItemIds]);
+
+  useEffect(() => {
+    if (!ocrAutoRunState?.enabled || !ocrAutoRunState.nextRunAt) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setOcrAutoRunNowMs(Date.now());
+    }, 300);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt]);
+
+  useEffect(() => {
+    const days = toInt(historyDaysInput);
+    if (!historyItemId || days === null || days <= 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void onLoadPriceHistory(days, { silent: true });
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [historyItemId, historyDaysInput, historyIncludeSuspect]);
+
+  useEffect(() => {
+    if (externalPriceChangeNonce <= 0) {
+      return;
+    }
+    const days = toInt(historyDaysInput);
+    void (async () => {
+      try {
+        await Promise.all([loadState(), loadCraftOptions(), loadSignals()]);
+        if (historyItemId && days !== null && days > 0) {
+          await onLoadPriceHistory(days, { silent: true });
+        }
+      } catch {
+        // sidebar mutation sync should be best-effort and silent
+      }
+    })();
+  }, [externalPriceChangeNonce]);
+
   function onSaveSelectedPrice(): void {
     if (!selectedItemId) {
       setError("请先选择物品。");
       return;
     }
     const unitPrice = toInt(selectedItemPrice);
-    if (unitPrice === null || unitPrice < 0) {
-      setError("价格必须是大于等于 0 的整数。");
+    if (unitPrice === null || unitPrice <= 0) {
+      setError("价格必须是大于 0 的整数。");
       return;
     }
     void commit(
@@ -1308,6 +1893,7 @@ export function WorkshopView(): JSX.Element {
           itemId: selectedItemId,
           unitPrice,
           source: "manual",
+          market: selectedItemPriceMarket,
         }),
       "已记录价格快照",
     );
@@ -1328,10 +1914,85 @@ export function WorkshopView(): JSX.Element {
 
   function onPickItemForCorrection(itemId: string): void {
     setSelectedItemId(itemId);
-    const price = latestPriceByItemId.get(itemId) ?? 0;
+    const latestMeta = latestPriceMetaByItemId.get(itemId);
+    const priceByMarket = selectedItemPriceMarket === "server" ? latestMeta?.server : latestMeta?.world;
+    const price = priceByMarket?.price ?? latestMeta?.single?.price ?? 0;
     const inventory = inventoryByItemId.get(itemId) ?? 0;
     setSelectedItemPrice(String(price));
     setSelectedItemInventory(String(inventory));
+  }
+
+  function isStarredItem(itemId: string): boolean {
+    return starItemIdSet.has(itemId);
+  }
+
+  function onToggleStarItem(itemId: string): void {
+    const itemName = itemById.get(itemId)?.name ?? itemId;
+    const nextStarred = !isStarredItem(itemId);
+    setStarItemIds((prev) => {
+      if (nextStarred) {
+        return prev.includes(itemId) ? prev : [...prev, itemId];
+      }
+      return prev.filter((entry) => entry !== itemId);
+    });
+    setMessage(nextStarred ? `已加入重点关注：${itemName}` : `已取消重点关注：${itemName}`);
+  }
+
+  function onJumpHistoryManagerForCurrentItem(): void {
+    if (!historyItemId) {
+      setError("请先选择要管理历史价格的物品。");
+      return;
+    }
+    onJumpToHistoryManager?.({ itemId: historyItemId });
+  }
+
+  function onJumpHistoryManagerForSnapshot(snapshotId: string, capturedAt: string): void {
+    if (!historyItemId) {
+      setError("请先选择要管理历史价格的物品。");
+      return;
+    }
+    onJumpToHistoryManager?.({
+      itemId: historyItemId,
+      snapshotId,
+    });
+    setMessage(`已定位到历史价格管理：${formatDateTime(capturedAt)}`);
+  }
+
+  function onViewHistoryCurveForItem(itemId: string, options?: { scroll?: boolean; market?: WorkshopPriceMarket }): void {
+    const shouldScroll = options?.scroll ?? true;
+    if (options?.market === "server" || options?.market === "world") {
+      setSelectedItemPriceMarket(options.market);
+    }
+    const target = classifiedItemOptions.find((entry) => entry.id === itemId);
+    if (!target) {
+      setError("无法定位该物品的行情曲线。");
+      return;
+    }
+    setHistoryKeyword("");
+    setHistoryMainCategory(target.mainCategory);
+    setHistorySubCategory(target.subCategory);
+    setHistoryItemId(itemId);
+    const days = toInt(historyDaysInput);
+    if (days !== null && days > 0) {
+      void onLoadPriceHistory(days, { silent: true });
+    }
+    if (shouldScroll) {
+      window.setTimeout(() => {
+        historyChartAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    }
+  }
+
+  function onJumpSimulationRecipe(recipeId: string): void {
+    const target = simulationRecipeOptions.find((entry) => entry.id === recipeId);
+    if (!target) {
+      setError("无法定位该配方。");
+      return;
+    }
+    setSimulateMainCategory(target.mainCategory);
+    setSimulateSubCategory(target.subCategory);
+    setSimulateRecipeId(target.id);
+    setMessage(`已定位到制作模拟器：${target.outputName}`);
   }
 
   async function onSimulate(): Promise<void> {
@@ -1363,6 +2024,7 @@ export function WorkshopView(): JSX.Element {
         };
       });
       setSimulationMaterialDraft(draftMap);
+      setSimulationOutputPriceDraft(result.outputUnitPrice === null ? "" : String(result.outputUnitPrice));
       setMessage("模拟完成");
     } catch (err) {
       setError(err instanceof Error ? err.message : "模拟失败");
@@ -1380,6 +2042,22 @@ export function WorkshopView(): JSX.Element {
     setError(null);
     setMessage(null);
     try {
+      const outputPriceText = simulationOutputPriceDraft.trim();
+      if (outputPriceText) {
+        const outputUnitPrice = toInt(outputPriceText);
+        if (outputUnitPrice === null || outputUnitPrice <= 0) {
+          throw new Error(`成品「${simulation.outputItemName}」售价必须是大于 0 的整数。`);
+        }
+        if (simulation.outputUnitPrice === null || outputUnitPrice !== simulation.outputUnitPrice) {
+          await window.aionApi.addWorkshopPriceSnapshot({
+            itemId: simulation.outputItemId,
+            unitPrice: outputUnitPrice,
+            source: "manual",
+            note: "simulate-output-edit",
+          });
+        }
+      }
+
       for (const row of simulation.materialRows) {
         const draft = simulationMaterialDraft[row.itemId];
         if (!draft) {
@@ -1395,8 +2073,8 @@ export function WorkshopView(): JSX.Element {
         const priceText = draft.unitPrice.trim();
         if (priceText) {
           const unitPrice = toInt(priceText);
-          if (unitPrice === null || unitPrice < 0) {
-            throw new Error(`材料「${row.itemName}」单价必须是大于等于 0 的整数。`);
+          if (unitPrice === null || unitPrice <= 0) {
+            throw new Error(`材料「${row.itemName}」单价必须是大于 0 的整数。`);
           }
           if (row.latestUnitPrice === null || unitPrice !== row.latestUnitPrice) {
             await window.aionApi.addWorkshopPriceSnapshot({
@@ -1428,8 +2106,9 @@ export function WorkshopView(): JSX.Element {
         };
       });
       setSimulationMaterialDraft(nextDraftMap);
+      setSimulationOutputPriceDraft(rerun.outputUnitPrice === null ? "" : String(rerun.outputUnitPrice));
       await Promise.all([loadCraftOptions(), loadSignals()]);
-      setMessage("材料单价/库存已保存，并已按最新数据重算。");
+      setMessage("成品/材料价格与库存已保存，并已按最新数据重算。");
     } catch (err) {
       setError(err instanceof Error ? err.message : "更新材料参数失败");
     } finally {
@@ -1437,42 +2116,69 @@ export function WorkshopView(): JSX.Element {
     }
   }
 
-  async function onLoadPriceHistory(daysOverride?: number): Promise<void> {
+  async function onLoadPriceHistory(daysOverride?: number, options?: { silent?: boolean }): Promise<void> {
+    const silent = options?.silent ?? false;
     if (!historyItemId) {
-      setError("请先选择要查询的物品。");
+      if (!silent) {
+        setError("请先选择要查询的物品。");
+      }
       return;
     }
     const days = daysOverride ?? toInt(historyDaysInput);
     if (days === null || days <= 0) {
-      setError("查询天数必须是正整数。");
+      if (!silent) {
+        setError("查询天数必须是正整数。");
+      }
       return;
     }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
+    const seq = historyQuerySeqRef.current + 1;
+    historyQuerySeqRef.current = seq;
+    if (!silent) {
+      setError(null);
+    }
+    setHistoryLoading(true);
     try {
-      const result = await window.aionApi.getWorkshopPriceHistory({
-        itemId: historyItemId,
-        days,
-      });
-      setHistoryResult(result);
-      setMessage("价格历史已刷新");
+      const [serverResult, worldResult] = await Promise.all([
+        window.aionApi.getWorkshopPriceHistory({
+          itemId: historyItemId,
+          days,
+          includeSuspect: historyIncludeSuspect,
+          market: "server",
+        }),
+        window.aionApi.getWorkshopPriceHistory({
+          itemId: historyItemId,
+          days,
+          includeSuspect: historyIncludeSuspect,
+          market: "world",
+        }),
+      ]);
+      if (historyQuerySeqRef.current !== seq) {
+        return;
+      }
+      setHistoryServerResult(serverResult);
+      setHistoryWorldResult(worldResult);
+      setHistoryHasLoaded(true);
     } catch (err) {
+      if (historyQuerySeqRef.current !== seq) {
+        return;
+      }
       setError(err instanceof Error ? err.message : "价格历史查询失败");
     } finally {
-      setBusy(false);
+      if (historyQuerySeqRef.current === seq) {
+        setHistoryLoading(false);
+      }
     }
   }
 
   async function onSaveSignalRule(): Promise<void> {
     const lookbackDays = toInt(signalLookbackDaysInput);
     if (lookbackDays === null || lookbackDays <= 0) {
-      setError("Phase 2.3 规则配置失败：回看天数必须是正整数。");
+      setError("周期性波动提示配置失败：回看天数必须是正整数。");
       return;
     }
     const thresholdPercent = Number(signalThresholdPercentInput);
-    if (!Number.isFinite(thresholdPercent) || thresholdPercent <= 0) {
-      setError("Phase 2.3 规则配置失败：阈值必须是大于 0 的数字。");
+    if (!Number.isFinite(thresholdPercent) || thresholdPercent < 15) {
+      setError("周期性波动提示配置失败：阈值必须是 >= 15 的数字。");
       return;
     }
 
@@ -1483,7 +2189,7 @@ export function WorkshopView(): JSX.Element {
           lookbackDays,
           dropBelowWeekdayAverageRatio: thresholdPercent / 100,
         }),
-      "Phase 2.3 周期波动提示规则已保存",
+      "周期性波动提示规则已保存",
     );
   }
 
@@ -1493,13 +2199,32 @@ export function WorkshopView(): JSX.Element {
     setMessage(null);
     try {
       await loadSignals();
-      setMessage("Phase 2.3 信号已刷新");
+      setMessage("周期性波动提示已刷新");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Phase 2.3 信号刷新失败");
+      setError(err instanceof Error ? err.message : "周期性波动提示刷新失败");
     } finally {
       setBusy(false);
     }
   }
+
+  const historyMarketPanels = [
+    {
+      market: "server" as const,
+      title: "伺服器交易所",
+      result: historyServerResult,
+      insight: historyServerInsight,
+      colorClass: "text-cyan-200",
+      borderClass: "border-cyan-300/20 bg-cyan-500/5",
+    },
+    {
+      market: "world" as const,
+      title: "世界交易所",
+      result: historyWorldResult,
+      insight: historyWorldInsight,
+      colorClass: "text-emerald-200",
+      borderClass: "border-emerald-300/20 bg-emerald-500/5",
+    },
+  ];
 
   if (!state) {
     return (
@@ -1516,22 +2241,23 @@ export function WorkshopView(): JSX.Element {
           <h3 className="text-base font-semibold">工坊（内置配方库）</h3>
         </div>
         <p className="mt-2 text-xs text-slate-300">当前已支持: 内置材料/配方库，价格与库存维护，制作模拟，背包可制作推荐。</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
           <div className="data-pill">物品数: {state.items.length}</div>
           <div className="data-pill">配方数: {state.recipes.length}</div>
           <div className="data-pill">价格快照: {state.prices.length}</div>
           <div className="data-pill">库存记录: {state.inventory.length}</div>
+          <div className="data-pill text-amber-200">重点关注: {starItemIds.length}</div>
         </div>
         {message ? <p className="mt-2 text-xs text-emerald-300">{message}</p> : null}
         {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
       </article>
 
       <article className="order-1 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">1) 市场工作台：OCR 抓价导入</h4>
+        <h4 className="text-sm font-semibold">OCR抓价器</h4>
         <p className="mt-2 text-xs text-slate-300">保留热键自动截屏 + OCR 导入主流程，支持手动拖拽校准名称框与价格框。</p>
         <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-500/10 p-2 text-xs">
           <p className="text-cyan-200">快捷抓价（全局热键：自动截屏并完成 OCR 与导入）</p>
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.6fr)_minmax(0,0.6fr)_auto]">
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.5fr)_minmax(0,0.5fr)_minmax(0,0.5fr)]">
             <input
               className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
               value={ocrCaptureDelayMs}
@@ -1547,6 +2273,15 @@ export function WorkshopView(): JSX.Element {
             >
               <option value="on">截屏前自动隐藏程序</option>
               <option value="off">截屏前不隐藏程序</option>
+            </select>
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+              value={ocrSafeMode ? "on" : "off"}
+              onChange={(event) => setOcrSafeMode(event.target.value === "on")}
+              disabled={busy}
+            >
+              <option value="on">OCR 安全模式（CPU 优先）</option>
+              <option value="off">OCR 性能模式（允许非 CPU）</option>
             </select>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">`1200` 表示按下热键后先等待 `1.2` 秒再截图；想提速可先试 `300~800`。</p>
@@ -1568,12 +2303,78 @@ export function WorkshopView(): JSX.Element {
               立即抓取一次
             </button>
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+          <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
+            <p className="text-[11px] text-cyan-200">自动巡航抓价（常驻轮询，适合你在交易行里持续滚动列表）</p>
+            <p className="mt-1 text-[11px] text-slate-400">全局切换快捷键：`Shift+F2`（开始/暂停巡航）。</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.28fr)_minmax(0,0.24fr)_minmax(0,0.24fr)_auto_auto_auto]">
+              <input
+                className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={ocrAutoRunIntervalSeconds}
+                onChange={(event) => setOcrAutoRunIntervalSeconds(event.target.value)}
+                disabled={busy}
+                placeholder="抓取间隔秒（2~120）"
+              />
+              <input
+                className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={ocrAutoRunFailLimit}
+                onChange={(event) => setOcrAutoRunFailLimit(event.target.value)}
+                disabled={busy}
+                placeholder="连续失败暂停（1~10）"
+              />
+              <select
+                className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={ocrAutoRunOverlayEnabled ? "on" : "off"}
+                onChange={(event) => setOcrAutoRunOverlayEnabled(event.target.value === "on")}
+                disabled={busy}
+              >
+                <option value="on">浮窗状态条：开启</option>
+                <option value="off">浮窗状态条：关闭</option>
+              </select>
+              <button
+                className="pill-btn"
+                onClick={() => void onConfigureOcrAutoRun(ocrAutoRunState?.enabled ?? false)}
+                disabled={busy}
+              >
+                应用设置
+              </button>
+              <button className="pill-btn" onClick={() => void onConfigureOcrAutoRun(true)} disabled={busy}>
+                开始巡航
+              </button>
+              <button className="pill-btn" onClick={() => void onConfigureOcrAutoRun(false)} disabled={busy}>
+                停止巡航
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+              <div className="data-pill">巡航: {ocrAutoRunState?.enabled ? (ocrAutoRunState.running ? "执行中" : "运行中") : "未启动"}</div>
+              <div className="data-pill">间隔: {ocrAutoRunState?.intervalSeconds ?? "--"} s</div>
+              <div className="data-pill">下一次: {ocrAutoRunCountdownSeconds === null ? "--" : `${ocrAutoRunCountdownSeconds}s`}</div>
+              <div className="data-pill">浮窗: {ocrAutoRunState?.showOverlay ? "开" : "关"}</div>
+              <div className="data-pill">轮次: {ocrAutoRunState?.loopCount ?? 0}</div>
+              <div className="data-pill">成功: {ocrAutoRunState?.successCount ?? 0}</div>
+              <div className="data-pill">失败: {ocrAutoRunState?.failureCount ?? 0}</div>
+              <div className="data-pill">
+                连败: {ocrAutoRunState?.consecutiveFailureCount ?? 0}/{ocrAutoRunState?.maxConsecutiveFailures ?? "--"}
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="data-pill">巡航快捷键: {ocrAutoRunState?.toggleShortcut ?? "Shift+F2"}</div>
+              <div className="data-pill">最近: {ocrAutoRunState?.lastResultAt ? formatDateTime(ocrAutoRunState.lastResultAt) : "--"}</div>
+            </div>
+            {ocrAutoRunState?.lastMessage ? <p className="mt-2 text-[11px] text-slate-300">{ocrAutoRunState.lastMessage}</p> : null}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-10">
             <div className="data-pill">状态: {ocrHotkeyState?.enabled ? (ocrHotkeyState.registered ? "已启用" : "注册失败") : "未启用"}</div>
             <div className="data-pill">快捷键: {ocrHotkeyState?.shortcut ?? "--"}</div>
             <div className="data-pill">延迟: {ocrCaptureDelayMs || "--"} ms</div>
-            <div className="data-pill">上次识别: {ocrHotkeyLastResult?.extractedLineCount ?? 0}</div>
+            <div className="data-pill">OCR 模式: {ocrSafeMode ? "安全" : "性能"}</div>
+            <div className="data-pill">
+              上次识别:{" "}
+              {ocrHotkeyLastResult?.expectedLineCount && ocrHotkeyLastResult.expectedLineCount > 0
+                ? `${ocrHotkeyLastResult.extractedLineCount}/${ocrHotkeyLastResult.expectedLineCount}`
+                : (ocrHotkeyLastResult?.extractedLineCount ?? 0)}
+            </div>
             <div className="data-pill">上次导入: {ocrHotkeyLastResult?.importedCount ?? 0}</div>
+            <div className="data-pill">去重跳过: {ocrHotkeyLastResult?.duplicateSkippedCount ?? 0}</div>
             <div className="data-pill">未匹配: {ocrHotkeyLastResult?.unknownItemCount ?? 0}</div>
             <div className="data-pill">异常行: {ocrHotkeyLastResult?.invalidLineCount ?? 0}</div>
             <div className="data-pill">警告: {ocrHotkeyLastResult?.warnings.length ?? 0}</div>
@@ -1626,8 +2427,8 @@ export function WorkshopView(): JSX.Element {
           ) : null}
         </div>
         <div className="mt-2 rounded-xl border border-white/10 bg-black/25 p-2">
-          <p className="text-[11px] text-slate-300">可视化校准：仅保留拖拽框选名称框/价格框，无需手动输入坐标。</p>
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <p className="text-[11px] text-slate-300">可视化校准：拖拽可重画大小；在框内拖动可平移；可见行数可自动识别（适配不同游戏 UI 大小）。</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
             <select
               className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
               value={ocrTradePresetKey}
@@ -1646,6 +2447,19 @@ export function WorkshopView(): JSX.Element {
             >
               <option value="names">拖拽校准目标: 名称框</option>
               <option value="prices">拖拽校准目标: 价格框</option>
+            </select>
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+              value={ocrTradeRowCount}
+              onChange={(event) => setOcrTradeRowCount(event.target.value)}
+              disabled={busy}
+            >
+              <option value="0">可见行数: 自动识别（推荐）</option>
+              <option value="6">可见行数: 6</option>
+              <option value="7">可见行数: 7</option>
+              <option value="8">可见行数: 8</option>
+              <option value="9">可见行数: 9</option>
+              <option value="10">可见行数: 10</option>
             </select>
             <button className="pill-btn" onClick={() => void onCaptureOcrScreenPreview()} disabled={busy}>
               捕获校准图
@@ -1709,7 +2523,7 @@ export function WorkshopView(): JSX.Element {
       </article>
 
       <article className="order-2 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">1) 市场工作台：行情中心与波动信号</h4>
+        <h4 className="text-sm font-semibold">市场分析器</h4>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -1741,11 +2555,14 @@ export function WorkshopView(): JSX.Element {
             value={historyKeyword}
             onChange={(event) => setHistoryKeyword(event.target.value)}
             disabled={busy}
-            placeholder="搜索物品（可选）"
+            placeholder="搜索物品（全物品范围）"
           />
         </div>
+        {historyKeyword.trim() ? (
+          <p className="mt-1 text-[11px] text-cyan-200">关键词搜索已切换为全物品范围（忽略大类/下级分类）。</p>
+        ) : null}
 
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto]">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto_auto_auto]">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={historyItemId}
@@ -1754,7 +2571,7 @@ export function WorkshopView(): JSX.Element {
           >
             {filteredHistoryItems.map((item) => (
               <option key={`history-item-${item.id}`} value={item.id}>
-                [{item.subCategory}] {item.name}
+                {isStarredItem(item.id) ? "★ " : ""}[{item.subCategory}] {item.name}
               </option>
             ))}
           </select>
@@ -1765,13 +2582,40 @@ export function WorkshopView(): JSX.Element {
             disabled={busy}
             placeholder="查询天数（如 30）"
           />
-          <button className="task-btn px-4" onClick={() => void onLoadPriceHistory()} disabled={busy || !historyItemId}>
-            查询历史
+          <button className="pill-btn whitespace-nowrap" onClick={onJumpHistoryManagerForCurrentItem} disabled={busy || !historyItemId}>
+            管理历史价格
+          </button>
+          <button className="pill-btn whitespace-nowrap" onClick={() => onToggleStarItem(historyItemId)} disabled={busy || !historyItemId}>
+            {historyItemId && isStarredItem(historyItemId) ? "★ 取消星标" : "☆ 星标关注"}
+          </button>
+          <button className={`pill-btn whitespace-nowrap ${focusStarOnly ? "!border-amber-300/60 !text-amber-200" : ""}`} onClick={() => setFocusStarOnly((prev) => !prev)}>
+            {focusStarOnly ? "仅看星标: 开" : "仅看星标: 关"}
           </button>
         </div>
-        {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前筛选下没有可查询物品。</p> : null}
+        {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前搜索条件下没有可查询物品。</p> : null}
+        {starredHistoryItems.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="text-amber-200">重点关注:</span>
+            {starredHistoryItems.slice(0, 12).map((item) => (
+              <button
+                key={`star-item-chip-${item.id}`}
+                className="pill-btn !border-amber-300/40 !text-amber-200"
+                onClick={() => onViewHistoryCurveForItem(item.id, { scroll: false })}
+              >
+                ★ {item.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            className={`pill-btn whitespace-nowrap ${historyIncludeSuspect ? "!border-rose-300/70 !text-rose-200" : "!border-emerald-300/50 !text-emerald-200"}`}
+            onClick={() => setHistoryIncludeSuspect((prev) => !prev)}
+            disabled={busy || !historyItemId}
+          >
+            {historyIncludeSuspect ? "可疑点: 已包含" : "可疑点: 已过滤"}
+          </button>
           {HISTORY_QUICK_DAY_OPTIONS.map((days) => {
             const active = activeHistoryQuickDays === days;
             return (
@@ -1780,7 +2624,6 @@ export function WorkshopView(): JSX.Element {
                 className={`pill-btn ${active ? "!border-cyan-300/60 !bg-cyan-300/20 !text-cyan-100" : ""}`}
                 onClick={() => {
                   setHistoryDaysInput(String(days));
-                  void onLoadPriceHistory(days);
                 }}
                 disabled={busy || !historyItemId}
               >
@@ -1797,6 +2640,7 @@ export function WorkshopView(): JSX.Element {
                 <thead className="bg-white/5 text-slate-300">
                   <tr>
                     <th className="px-2 py-1">物品</th>
+                    <th className="px-2 py-1">市场</th>
                     <th className="px-2 py-1">价格</th>
                     <th className="px-2 py-1">时间</th>
                     <th className="px-2 py-1">状态</th>
@@ -1806,6 +2650,7 @@ export function WorkshopView(): JSX.Element {
                   {recentOcrImportedEntries.map((entry, index) => (
                     <tr key={`recent-ocr-import-${entry.itemId}-${entry.lineNumber}-${index}`} className="border-t border-white/10">
                       <td className="px-2 py-1">{entry.itemName}</td>
+                      <td className="px-2 py-1">{formatMarketLabel(entry.market)}</td>
                       <td className="px-2 py-1">{formatGold(entry.unitPrice)}</td>
                       <td className="px-2 py-1">{formatDateTime(entry.capturedAt)}</td>
                       <td className={`px-2 py-1 ${entry.createdItem ? "text-amber-300" : "text-emerald-300"}`}>
@@ -1819,122 +2664,198 @@ export function WorkshopView(): JSX.Element {
           </div>
         ) : null}
 
-        {historyResult ? (
-          <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-6">
-              <div className="data-pill">样本数: {historyResult.sampleCount}</div>
-              <div className="data-pill">最新价: {formatGold(historyResult.latestPrice)}</div>
-              <div className="data-pill">区间均价: {formatGold(historyResult.averagePrice)}</div>
-              <div className="data-pill">MA7(最新): {formatGold(historyResult.ma7Latest)}</div>
-              <div
-                className={`data-pill ${
-                  historyInsight?.deviationFromWeekday !== null && historyInsight?.deviationFromWeekday !== undefined
-                    ? historyInsight.deviationFromWeekday <= 0
-                      ? "text-emerald-300"
-                      : "text-rose-300"
-                    : ""
-                }`}
-              >
-                周内均价偏离: {toSignedPercent(historyInsight?.deviationFromWeekday ?? null)}
-              </div>
-              <div className="data-pill">
-                最新时间: {historyResult.latestCapturedAt ? new Date(historyResult.latestCapturedAt).toLocaleString() : "--"}
-              </div>
+        <div ref={historyChartAnchorRef} className="relative mt-3 min-h-[780px]">
+          {historyLoading ? (
+            <div className="pointer-events-none absolute right-0 top-0 z-10 rounded-md border border-cyan-300/30 bg-cyan-500/15 px-2 py-1 text-[11px] text-cyan-200">
+              更新中...
             </div>
+          ) : null}
+          {historyHasLoaded ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                <div className="data-pill">伺服器样本: {historyServerResult?.sampleCount ?? 0}</div>
+                <div className="data-pill">伺服器可疑: {historyServerResult?.suspectCount ?? 0}</div>
+                <div className="data-pill">世界样本: {historyWorldResult?.sampleCount ?? 0}</div>
+                <div className="data-pill">世界可疑: {historyWorldResult?.suspectCount ?? 0}</div>
+              </div>
 
-            {historyChartModel ? (
-              <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/25 p-3">
-                <svg viewBox={`0 0 ${historyChartModel.width} ${historyChartModel.height}`} className="h-[280px] w-full min-w-[760px]">
-                  {historyChartModel.yTicks.map((tick) => (
-                    <g key={`history-y-${tick.y}`}>
+              {dualHistoryChartModel ? (
+                <div className="overflow-x-auto rounded-xl border border-white/10 bg-black/25 p-3">
+                  <svg viewBox={`0 0 ${dualHistoryChartModel.width} ${dualHistoryChartModel.height}`} className="h-[320px] w-full min-w-[760px]">
+                    {dualHistoryChartModel.yTicks.map((tick) => (
+                      <g key={`dual-history-y-${tick.y}`}>
+                        <line
+                          x1={dualHistoryChartModel.left}
+                          y1={tick.y}
+                          x2={dualHistoryChartModel.width - dualHistoryChartModel.right}
+                          y2={tick.y}
+                          stroke="rgba(148,163,184,0.2)"
+                          strokeWidth="1"
+                        />
+                        <text x={dualHistoryChartModel.left - 8} y={tick.y + 4} textAnchor="end" fill="#cbd5e1" fontSize="11">
+                          {formatGold(tick.value)}
+                        </text>
+                      </g>
+                    ))}
+                    {dualHistoryChartModel.wednesdayMarkers.map((marker) => (
                       <line
-                        x1={historyChartModel.left}
-                        y1={tick.y}
-                        x2={historyChartModel.width - historyChartModel.right}
-                        y2={tick.y}
-                        stroke="rgba(148,163,184,0.2)"
+                        key={`dual-history-wed-${marker.date}`}
+                        x1={marker.x}
+                        y1={dualHistoryChartModel.top}
+                        x2={marker.x}
+                        y2={dualHistoryChartModel.height - dualHistoryChartModel.bottom}
+                        stroke="rgba(251,191,36,0.35)"
+                        strokeDasharray="5 5"
                         strokeWidth="1"
                       />
-                      <text x={historyChartModel.left - 8} y={tick.y + 4} textAnchor="end" fill="#cbd5e1" fontSize="11">
-                        {formatGold(tick.value)}
-                      </text>
-                    </g>
-                  ))}
-
-                  {historyChartModel.wednesdayMarkers.map((marker) => (
+                    ))}
                     <line
-                      key={`history-wed-${marker.date}`}
-                      x1={marker.x}
-                      y1={historyChartModel.top}
-                      x2={marker.x}
-                      y2={historyChartModel.height - historyChartModel.bottom}
-                      stroke="rgba(251,191,36,0.4)"
-                      strokeDasharray="5 5"
-                      strokeWidth="1"
+                      x1={dualHistoryChartModel.left}
+                      y1={dualHistoryChartModel.height - dualHistoryChartModel.bottom}
+                      x2={dualHistoryChartModel.width - dualHistoryChartModel.right}
+                      y2={dualHistoryChartModel.height - dualHistoryChartModel.bottom}
+                      stroke="rgba(148,163,184,0.55)"
+                      strokeWidth="1.1"
                     />
-                  ))}
-
-                  <line
-                    x1={historyChartModel.left}
-                    y1={historyChartModel.height - historyChartModel.bottom}
-                    x2={historyChartModel.width - historyChartModel.right}
-                    y2={historyChartModel.height - historyChartModel.bottom}
-                    stroke="rgba(148,163,184,0.55)"
-                    strokeWidth="1.1"
-                  />
-
-                  {historyChartModel.pricePath ? (
-                    <path d={historyChartModel.pricePath} fill="none" stroke="#22d3ee" strokeWidth="2.4" />
-                  ) : null}
-                  {historyChartModel.ma7Path ? (
-                    <path d={historyChartModel.ma7Path} fill="none" stroke="#fbbf24" strokeWidth="2.1" />
-                  ) : null}
-
-                  {historyChartModel.latestPoint ? (
-                    <circle
-                      cx={historyChartModel.latestPoint.x}
-                      cy={historyChartModel.latestPoint.y}
-                      r="4.2"
-                      fill="#22d3ee"
-                      stroke="rgba(255,255,255,0.85)"
-                      strokeWidth="1.2"
-                    />
-                  ) : null}
-
-                  {historyChartModel.xTicks.map((tick) => (
-                    <text
-                      key={`history-x-${tick.x}`}
-                      x={tick.x}
-                      y={historyChartModel.height - 8}
-                      textAnchor="middle"
-                      fill="#cbd5e1"
-                      fontSize="11"
-                    >
-                      {tick.label}
-                    </text>
-                  ))}
-                </svg>
-
-                <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-300">
-                  <span>青线: 实际价格</span>
-                  <span>黄线: MA7</span>
-                  <span>黄虚线: 周三重置日</span>
+                    {dualHistoryChartModel.serverPricePath ? (
+                      <path d={dualHistoryChartModel.serverPricePath} fill="none" stroke="#22d3ee" strokeWidth="2.3" />
+                    ) : null}
+                    {dualHistoryChartModel.worldPricePath ? (
+                      <path d={dualHistoryChartModel.worldPricePath} fill="none" stroke="#34d399" strokeWidth="2.3" />
+                    ) : null}
+                    {dualHistoryChartModel.serverPoints.map((point) => (
+                      <circle
+                        key={`dual-history-server-${point.id}`}
+                        cx={point.x}
+                        cy={point.y}
+                        r={point.isSuspect ? "3.8" : "2.8"}
+                        fill={point.isSuspect ? "#fb7185" : "#22d3ee"}
+                        fillOpacity={point.isSuspect ? 0.95 : 0.72}
+                        className="cursor-pointer"
+                        onClick={() => onJumpHistoryManagerForSnapshot(point.id, point.capturedAt)}
+                      >
+                        <title>
+                          {`${formatDateTime(point.capturedAt)} | ${formatGold(point.unitPrice)} | 伺服器${point.suspectReason ? ` | ${point.suspectReason}` : ""}`}
+                        </title>
+                      </circle>
+                    ))}
+                    {dualHistoryChartModel.worldPoints.map((point) => (
+                      <circle
+                        key={`dual-history-world-${point.id}`}
+                        cx={point.x}
+                        cy={point.y}
+                        r={point.isSuspect ? "3.8" : "2.8"}
+                        fill={point.isSuspect ? "#fb7185" : "#34d399"}
+                        fillOpacity={point.isSuspect ? 0.95 : 0.72}
+                        className="cursor-pointer"
+                        onClick={() => onJumpHistoryManagerForSnapshot(point.id, point.capturedAt)}
+                      >
+                        <title>
+                          {`${formatDateTime(point.capturedAt)} | ${formatGold(point.unitPrice)} | 世界${point.suspectReason ? ` | ${point.suspectReason}` : ""}`}
+                        </title>
+                      </circle>
+                    ))}
+                    {dualHistoryChartModel.latestServerPoint ? (
+                      <circle
+                        cx={dualHistoryChartModel.latestServerPoint.x}
+                        cy={dualHistoryChartModel.latestServerPoint.y}
+                        r="4.2"
+                        fill="#22d3ee"
+                        stroke="rgba(255,255,255,0.85)"
+                        strokeWidth="1.2"
+                      />
+                    ) : null}
+                    {dualHistoryChartModel.latestWorldPoint ? (
+                      <circle
+                        cx={dualHistoryChartModel.latestWorldPoint.x}
+                        cy={dualHistoryChartModel.latestWorldPoint.y}
+                        r="4.2"
+                        fill="#34d399"
+                        stroke="rgba(255,255,255,0.85)"
+                        strokeWidth="1.2"
+                      />
+                    ) : null}
+                    {dualHistoryChartModel.xTicks.map((tick) => (
+                      <text key={`dual-history-x-${tick.x}`} x={tick.x} y={dualHistoryChartModel.height - 8} textAnchor="middle" fill="#cbd5e1" fontSize="11">
+                        {tick.label}
+                      </text>
+                    ))}
+                  </svg>
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-300">
+                    <span>青线: 伺服器价格曲线</span>
+                    <span>绿线: 世界价格曲线</span>
+                    <span>黄虚线: 周三重置日</span>
+                    <span>红点: 可疑价（点击点位可直达历史管理）</span>
+                  </div>
                 </div>
+              ) : (
+                <p className="text-xs text-slate-300">当前区间没有价格样本，无法绘制曲线。</p>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                {historyMarketPanels.map((panel) => {
+                  const result = panel.result;
+                  const insight = panel.insight;
+                  return (
+                    <div key={`history-panel-${panel.market}`} className={`rounded-xl border p-3 text-xs ${panel.borderClass}`}>
+                      <p className={`text-sm ${panel.colorClass}`}>{panel.title}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-7">
+                        <div className="data-pill">样本数: {result?.sampleCount ?? 0}</div>
+                        <div className="data-pill">
+                          可疑点: {result?.suspectCount ?? 0}
+                          {historyIncludeSuspect ? "（已包含）" : "（已过滤）"}
+                        </div>
+                        <div className="data-pill">最新价: {formatGold(result?.latestPrice ?? null)}</div>
+                        <div className="data-pill">区间均价: {formatGold(result?.averagePrice ?? null)}</div>
+                        <div className="data-pill">MA7(最新): {formatGold(result?.ma7Latest ?? null)}</div>
+                        <div
+                          className={`data-pill ${
+                            insight?.deviationFromWeekday !== null && insight?.deviationFromWeekday !== undefined
+                              ? insight.deviationFromWeekday <= 0
+                                ? "text-emerald-300"
+                                : "text-rose-300"
+                              : ""
+                          }`}
+                        >
+                          周内均价偏离: {toSignedPercent(insight?.deviationFromWeekday ?? null)}
+                        </div>
+                        <div className="data-pill">
+                          最新时间: {result?.latestCapturedAt ? new Date(result.latestCapturedAt).toLocaleString() : "--"}
+                        </div>
+                      </div>
+
+                      {result && result.suspectPoints.length > 0 ? (
+                        <div className="mt-2 rounded-xl border border-rose-300/30 bg-rose-500/10 p-2 text-xs">
+                          <p className="text-rose-200">检测到可疑价格点（{result.suspectPoints.length}）</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {result.suspectPoints.slice(0, 10).map((point) => (
+                              <button
+                                key={`history-suspect-${panel.market}-${point.id}`}
+                                className="pill-btn !border-rose-300/50 !text-rose-200"
+                                onClick={() => onJumpHistoryManagerForSnapshot(point.id, point.capturedAt)}
+                                title={point.suspectReason ?? "可疑价格"}
+                              >
+                                {formatDateLabel(point.capturedAt)} {formatGold(point.unitPrice)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs md:grid-cols-7">
+                        {(result?.weekdayAverages ?? []).map((entry) => (
+                          <div key={`weekday-avg-${panel.market}-${entry.weekday}`} className="data-pill">
+                            {weekdayLabel(entry.weekday)}: {formatGold(entry.averagePrice)} ({entry.sampleCount})
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="text-xs text-slate-300">当前区间没有价格样本，无法绘制曲线。</p>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-7">
-              {historyResult.weekdayAverages.map((entry) => (
-                <div key={`weekday-avg-${entry.weekday}`} className="data-pill">
-                  {weekdayLabel(entry.weekday)}: {formatGold(entry.averagePrice)} ({entry.sampleCount})
-                </div>
-              ))}
-            </div>
 
             <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
-              <p className="text-slate-200">Phase 2.3 周期性波动提示（按星期）</p>
+              <p className="text-slate-200">周期性波动提示</p>
               <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.7fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto_auto]">
                 <select
                   className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -1957,7 +2878,7 @@ export function WorkshopView(): JSX.Element {
                   value={signalThresholdPercentInput}
                   onChange={(event) => setSignalThresholdPercentInput(event.target.value)}
                   disabled={busy}
-                  placeholder="触发阈值%（如 8）"
+                  placeholder="触发阈值%（建议 >=15）"
                 />
                 <button className="task-btn px-4" onClick={() => void onSaveSignalRule()} disabled={busy}>
                   保存规则
@@ -1967,10 +2888,11 @@ export function WorkshopView(): JSX.Element {
                 </button>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-6">
+              <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-7">
                 <div className="data-pill">规则状态: {signalResult?.ruleEnabled ? "开启" : "关闭"}</div>
                 <div className="data-pill">分析天数: {signalResult?.lookbackDays ?? "--"}</div>
-                <div className="data-pill">阈值: {toPercent(signalResult ? signalResult.thresholdRatio : null)}</div>
+                <div className="data-pill">阈值(输入): {toPercent(signalResult ? signalResult.thresholdRatio : null)}</div>
+                <div className="data-pill">阈值(生效): {toPercent(signalResult ? signalResult.effectiveThresholdRatio : null)}</div>
                 <div className="data-pill">触发数: {signalResult?.triggeredCount ?? 0}</div>
                 <div className="data-pill text-emerald-300">进货点: {signalResult?.buyZoneCount ?? 0}</div>
                 <div className="data-pill text-amber-300">出货点: {signalResult?.sellZoneCount ?? 0}</div>
@@ -1980,9 +2902,15 @@ export function WorkshopView(): JSX.Element {
                 triggeredSignalRows.length > 0 ? (
                   <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-white/10 bg-black/30 p-2">
                     {triggeredSignalRows.slice(0, 20).map((row) => (
-                      <div key={`signal-${row.itemId}`} className="mb-2 rounded-lg border border-emerald-200/30 bg-emerald-500/10 p-2">
-                        <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                      <div
+                        key={`signal-${row.itemId}-${row.market ?? "single"}`}
+                        className={`mb-2 rounded-lg border bg-emerald-500/10 p-2 ${
+                          isStarredItem(row.itemId) ? "border-amber-300/60 ring-1 ring-amber-300/40" : "border-emerald-200/30"
+                        }`}
+                      >
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-9">
                           <div className="data-pill">物品: {row.itemName}</div>
+                          <div className="data-pill">市场: {formatMarketLabel(row.market)}</div>
                           <div className="data-pill text-emerald-300">{trendTagLabel(row.trendTag)}</div>
                           <div className="data-pill">最新价: {formatGold(row.latestPrice)}</div>
                           <div className="data-pill">
@@ -1995,11 +2923,21 @@ export function WorkshopView(): JSX.Element {
                           <div className="data-pill text-cyan-300">
                             MA7偏离: {toSignedPercent(row.deviationRatioFromMa7)}
                           </div>
+                          <div className="data-pill text-amber-200">置信分: {row.confidenceScore}</div>
                         </div>
+                        {row.reasons.length > 0 ? <p className="mt-2 text-[11px] text-slate-300">判定依据: {row.reasons.join(" | ")}</p> : null}
                         <p className="mt-2 text-slate-300">
                           最新采样: {row.latestCapturedAt ? new Date(row.latestCapturedAt).toLocaleString() : "--"}，样本数:{" "}
                           {row.sampleCount}
                         </p>
+                        <div className="mt-2 flex justify-end gap-2">
+                          <button className="pill-btn !border-amber-300/40 !text-amber-200" onClick={() => onToggleStarItem(row.itemId)} disabled={busy}>
+                            {isStarredItem(row.itemId) ? "★ 已星标" : "☆ 星标"}
+                          </button>
+                          <button className="pill-btn" onClick={() => onViewHistoryCurveForItem(row.itemId, { market: row.market })} disabled={busy}>
+                            查看曲线
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2014,7 +2952,6 @@ export function WorkshopView(): JSX.Element {
             </div>
 
             <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
-              <p className="text-slate-200">Phase 4 趋势建议（进货点 / 出货点）</p>
               {signalResult ? (
                 <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                   <div className="rounded-lg border border-emerald-300/25 bg-emerald-500/10 p-2">
@@ -2022,16 +2959,37 @@ export function WorkshopView(): JSX.Element {
                     {buyZoneRows.length > 0 ? (
                       <div className="mt-2 max-h-56 overflow-auto space-y-2">
                         {buyZoneRows.slice(0, 16).map((row) => (
-                          <div key={`buy-zone-${row.itemId}`} className="rounded-lg border border-emerald-200/20 bg-black/25 p-2">
+                          <div
+                            key={`buy-zone-${row.itemId}-${row.market ?? "single"}`}
+                            className={`rounded-lg border bg-black/25 p-2 ${
+                              isStarredItem(row.itemId) ? "border-amber-300/60 ring-1 ring-amber-300/40" : "border-emerald-200/20"
+                            }`}
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span>{row.itemName}</span>
-                              <span>{formatGold(row.latestPrice)}</span>
+                              <span>
+                                {row.itemName} <span className="text-slate-300">[{formatMarketLabel(row.market)}]</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span>{formatGold(row.latestPrice)}</span>
+                                <button
+                                  className="pill-btn !border-amber-300/40 !text-amber-200"
+                                  onClick={() => onToggleStarItem(row.itemId)}
+                                  disabled={busy}
+                                >
+                                  {isStarredItem(row.itemId) ? "★" : "☆"}
+                                </button>
+                                <button className="pill-btn" onClick={() => onViewHistoryCurveForItem(row.itemId, { market: row.market })} disabled={busy}>
+                                  曲线
+                                </button>
+                              </div>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-300">
                               <span>星期偏离 {toSignedPercent(row.deviationRatioFromWeekdayAverage)}</span>
                               <span>MA7偏离 {toSignedPercent(row.deviationRatioFromMa7)}</span>
+                              <span>置信分 {row.confidenceScore}</span>
                               <span>样本 {row.sampleCount}</span>
                             </div>
+                            {row.reasons.length > 0 ? <p className="mt-1 text-[11px] text-slate-300">依据: {row.reasons.join(" | ")}</p> : null}
                           </div>
                         ))}
                       </div>
@@ -2044,16 +3002,37 @@ export function WorkshopView(): JSX.Element {
                     {sellZoneRows.length > 0 ? (
                       <div className="mt-2 max-h-56 overflow-auto space-y-2">
                         {sellZoneRows.slice(0, 16).map((row) => (
-                          <div key={`sell-zone-${row.itemId}`} className="rounded-lg border border-amber-200/20 bg-black/25 p-2">
+                          <div
+                            key={`sell-zone-${row.itemId}-${row.market ?? "single"}`}
+                            className={`rounded-lg border bg-black/25 p-2 ${
+                              isStarredItem(row.itemId) ? "border-amber-300/60 ring-1 ring-amber-300/40" : "border-amber-200/20"
+                            }`}
+                          >
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span>{row.itemName}</span>
-                              <span>{formatGold(row.latestPrice)}</span>
+                              <span>
+                                {row.itemName} <span className="text-slate-300">[{formatMarketLabel(row.market)}]</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span>{formatGold(row.latestPrice)}</span>
+                                <button
+                                  className="pill-btn !border-amber-300/40 !text-amber-200"
+                                  onClick={() => onToggleStarItem(row.itemId)}
+                                  disabled={busy}
+                                >
+                                  {isStarredItem(row.itemId) ? "★" : "☆"}
+                                </button>
+                                <button className="pill-btn" onClick={() => onViewHistoryCurveForItem(row.itemId, { market: row.market })} disabled={busy}>
+                                  曲线
+                                </button>
+                              </div>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-slate-300">
                               <span>星期偏离 {toSignedPercent(row.deviationRatioFromWeekdayAverage)}</span>
                               <span>MA7偏离 {toSignedPercent(row.deviationRatioFromMa7)}</span>
+                              <span>置信分 {row.confidenceScore}</span>
                               <span>样本 {row.sampleCount}</span>
                             </div>
+                            {row.reasons.length > 0 ? <p className="mt-1 text-[11px] text-slate-300">依据: {row.reasons.join(" | ")}</p> : null}
                           </div>
                         ))}
                       </div>
@@ -2066,18 +3045,22 @@ export function WorkshopView(): JSX.Element {
                 <p className="mt-2 text-slate-300">尚未生成趋势建议，请先刷新信号。</p>
               )}
             </div>
-          </div>
-        ) : (
-          <p className="mt-2 text-xs text-slate-300">还没有查询结果。先选物品和天数后点击“查询历史”。</p>
-        )}
+
+            </div>
+          ) : (
+            <div className="flex min-h-[780px] items-center justify-center">
+              <p className="text-xs text-slate-300">还没有查询结果。先选物品和天数，系统会自动查询。</p>
+            </div>
+          )}
+        </div>
       </article>
 
       <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">2) 制作模拟器（单配方）+ 机会分析</h4>
+          <h4 className="text-sm font-semibold">做装模拟器</h4>
           {simulation ? (
             <button className="pill-btn" onClick={() => void onApplySimulationMaterialEdits()} disabled={busy}>
-              保存单价/库存并重算
+              保存成品/材料价格与库存并重算
             </button>
           ) : null}
         </div>
@@ -2108,7 +3091,7 @@ export function WorkshopView(): JSX.Element {
             ))}
           </select>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_auto]">
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_auto]">
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={simulateRecipeId}
@@ -2127,6 +3110,13 @@ export function WorkshopView(): JSX.Element {
             onChange={(event) => setSimulateRuns(event.target.value)}
             disabled={busy}
             placeholder="制作次数"
+          />
+          <input
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={simulationOutputPriceDraft}
+            onChange={(event) => setSimulationOutputPriceDraft(event.target.value)}
+            disabled={busy || !simulation}
+            placeholder="成品售价(可改)"
           />
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -2156,8 +3146,9 @@ export function WorkshopView(): JSX.Element {
             <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
               <div className="data-pill">税后收入: {formatGold(simulation.netRevenueAfterTax)}</div>
               <div className="data-pill">利润率: {toPercent(simulation.estimatedProfitRate)}</div>
+              <div className="data-pill">成品单价: {formatGold(simulation.outputUnitPrice)}</div>
               <div className="data-pill">缺口补齐成本: {formatGold(simulation.missingPurchaseCost)}</div>
-              <div className="data-pill">{simulation.craftableNow ? "库存可直接制作" : "库存不足，需补材料"}</div>
+              <div className="data-pill md:col-span-4">{simulation.craftableNow ? "库存可直接制作" : "库存不足，需补材料"}</div>
             </div>
             {simulation.unknownPriceItemIds.length > 0 ? (
               <p className="mt-2 text-amber-300">
@@ -2176,6 +3167,7 @@ export function WorkshopView(): JSX.Element {
                     <th className="px-2 py-1">库存(可改)</th>
                     <th className="px-2 py-1">缺口</th>
                     <th className="px-2 py-1">单价(可改)</th>
+                    <th className="px-2 py-1">默认取价</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2217,6 +3209,7 @@ export function WorkshopView(): JSX.Element {
                           placeholder="留空=不改"
                         />
                       </td>
+                      <td className="px-2 py-1 text-slate-300">{formatMarketLabel(row.latestPriceMarket)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2228,15 +3221,21 @@ export function WorkshopView(): JSX.Element {
 
       <article className="order-4 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">3) 背包与补差工作台（库存驱动）</h4>
+          <h4 className="text-sm font-semibold">库存管理</h4>
           <button className="pill-btn" onClick={() => void loadCraftOptions()} disabled={busy}>
             刷新建议
           </button>
         </div>
 
         <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-          <h5 className="text-xs font-semibold text-slate-200">3.1 价格/库存修正（全局）</h5>
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
+            <input
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              value={itemKeyword}
+              onChange={(event) => setItemKeyword(event.target.value)}
+              disabled={busy}
+              placeholder="搜索物品名（全局）"
+            />
             <select
               className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
               value={itemMainCategory}
@@ -2275,10 +3274,20 @@ export function WorkshopView(): JSX.Element {
               ))}
             </select>
           </div>
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <p className="mt-2 text-xs text-slate-300">提示：输入关键词后，将在全物品范围搜索并忽略大类/下级分类筛选。</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 2xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <select
+              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              value={selectedItemPriceMarket}
+              onChange={(event) => setSelectedItemPriceMarket(event.target.value as "server" | "world")}
+              disabled={busy || !selectedItemId}
+            >
+              <option value="server">价格市场: 伺服器</option>
+              <option value="world">价格市场: 世界</option>
+            </select>
             <input
               className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              placeholder="最新单价"
+              placeholder="录入价格"
               value={selectedItemPrice}
               onChange={(event) => setSelectedItemPrice(event.target.value)}
               disabled={busy || !selectedItemId}
@@ -2301,8 +3310,13 @@ export function WorkshopView(): JSX.Element {
           </div>
           {selectedItemId ? (
             <p className="mt-2 text-xs text-slate-300">
-              当前值: 单价 {formatGold(latestPriceByItemId.get(selectedItemId) ?? null)} / 库存 {inventoryByItemId.get(selectedItemId) ?? 0} / 最新时间{" "}
-              {formatDateTime(latestPriceMetaByItemId.get(selectedItemId)?.capturedAt ?? null)}
+              当前值: 伺服器 {formatGold(latestPriceMetaByItemId.get(selectedItemId)?.server?.price ?? null)}（
+              {formatDateTime(latestPriceMetaByItemId.get(selectedItemId)?.server?.capturedAt ?? null)}） / 世界{" "}
+              {formatGold(latestPriceMetaByItemId.get(selectedItemId)?.world?.price ?? null)}（
+              {formatDateTime(latestPriceMetaByItemId.get(selectedItemId)?.world?.capturedAt ?? null)}） / 单列{" "}
+              {formatGold(latestPriceMetaByItemId.get(selectedItemId)?.single?.price ?? null)}（
+              {formatDateTime(latestPriceMetaByItemId.get(selectedItemId)?.single?.capturedAt ?? null)}） / 库存{" "}
+              {inventoryByItemId.get(selectedItemId) ?? 0}
             </p>
           ) : (
             <p className="mt-2 text-xs text-amber-300">当前分类下没有物品。</p>
@@ -2313,10 +3327,10 @@ export function WorkshopView(): JSX.Element {
                 <tr>
                   <th className="px-2 py-1">物品</th>
                   <th className="px-2 py-1">分类</th>
-                  <th className="px-2 py-1">最新价格</th>
-                  <th className="px-2 py-1">最新时间</th>
+                  <th className="px-2 py-1">伺服器价格</th>
+                  <th className="px-2 py-1">世界价格</th>
                   <th className="px-2 py-1">库存</th>
-                  <th className="px-2 py-1">修正</th>
+                  <th className="px-2 py-1">选择</th>
                 </tr>
               </thead>
               <tbody>
@@ -2324,8 +3338,14 @@ export function WorkshopView(): JSX.Element {
                   <tr key={item.id} className="border-t border-white/10">
                     <td className="px-2 py-1">{item.name}</td>
                     <td className="px-2 py-1">{`${item.mainCategory} / ${item.subCategory}`}</td>
-                    <td className="px-2 py-1">{formatGold(latestPriceByItemId.get(item.id) ?? null)}</td>
-                    <td className="px-2 py-1">{formatDateTime(latestPriceMetaByItemId.get(item.id)?.capturedAt ?? null)}</td>
+                    <td className="px-2 py-1">
+                      <div>{formatGold(latestPriceMetaByItemId.get(item.id)?.server?.price ?? null)}</div>
+                      <div className="text-[10px] text-slate-400">{formatDateTime(latestPriceMetaByItemId.get(item.id)?.server?.capturedAt ?? null)}</div>
+                    </td>
+                    <td className="px-2 py-1">
+                      <div>{formatGold(latestPriceMetaByItemId.get(item.id)?.world?.price ?? null)}</div>
+                      <div className="text-[10px] text-slate-400">{formatDateTime(latestPriceMetaByItemId.get(item.id)?.world?.capturedAt ?? null)}</div>
+                    </td>
                     <td className="px-2 py-1">{inventoryByItemId.get(item.id) ?? 0}</td>
                     <td className="px-2 py-1">
                       <button className="pill-btn" onClick={() => onPickItemForCorrection(item.id)} disabled={busy}>
@@ -2339,101 +3359,161 @@ export function WorkshopView(): JSX.Element {
           </div>
         </div>
 
-        <h5 className="mt-4 text-xs font-semibold text-slate-200">3.2 背包逆向推导（可制作什么）</h5>
-        <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
-          {craftOptions.length === 0 ? (
-            <p className="px-2 py-2 text-slate-300">暂无可分析配方。</p>
-          ) : (
-            craftOptions.slice(0, 30).map((option) => (
-              <div key={`option-${option.recipeId}`} className="mb-2 rounded-lg border border-white/10 bg-white/5 p-2">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                  <div className="data-pill">成品: {option.outputItemName}</div>
-                  <div className="data-pill">可做次数: {option.craftableCount}</div>
-                  <div className="data-pill">单次成本: {formatGold(option.requiredMaterialCostPerRun)}</div>
-                  <div
-                    className={`data-pill ${
-                      option.estimatedProfitPerRun !== null && option.estimatedProfitPerRun >= 0
-                        ? "text-emerald-300"
-                        : "text-rose-300"
-                    }`}
-                  >
-                    单次利润: {formatGold(option.estimatedProfitPerRun)}
-                  </div>
-                </div>
-                {option.missingRowsForOneRun.length > 0 ? (
-                  <p className="mt-2 text-slate-300">
-                    缺口:
-                    {option.missingRowsForOneRun.map((row) => `${row.itemName}(${row.missing})`).join("、")}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-emerald-300">当前库存已满足单次制作。</p>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="mt-4">
-          <h5 className="text-xs font-semibold text-slate-200">3.3 差一点可做（补差预算）</h5>
-        <p className="mt-2 text-xs text-slate-300">输入可补差预算，系统会推算“补一点材料即可开做”的目标与预算内潜在利润。</p>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto]">
+        <h5 className="mt-4 text-xs font-semibold text-slate-200">材料逆向推导制造推荐工具</h5>
+        <p className="mt-2 text-xs text-slate-300">
+          输入一个材料可反推关联配方；留空则按你当前背包的综合材料覆盖率自动推荐。系统会同步给出补差材料和预算内建议次数。
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]">
           <input
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={nearCraftBudgetInput}
-            onChange={(event) => setNearCraftBudgetInput(event.target.value)}
+            value={reverseMaterialKeyword}
+            onChange={(event) => setReverseMaterialKeyword(event.target.value)}
+            disabled={busy}
+            placeholder="材料关键词（如 奥里哈康）"
+          />
+          <select
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={reverseFocusMaterialId}
+            onChange={(event) => setReverseFocusMaterialId(event.target.value)}
+            disabled={busy}
+          >
+            <option value="">材料筛选: 综合背包（全部）</option>
+            {reverseMaterialOptions.map((item) => (
+              <option key={`reverse-material-${item.id}`} value={item.id}>
+                {item.name}（库存 {inventoryByItemId.get(item.id) ?? 0}）
+              </option>
+            ))}
+          </select>
+          <input
+            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            value={reverseCraftBudgetInput}
+            onChange={(event) => setReverseCraftBudgetInput(event.target.value)}
             disabled={busy}
             placeholder="补差预算（金币）"
           />
           <select
             className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={nearCraftSortMode}
-            onChange={(event) => setNearCraftSortMode(event.target.value as "max_budget_profit" | "min_gap_cost")}
+            value={reverseScoreMode}
+            onChange={(event) => setReverseScoreMode(event.target.value as ReverseScoreMode)}
             disabled={busy}
           >
-            <option value="max_budget_profit">排序: 最高预算利润优先</option>
-            <option value="min_gap_cost">排序: 最低补差成本优先</option>
+            <option value="balanced">关联偏好: 平衡模式</option>
+            <option value="coverage">关联偏好: 覆盖率优先</option>
+            <option value="profit">关联偏好: 利润优先</option>
+            <option value="craftable">关联偏好: 可直接制作优先</option>
           </select>
           <button className="task-btn px-4" onClick={() => void loadCraftOptions()} disabled={busy}>
-            按预算刷新
+            刷新建议
           </button>
         </div>
-        <p className="mt-2 text-xs text-slate-300">当前预算: {formatGold(nearCraftBudget)} 金币，计算基于“{taxMode === "0.1" ? "服务器拍卖行税 10%" : "世界交易行税 20%"}”。</p>
-        <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
-          {nearCraftSuggestions.length === 0 ? (
-            <p className="px-2 py-2 text-slate-300">在当前预算下，没有可补差开做的目标，或关键材料缺少价格。</p>
-          ) : (
-            nearCraftSuggestions.slice(0, 30).map((entry) => (
-              <div key={`near-${entry.recipeId}`} className="mb-2 rounded-lg border border-white/10 bg-white/5 p-2">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
-                  <div className="data-pill">成品: {entry.outputItemName}</div>
-                  <div className="data-pill">单次补差: {formatGold(entry.missingPurchaseCostPerRun)}</div>
-                  <div className="data-pill">预算内可补差次数: {entry.affordableRuns}</div>
-                  <div className="data-pill">单次利润: {formatGold(entry.estimatedProfitPerRun)}</div>
-                  <div
-                    className={`data-pill ${
-                      entry.estimatedBudgetProfit !== null && entry.estimatedBudgetProfit >= 0
-                        ? "text-emerald-300"
-                        : "text-rose-300"
-                    }`}
-                  >
-                    预算内潜在利润: {formatGold(entry.estimatedBudgetProfit)}
-                  </div>
-                </div>
-                {entry.unknownPriceRows.length > 0 ? (
-                  <p className="mt-2 text-amber-300">
-                    缺价格材料:
-                    {entry.unknownPriceRows.map((row) => `${row.itemName}`).join("、")}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-slate-300">
-                    主要缺口:
-                    {entry.missingRows.map((row) => `${row.itemName}(${row.missing})`).join("、")}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
+        <p className="mt-2 text-xs text-slate-300">
+          当前模式: {reverseFocusMaterialName ? `按材料「${reverseFocusMaterialName}」反推` : "综合背包关联推荐"} | 当前预算:{" "}
+          {formatGold(reverseCraftBudget)} 金币 | 评分偏好: {reverseScoreModeLabel}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded border border-emerald-300/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">可直接制作</span>
+          <span className="rounded border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-cyan-200">补差后可做</span>
+          <span className="rounded border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-amber-200">缺价格待补</span>
+          <span className="rounded border border-rose-300/35 bg-rose-500/10 px-2 py-1 text-rose-200">低利润/风险</span>
         </div>
+        <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
+          {craftOptions.length === 0 ? (
+            <p className="px-2 py-2 text-slate-300">暂无可分析配方。</p>
+          ) : reverseCraftSuggestions.length === 0 ? (
+            <p className="px-2 py-2 text-slate-300">
+              {reverseFocusMaterialName ? `没有找到使用「${reverseFocusMaterialName}」的可推荐配方。` : "当前背包材料不足，暂时没有可推荐配方。"}
+            </p>
+          ) : (
+            reverseCraftSuggestions.slice(0, 30).map((entry) => {
+              const hasUnknownPrice = entry.unknownPriceRows.length > 0;
+              const hasGap = entry.missingRows.length > 0;
+              const positiveProfit = (entry.estimatedProfitPerRun ?? 0) >= 0;
+              const directCraftable = entry.craftableCount > 0;
+              const coverageTone =
+                entry.coverageRatio >= 0.75 ? "text-emerald-300" : entry.coverageRatio >= 0.4 ? "text-amber-300" : "text-rose-300";
+              let statusLabel = "补差后可做";
+              let statusClass = "border-cyan-300/35 bg-cyan-500/10 text-cyan-200";
+              if (hasUnknownPrice) {
+                statusLabel = "缺价格待补";
+                statusClass = "border-amber-300/35 bg-amber-500/10 text-amber-200";
+              } else if (directCraftable && positiveProfit) {
+                statusLabel = "可直接制作";
+                statusClass = "border-emerald-300/40 bg-emerald-500/10 text-emerald-200";
+              } else if (!positiveProfit) {
+                statusLabel = "低利润/风险";
+                statusClass = "border-rose-300/35 bg-rose-500/10 text-rose-200";
+              }
+              const cardToneClass = hasUnknownPrice
+                ? "border-amber-300/35"
+                : !positiveProfit
+                  ? "border-rose-300/35"
+                  : directCraftable
+                    ? "border-emerald-300/30"
+                    : "border-cyan-300/25";
+
+              return (
+                <div
+                  key={`reverse-${entry.recipeId}`}
+                  className={`mb-2 rounded-lg border bg-white/5 p-2 ${cardToneClass} ${
+                    isStarredItem(entry.outputItemId) ? "ring-1 ring-amber-300/35" : ""
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-slate-100">
+                      成品: {entry.outputItemName}
+                      {entry.relatedByFocusMaterial ? "（命中材料）" : ""}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded border px-2 py-1 text-[11px] ${statusClass}`}>{statusLabel}</span>
+                      <span className="data-pill !px-2 !py-1">关联分 {entry.relevanceScore.toFixed(1)}</span>
+                      <button
+                        className="pill-btn !border-amber-300/40 !text-amber-200"
+                        onClick={() => onToggleStarItem(entry.outputItemId)}
+                        disabled={busy}
+                      >
+                        {isStarredItem(entry.outputItemId) ? "★" : "☆"}
+                      </button>
+                      <button className="pill-btn" onClick={() => onViewHistoryCurveForItem(entry.outputItemId)} disabled={busy}>
+                        曲线
+                      </button>
+                      <button className="pill-btn" onClick={() => onJumpSimulationRecipe(entry.recipeId)} disabled={busy}>
+                        定位模拟器
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className={`data-pill ${coverageTone}`}>覆盖率: {toPercent(entry.coverageRatio)}</div>
+                    <div className="data-pill">
+                      已命中材料: {entry.matchedOwnedMaterialCount}/{entry.totalMaterialCount}
+                    </div>
+                    <div className={`data-pill ${directCraftable ? "text-emerald-300" : "text-slate-300"}`}>可直接制作: {entry.craftableCount}</div>
+                    <div className="data-pill">单次总材料成本: {formatGold(entry.requiredMaterialCostPerRun)}</div>
+                    <div className={`data-pill ${hasGap ? "text-amber-300" : "text-emerald-300"}`}>单次补差: {formatGold(entry.missingPurchaseCostPerRun)}</div>
+                    <div className="data-pill">预算建议次数: {entry.suggestedRunsByBudget}</div>
+                    <div className={`data-pill ${positiveProfit ? "text-emerald-300" : "text-rose-300"}`}>单次利润: {formatGold(entry.estimatedProfitPerRun)}</div>
+                    <div className={`data-pill ${entry.estimatedBudgetProfit !== null && entry.estimatedBudgetProfit >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      预算潜在利润: {formatGold(entry.estimatedBudgetProfit)}
+                    </div>
+                  </div>
+
+                  {entry.relatedByFocusMaterial ? (
+                    <p className="mt-2 text-slate-300">
+                      目标材料占比: 需求 {entry.focusMaterialRequired} / 现有 {entry.focusMaterialOwned}
+                    </p>
+                  ) : null}
+
+                  {entry.unknownPriceRows.length > 0 ? (
+                    <p className="mt-2 text-amber-300">缺价格材料: {entry.unknownPriceRows.map((row) => row.itemName).join("、")}</p>
+                  ) : entry.missingRows.length > 0 ? (
+                    <p className="mt-2 text-slate-300">补差材料: {entry.missingRows.map((row) => `${row.itemName}(${row.missing})`).join("、")}</p>
+                  ) : (
+                    <p className="mt-2 text-emerald-300">当前库存可直接开做，无需补差材料。</p>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </article>
     </div>

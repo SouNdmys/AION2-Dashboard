@@ -1,10 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import type { WorkshopItemCategory, WorkshopState } from "../../shared/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { WorkshopItemCategory, WorkshopPriceMarket, WorkshopState } from "../../shared/types";
 
 const goldFormatter = new Intl.NumberFormat("zh-CN");
 
 function formatGold(value: number): string {
   return goldFormatter.format(Math.floor(value));
+}
+
+function isSuspectPriceNote(note?: string): boolean {
+  if (!note) {
+    return false;
+  }
+  return note.includes("qa:suspect") || note.includes("qa:hard-outlier");
+}
+
+function formatMarketLabel(market: WorkshopPriceMarket | undefined): string {
+  if (market === "server") {
+    return "伺服器";
+  }
+  if (market === "world") {
+    return "世界";
+  }
+  return "单列";
 }
 
 function toInt(raw: string): number | null {
@@ -195,7 +212,15 @@ function sortMainCategoryText(left: string, right: string): number {
   return left.localeCompare(right, "zh-CN");
 }
 
-export function WorkshopSidebarHistoryCard(): JSX.Element {
+interface WorkshopSidebarHistoryCardProps {
+  focusItemId?: string | null;
+  focusSnapshotId?: string | null;
+  focusNonce?: number;
+  onPriceDataChanged?: () => void;
+}
+
+export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProps = {}): JSX.Element {
+  const { focusItemId = null, focusSnapshotId = null, focusNonce = 0, onPriceDataChanged } = props;
   const [state, setState] = useState<WorkshopState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +230,9 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
   const [selectedItemId, setSelectedItemId] = useState<"all" | string>("all");
   const [keyword, setKeyword] = useState("");
   const [limitInput, setLimitInput] = useState("120");
+  const [highlightSnapshotId, setHighlightSnapshotId] = useState<string | null>(null);
+  const handledFocusNonceRef = useRef(0);
+  const historyTableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const classifiedItems = useMemo(() => {
     if (!state) {
@@ -279,6 +307,7 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
         itemId: string;
         itemName: string;
         unitPrice: number;
+        market?: WorkshopPriceMarket;
         capturedAt: string;
         source: "manual" | "import";
         note?: string;
@@ -318,8 +347,15 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
         return true;
       });
 
-    return sorted.slice(0, limit);
-  }, [state, itemMetaById, mainCategory, subCategory, selectedItemId, keyword, limit]);
+    const limited = sorted.slice(0, limit);
+    if (highlightSnapshotId && !limited.some((row) => row.id === highlightSnapshotId)) {
+      const target = sorted.find((row) => row.id === highlightSnapshotId);
+      if (target) {
+        return [target, ...limited.slice(0, Math.max(0, limit - 1))];
+      }
+    }
+    return limited;
+  }, [state, itemMetaById, mainCategory, subCategory, selectedItemId, keyword, limit, highlightSnapshotId]);
 
   useEffect(() => {
     void refresh();
@@ -347,6 +383,56 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
     }
   }, [selectedItemId, validItemIds]);
 
+  useEffect(() => {
+    if (!focusItemId || focusNonce <= 0) {
+      return;
+    }
+    if (focusNonce === handledFocusNonceRef.current) {
+      return;
+    }
+    handledFocusNonceRef.current = focusNonce;
+    const target = classifiedItems.find((item) => item.id === focusItemId);
+    if (!target) {
+      setError("定位失败：目标物品不存在，可能已被删除。");
+      return;
+    }
+    setMainCategory("all");
+    setSubCategory("all");
+    setKeyword("");
+    setLimitInput((prev) => {
+      const current = toInt(prev);
+      if (current !== null && current >= 500) {
+        return prev;
+      }
+      return "500";
+    });
+    setSelectedItemId(focusItemId);
+    setHighlightSnapshotId(focusSnapshotId ?? null);
+    setMessage(focusSnapshotId ? `已定位到历史价格管理：${target.name}（目标点位已高亮）` : `已定位到历史价格管理：${target.name}`);
+  }, [focusItemId, focusSnapshotId, focusNonce, classifiedItems]);
+
+  useEffect(() => {
+    if (!highlightSnapshotId) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const container = historyTableContainerRef.current;
+      if (!container) {
+        return;
+      }
+      const row = container.querySelector<HTMLTableRowElement>(`#workshop-price-row-${highlightSnapshotId}`);
+      if (!row) {
+        return;
+      }
+      const rowTop = row.offsetTop;
+      const targetTop = Math.max(0, rowTop - (container.clientHeight - row.clientHeight) / 2);
+      container.scrollTo({ top: targetTop, behavior: "smooth" });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [highlightSnapshotId, rows]);
+
   async function refresh(): Promise<void> {
     setBusy(true);
     setError(null);
@@ -372,7 +458,11 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
     try {
       const next = await window.aionApi.deleteWorkshopPriceSnapshot(snapshotId);
       setState(next);
+      if (highlightSnapshotId === snapshotId) {
+        setHighlightSnapshotId(null);
+      }
       setMessage(`已删除价格记录: ${itemName}`);
+      onPriceDataChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除价格记录失败");
     } finally {
@@ -450,7 +540,7 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
       {message ? <p className="mt-1 text-xs text-emerald-300">{message}</p> : null}
       {error ? <p className="mt-1 text-xs text-rose-300">{error}</p> : null}
 
-      <div className="mt-3 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20">
+      <div ref={historyTableContainerRef} className="mt-3 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20">
         {rows.length === 0 ? (
           <p className="px-3 py-3 text-xs text-slate-300">暂无可管理的价格快照。</p>
         ) : (
@@ -460,6 +550,7 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
                 <th className="px-2 py-2">物品</th>
                 <th className="px-2 py-2">分类</th>
                 <th className="px-2 py-2">价格</th>
+                <th className="px-2 py-2">市场</th>
                 <th className="px-2 py-2">时间</th>
                 <th className="px-2 py-2">来源</th>
                 <th className="px-2 py-2">操作</th>
@@ -467,10 +558,18 @@ export function WorkshopSidebarHistoryCard(): JSX.Element {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`workshop-price-manage-${row.id}`} className="border-t border-white/10">
+                <tr
+                  id={`workshop-price-row-${row.id}`}
+                  key={`workshop-price-manage-${row.id}`}
+                  className={`border-t border-white/10 ${highlightSnapshotId === row.id ? "bg-cyan-500/20" : ""}`}
+                >
                   <td className="px-2 py-2">{row.itemName}</td>
                   <td className="px-2 py-2">{`${row.mainCategory}/${row.subCategory}`}</td>
-                  <td className="px-2 py-2">{formatGold(row.unitPrice)}</td>
+                  <td className={`px-2 py-2 ${isSuspectPriceNote(row.note) ? "text-rose-300" : ""}`}>
+                    {formatGold(row.unitPrice)}
+                    {isSuspectPriceNote(row.note) ? "（可疑）" : ""}
+                  </td>
+                  <td className="px-2 py-2">{formatMarketLabel(row.market)}</td>
                   <td className="px-2 py-2">{new Date(row.capturedAt).toLocaleString()}</td>
                   <td className="px-2 py-2">{row.source === "import" ? "导入" : "手动"}</td>
                   <td className="px-2 py-2">

@@ -6,6 +6,8 @@ import { BrowserWindow, desktopCapturer, globalShortcut, screen } from "electron
 import { IPC_CHANNELS } from "../shared/ipc";
 import type {
   WorkshopItemCategory,
+  WorkshopOcrAutoRunConfig,
+  WorkshopOcrAutoRunState,
   WorkshopOcrHotkeyConfig,
   WorkshopOcrHotkeyRunResult,
   WorkshopOcrHotkeyState,
@@ -19,9 +21,17 @@ const DEFAULT_SHORTCUT = process.platform === "win32" ? "Shift+F1" : "CommandOrC
 const DEFAULT_LANGUAGE = "chi_tra";
 const DEFAULT_PSM = 6;
 const DEFAULT_CATEGORY: WorkshopItemCategory = "material";
+const DEFAULT_AUTO_RUN_INTERVAL_SECONDS = 8;
+const DEFAULT_AUTO_RUN_MAX_CONSECUTIVE_FAILURES = 3;
+const AUTO_RUN_INTERVAL_MIN = 2;
+const AUTO_RUN_INTERVAL_MAX = 120;
+const AUTO_RUN_FAILURE_MIN = 1;
+const AUTO_RUN_FAILURE_MAX = 10;
+const AUTO_RUN_TOGGLE_SHORTCUT = process.platform === "win32" ? "Shift+F2" : "CommandOrControl+Shift+F2";
+const AUTO_RUN_DEDUPE_SECONDS = 30;
 const DEFAULT_TRADE_BOARD_PRESET: WorkshopTradeBoardPreset = {
   enabled: true,
-  rowCount: 7,
+  rowCount: 0,
   namesRect: {
     x: 426,
     y: 310,
@@ -46,6 +56,7 @@ let currentState: WorkshopOcrHotkeyState = {
   shortcut: DEFAULT_SHORTCUT,
   language: DEFAULT_LANGUAGE,
   psm: DEFAULT_PSM,
+  safeMode: true,
   autoCreateMissingItems: false,
   defaultCategory: DEFAULT_CATEGORY,
   iconCaptureEnabled: false,
@@ -57,6 +68,28 @@ let tradeBoardPreset: WorkshopTradeBoardPreset | null = DEFAULT_TRADE_BOARD_PRES
 let defaultCaptureDelayMs = 600;
 let defaultHideAppBeforeCapture = true;
 let running = false;
+let autoRunState: WorkshopOcrAutoRunState = {
+  enabled: false,
+  running: false,
+  intervalSeconds: DEFAULT_AUTO_RUN_INTERVAL_SECONDS,
+  showOverlay: true,
+  toggleShortcut: AUTO_RUN_TOGGLE_SHORTCUT,
+  maxConsecutiveFailures: DEFAULT_AUTO_RUN_MAX_CONSECUTIVE_FAILURES,
+  consecutiveFailureCount: 0,
+  startedAt: null,
+  nextRunAt: null,
+  loopCount: 0,
+  successCount: 0,
+  failureCount: 0,
+  lastResultAt: null,
+  lastMessage: null,
+};
+let autoRunLoopId = 0;
+let overlayWindow: BrowserWindow | null = null;
+let overlayRefreshTimer: NodeJS.Timeout | null = null;
+let autoRunToggleShortcutRegistered = false;
+const OVERLAY_ENTRY_MAX = 4;
+const overlayPriceFormatter = new Intl.NumberFormat("zh-CN");
 
 function sanitizeCaptureOptions(raw?: WorkshopScreenCaptureOptions): { delayMs: number; hideAppBeforeCapture: boolean } {
   const delayRaw = raw?.delayMs;
@@ -75,6 +108,275 @@ function resolveCaptureOptions(raw?: WorkshopScreenCaptureOptions): { delayMs: n
     hideAppBeforeCapture: raw?.hideAppBeforeCapture ?? defaultHideAppBeforeCapture,
   };
   return sanitizeCaptureOptions(merged);
+}
+
+function sanitizeAutoRunIntervalSeconds(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return DEFAULT_AUTO_RUN_INTERVAL_SECONDS;
+  }
+  return Math.min(AUTO_RUN_INTERVAL_MAX, Math.max(AUTO_RUN_INTERVAL_MIN, Math.floor(raw)));
+}
+
+function sanitizeAutoRunMaxConsecutiveFailures(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    return DEFAULT_AUTO_RUN_MAX_CONSECUTIVE_FAILURES;
+  }
+  return Math.min(AUTO_RUN_FAILURE_MAX, Math.max(AUTO_RUN_FAILURE_MIN, Math.floor(raw)));
+}
+
+function getWorkshopOcrAutoRunStateSnapshot(): WorkshopOcrAutoRunState {
+  return {
+    enabled: autoRunState.enabled,
+    running: autoRunState.running,
+    intervalSeconds: autoRunState.intervalSeconds,
+    showOverlay: autoRunState.showOverlay,
+    toggleShortcut: autoRunState.toggleShortcut,
+    maxConsecutiveFailures: autoRunState.maxConsecutiveFailures,
+    consecutiveFailureCount: autoRunState.consecutiveFailureCount,
+    startedAt: autoRunState.startedAt,
+    nextRunAt: autoRunState.nextRunAt,
+    loopCount: autoRunState.loopCount,
+    successCount: autoRunState.successCount,
+    failureCount: autoRunState.failureCount,
+    lastResultAt: autoRunState.lastResultAt,
+    lastMessage: autoRunState.lastMessage,
+  };
+}
+
+function formatOverlayImportedEntryLine(entry: WorkshopOcrHotkeyRunResult["importedEntries"][number]): string {
+  const price = overlayPriceFormatter.format(Math.max(0, Math.floor(entry.unitPrice)));
+  const marketTag = entry.market === "server" ? " [伺服]" : entry.market === "world" ? " [世界]" : "";
+  return `${entry.itemName} ${price}${marketTag}`;
+}
+
+function overlayStatusText(): {
+  title: string;
+  line1: string;
+  line2: string;
+  success: boolean;
+  entriesTitle: string;
+  entries: string[];
+} {
+  const now = Date.now();
+  const nextSeconds =
+    autoRunState.nextRunAt === null
+      ? null
+      : Math.max(0, Math.ceil((new Date(autoRunState.nextRunAt).getTime() - now) / 1000));
+  const title = autoRunState.running
+    ? "OCR 自动抓价: 执行中"
+    : autoRunState.enabled
+      ? "OCR 自动抓价: 运行中"
+      : "OCR 自动抓价: 已停止";
+  const lastCoverage =
+    currentState.lastResult?.expectedLineCount && currentState.lastResult.expectedLineCount > 0
+      ? `${currentState.lastResult.extractedLineCount}/${currentState.lastResult.expectedLineCount}`
+      : `${currentState.lastResult?.extractedLineCount ?? 0}`;
+  const line1 = `轮次 ${autoRunState.loopCount} | 成功 ${autoRunState.successCount} | 失败 ${autoRunState.failureCount} | 行 ${lastCoverage}`;
+  const line2 = autoRunState.running
+    ? "正在截图与识别..."
+    : autoRunState.enabled
+      ? `下一次抓取: ${nextSeconds ?? "--"}s | 连续失败 ${autoRunState.consecutiveFailureCount}/${autoRunState.maxConsecutiveFailures}`
+      : autoRunState.lastMessage || "等待启动";
+  const success = autoRunState.lastMessage ? autoRunState.failureCount <= autoRunState.successCount : true;
+  const importedEntries = currentState.lastResult?.success ? currentState.lastResult.importedEntries ?? [] : [];
+  const visibleEntries = importedEntries.slice(0, OVERLAY_ENTRY_MAX).map((entry) => formatOverlayImportedEntryLine(entry));
+  const remainingCount = Math.max(0, importedEntries.length - visibleEntries.length);
+  if (remainingCount > 0) {
+    visibleEntries.push(`...其余 ${remainingCount} 条`);
+  }
+  const entriesTitle =
+    importedEntries.length > 0
+      ? `最近成功抓价 ${importedEntries.length} 条（显示 ${Math.min(importedEntries.length, OVERLAY_ENTRY_MAX)} 条）`
+      : "最近成功抓价：暂无明细";
+  return { title, line1, line2, success, entriesTitle, entries: visibleEntries };
+}
+
+function renderOverlayHtml(): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+    .wrap {
+      margin: 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(10,14,20,0.72);
+      backdrop-filter: blur(10px);
+      color: #E2E8F0;
+      font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      padding: 10px 12px;
+    }
+    .title { font-size: 12px; font-weight: 700; color: #7DD3FC; }
+    .line { font-size: 11px; margin-top: 4px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .line.ok { color: #86EFAC; }
+    .line.err { color: #FDA4AF; }
+    .entries-title {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.14);
+      font-size: 11px;
+      color: #93C5FD;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    .entries {
+      margin-top: 4px;
+      max-height: 78px;
+      overflow: hidden;
+    }
+    .entry {
+      font-size: 11px;
+      line-height: 1.35;
+      color: #E2E8F0;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    .entry.empty { color: #94A3B8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="title" class="title">OCR 自动抓价: 已停止</div>
+    <div id="line1" class="line">轮次 0 | 成功 0 | 失败 0</div>
+    <div id="line2" class="line ok">等待启动</div>
+    <div id="entries-title" class="entries-title">最近成功抓价：暂无明细</div>
+    <div id="entries" class="entries">
+      <div class="entry empty">等待第一轮成功抓价...</div>
+    </div>
+  </div>
+  <script>
+    window.__updateOverlay = function(payload) {
+      var title = document.getElementById("title");
+      var line1 = document.getElementById("line1");
+      var line2 = document.getElementById("line2");
+      var entriesTitle = document.getElementById("entries-title");
+      var entries = document.getElementById("entries");
+      if (title) title.textContent = payload.title || "";
+      if (line1) line1.textContent = payload.line1 || "";
+      if (line2) {
+        line2.textContent = payload.line2 || "";
+        line2.className = "line " + (payload.success ? "ok" : "err");
+      }
+      if (entriesTitle) entriesTitle.textContent = payload.entriesTitle || "最近成功抓价：暂无明细";
+      if (entries) {
+        while (entries.firstChild) {
+          entries.removeChild(entries.firstChild);
+        }
+        var rows = Array.isArray(payload.entries) ? payload.entries : [];
+        if (rows.length === 0) {
+          var emptyNode = document.createElement("div");
+          emptyNode.className = "entry empty";
+          emptyNode.textContent = "等待第一轮成功抓价...";
+          entries.appendChild(emptyNode);
+        } else {
+          rows.forEach(function(text) {
+            var row = document.createElement("div");
+            row.className = "entry";
+            row.textContent = String(text || "");
+            entries.appendChild(row);
+          });
+        }
+      }
+    };
+  </script>
+</body>
+</html>`;
+}
+
+function ensureOverlayWindow(): BrowserWindow {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    return overlayWindow;
+  }
+  const display = screen.getPrimaryDisplay();
+  const bounds = display.workArea;
+  overlayWindow = new BrowserWindow({
+    width: 460,
+    height: 196,
+    x: bounds.x + 16,
+    y: bounds.y + 16,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: false,
+    webPreferences: {
+      sandbox: false,
+      contextIsolation: false,
+      nodeIntegration: false,
+    },
+  });
+  overlayWindow.setAlwaysOnTop(true, "screen-saver");
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  overlayWindow.on("closed", () => {
+    overlayWindow = null;
+  });
+  void overlayWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(renderOverlayHtml())}`);
+  return overlayWindow;
+}
+
+function hideOverlayWindow(): void {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return;
+  }
+  overlayWindow.hide();
+}
+
+function refreshOverlayWindow(): void {
+  if (!autoRunState.enabled || !autoRunState.showOverlay) {
+    hideOverlayWindow();
+    return;
+  }
+  const win = ensureOverlayWindow();
+  const payload = overlayStatusText();
+  const script = `window.__updateOverlay && window.__updateOverlay(${JSON.stringify(payload)});`;
+  const runScript = (): void => {
+    void win.webContents.executeJavaScript(script).catch(() => {
+      // ignore overlay render failures
+    });
+  };
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", runScript);
+  } else {
+    runScript();
+  }
+  if (!win.isVisible()) {
+    win.showInactive();
+  }
+}
+
+function syncOverlayRefreshTimer(): void {
+  if (autoRunState.enabled && autoRunState.showOverlay) {
+    if (!overlayRefreshTimer) {
+      overlayRefreshTimer = setInterval(() => {
+        refreshOverlayWindow();
+      }, 500);
+    }
+    return;
+  }
+  if (overlayRefreshTimer) {
+    clearInterval(overlayRefreshTimer);
+    overlayRefreshTimer = null;
+  }
+}
+
+function emitAutoRunState(): void {
+  const snapshot = getWorkshopOcrAutoRunStateSnapshot();
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.workshopOcrAutoRunState, snapshot);
+    }
+  });
+  syncOverlayRefreshTimer();
+  refreshOverlayWindow();
 }
 
 function sleep(ms: number): Promise<void> {
@@ -151,8 +453,18 @@ function buildShortcutCandidates(shortcut: string): string[] {
   return list;
 }
 
-function summarizeImportOutcome(extractedLineCount: number, importedCount: number, unknownItemCount: number, invalidLineCount: number): string {
-  return `快捷抓价完成：识别 ${extractedLineCount} 行，导入 ${importedCount} 条，未匹配 ${unknownItemCount} 行，异常 ${invalidLineCount} 行。`;
+function summarizeImportOutcome(
+  extractedLineCount: number,
+  expectedLineCount: number | null,
+  importedCount: number,
+  duplicateSkippedCount: number,
+  unknownItemCount: number,
+  invalidLineCount: number,
+): string {
+  const coverage =
+    expectedLineCount && expectedLineCount > 0 ? `识别 ${extractedLineCount}/${expectedLineCount} 行` : `识别 ${extractedLineCount} 行`;
+  const duplicateText = duplicateSkippedCount > 0 ? `，去重跳过 ${duplicateSkippedCount} 条` : "";
+  return `快捷抓价完成：${coverage}，导入 ${importedCount} 条${duplicateText}，未匹配 ${unknownItemCount} 行，异常 ${invalidLineCount} 行。`;
 }
 
 function buildImportWarnings(baseWarnings: string[], unknownItemNames: string[], invalidLineCount: number): string[] {
@@ -190,7 +502,7 @@ function sanitizeTradeBoardPreset(raw: WorkshopOcrHotkeyConfig["tradeBoardPreset
   if (!raw || !raw.enabled) {
     return null;
   }
-  const rowCount = Number.isFinite(raw.rowCount) ? Math.min(30, Math.max(1, Math.floor(raw.rowCount))) : 7;
+  const rowCount = Number.isFinite(raw.rowCount) ? Math.min(30, Math.max(0, Math.floor(raw.rowCount))) : 0;
   const normalizeRect = (rect: WorkshopTradeBoardPreset["namesRect"]) => ({
     x: Math.max(0, Math.floor(rect.x)),
     y: Math.max(0, Math.floor(rect.y)),
@@ -209,13 +521,23 @@ function sanitizeTradeBoardPreset(raw: WorkshopOcrHotkeyConfig["tradeBoardPreset
   };
 }
 
-async function capturePrimaryDisplayImage(options?: WorkshopScreenCaptureOptions) {
+async function capturePrimaryDisplayImage(
+  options?: WorkshopScreenCaptureOptions,
+  hideOverlayBeforeCapture = true,
+) {
   const captureOptions = resolveCaptureOptions(options);
   const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed() && win.isVisible());
-  if (captureOptions.hideAppBeforeCapture) {
-    windows.forEach((win) => {
+  const focusedWindows = windows.filter((win) => win.isFocused());
+  const shouldHideFocusedAppWindows = captureOptions.hideAppBeforeCapture && focusedWindows.length > 0;
+  const overlayWasVisible = overlayWindow !== null && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
+  const shouldHideOverlayTemporarily = hideOverlayBeforeCapture && overlayWasVisible;
+  if (shouldHideFocusedAppWindows) {
+    focusedWindows.forEach((win) => {
       win.hide();
     });
+  }
+  if (shouldHideOverlayTemporarily) {
+    overlayWindow?.hide();
   }
   if (captureOptions.delayMs > 0) {
     await sleep(captureOptions.delayMs);
@@ -236,16 +558,22 @@ async function capturePrimaryDisplayImage(options?: WorkshopScreenCaptureOptions
     }
     return target.thumbnail;
   } finally {
-    if (captureOptions.hideAppBeforeCapture) {
-      windows.forEach((win) => {
+    if (shouldHideFocusedAppWindows) {
+      focusedWindows.forEach((win) => {
         win.show();
       });
+    }
+    if (shouldHideOverlayTemporarily && autoRunState.enabled && autoRunState.showOverlay) {
+      overlayWindow?.showInactive();
     }
   }
 }
 
-async function capturePrimaryDisplayToTempFile(options?: WorkshopScreenCaptureOptions): Promise<string> {
-  const image = await capturePrimaryDisplayImage(options);
+async function capturePrimaryDisplayToTempFile(
+  options?: WorkshopScreenCaptureOptions,
+  hideOverlayBeforeCapture = true,
+): Promise<string> {
+  const image = await capturePrimaryDisplayImage(options, hideOverlayBeforeCapture);
   const filePath = path.join(os.tmpdir(), `aion2-ocr-hotkey-${Date.now()}-${randomUUID()}.png`);
   fs.writeFileSync(filePath, image.toPNG());
   return filePath;
@@ -266,7 +594,9 @@ function buildFailureResult(message: string, warnings: string[] = []): WorkshopO
     message,
     screenshotPath: null,
     extractedLineCount: 0,
+    expectedLineCount: null,
     importedCount: 0,
+    duplicateSkippedCount: 0,
     createdItemCount: 0,
     unknownItemCount: 0,
     invalidLineCount: 0,
@@ -277,14 +607,20 @@ function buildFailureResult(message: string, warnings: string[] = []): WorkshopO
   };
 }
 
-async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<WorkshopOcrHotkeyRunResult> {
+async function runHotkeyFlow(
+  options?: WorkshopScreenCaptureOptions,
+  triggerMode: "manual" | "auto" = "manual",
+): Promise<WorkshopOcrHotkeyRunResult> {
   let screenshotPath: string | null = null;
   try {
-    screenshotPath = await capturePrimaryDisplayToTempFile(options);
+    const hideOverlayBeforeCapture = triggerMode !== "auto";
+    screenshotPath = await capturePrimaryDisplayToTempFile(options, hideOverlayBeforeCapture);
+    const expectedLineCount = tradeBoardPreset?.enabled ? tradeBoardPreset.rowCount : null;
     const extracted = await extractWorkshopOcrText({
       imagePath: screenshotPath,
       language: currentState.language,
       psm: currentState.psm,
+      safeMode: currentState.safeMode,
       tradeBoardPreset,
     });
     if (!extracted.text.trim()) {
@@ -294,10 +630,16 @@ async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<Wo
       text: extracted.text,
       tradeRows: extracted.tradeRows,
       source: "import",
+      dedupeWithinSeconds: triggerMode === "auto" ? AUTO_RUN_DEDUPE_SECONDS : 0,
       autoCreateMissingItems: currentState.autoCreateMissingItems,
       defaultCategory: currentState.defaultCategory,
       strictIconMatch: false,
     });
+    if (expectedLineCount && extracted.lineCount < expectedLineCount) {
+      const missing = expectedLineCount - extracted.lineCount;
+      const ratio = ((extracted.lineCount / expectedLineCount) * 100).toFixed(0);
+      extracted.warnings.push(`识别覆盖不足：${extracted.lineCount}/${expectedLineCount}（缺失 ${missing} 行，覆盖 ${ratio}%）。`);
+    }
     const warnings = buildImportWarnings(
       [...extracted.warnings, ...imported.iconCaptureWarnings],
       imported.unknownItemNames,
@@ -308,13 +650,17 @@ async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<Wo
       success: true,
       message: summarizeImportOutcome(
         extracted.lineCount,
+        expectedLineCount,
         imported.importedCount,
+        imported.duplicateSkippedCount,
         imported.unknownItemNames.length,
         imported.invalidLines.length,
       ),
       screenshotPath: null,
       extractedLineCount: extracted.lineCount,
+      expectedLineCount,
       importedCount: imported.importedCount,
+      duplicateSkippedCount: imported.duplicateSkippedCount,
       createdItemCount: imported.createdItemCount,
       unknownItemCount: imported.unknownItemNames.length,
       invalidLineCount: imported.invalidLines.length,
@@ -336,13 +682,16 @@ async function runHotkeyFlow(options?: WorkshopScreenCaptureOptions): Promise<Wo
   }
 }
 
-async function runHotkeyFlowAndBroadcast(options?: WorkshopScreenCaptureOptions): Promise<WorkshopOcrHotkeyRunResult> {
+async function runHotkeyFlowAndBroadcast(
+  options?: WorkshopScreenCaptureOptions,
+  triggerMode: "manual" | "auto" = "manual",
+): Promise<WorkshopOcrHotkeyRunResult> {
   if (running) {
     return buildFailureResult("上一次快捷抓价仍在执行中，请稍后重试。");
   }
   running = true;
   try {
-    const result = await runHotkeyFlow(options);
+    const result = await runHotkeyFlow(options, triggerMode);
     currentState = {
       ...currentState,
       lastResult: result,
@@ -351,6 +700,53 @@ async function runHotkeyFlowAndBroadcast(options?: WorkshopScreenCaptureOptions)
     return result;
   } finally {
     running = false;
+  }
+}
+
+function updateAutoRunState(patch: Partial<WorkshopOcrAutoRunState>): void {
+  autoRunState = {
+    ...autoRunState,
+    ...patch,
+  };
+  emitAutoRunState();
+}
+
+async function runAutoLoop(loopId: number): Promise<void> {
+  while (autoRunState.enabled && loopId === autoRunLoopId) {
+    const waitMs = autoRunState.intervalSeconds * 1000;
+    const nextRunAt = new Date(Date.now() + waitMs).toISOString();
+    updateAutoRunState({
+      running: false,
+      nextRunAt,
+    });
+    await sleep(waitMs);
+    if (!autoRunState.enabled || loopId !== autoRunLoopId) {
+      break;
+    }
+    updateAutoRunState({
+      running: true,
+      nextRunAt: null,
+    });
+    const result = await runHotkeyFlowAndBroadcast(undefined, "auto");
+    const nextConsecutiveFailureCount = result.success ? 0 : autoRunState.consecutiveFailureCount + 1;
+    const shouldAutoPause = !result.success && nextConsecutiveFailureCount >= autoRunState.maxConsecutiveFailures;
+    const pausedMessage = shouldAutoPause
+      ? `自动抓价已暂停：连续失败 ${nextConsecutiveFailureCount} 次。请检查交易行界面、框选区域与 OCR 环境后再启动。`
+      : result.message;
+    updateAutoRunState({
+      enabled: shouldAutoPause ? false : autoRunState.enabled,
+      running: false,
+      loopCount: autoRunState.loopCount + 1,
+      successCount: autoRunState.successCount + (result.success ? 1 : 0),
+      failureCount: autoRunState.failureCount + (result.success ? 0 : 1),
+      consecutiveFailureCount: nextConsecutiveFailureCount,
+      nextRunAt: null,
+      lastResultAt: result.at,
+      lastMessage: pausedMessage,
+    });
+    if (shouldAutoPause) {
+      break;
+    }
   }
 }
 
@@ -374,6 +770,41 @@ function tryRegisterShortcut(shortcut: string): boolean {
   }
 }
 
+function unregisterAutoRunToggleShortcut(): void {
+  if (!autoRunToggleShortcutRegistered) {
+    return;
+  }
+  try {
+    globalShortcut.unregister(AUTO_RUN_TOGGLE_SHORTCUT);
+  } catch {
+    // ignore invalid accelerator unregistration
+  }
+  autoRunToggleShortcutRegistered = false;
+}
+
+function registerAutoRunToggleShortcut(): void {
+  if (autoRunToggleShortcutRegistered) {
+    return;
+  }
+  try {
+    autoRunToggleShortcutRegistered = globalShortcut.register(AUTO_RUN_TOGGLE_SHORTCUT, () => {
+      void configureWorkshopOcrAutoRun({
+        enabled: !autoRunState.enabled,
+        intervalSeconds: autoRunState.intervalSeconds,
+        showOverlay: autoRunState.showOverlay,
+        maxConsecutiveFailures: autoRunState.maxConsecutiveFailures,
+      });
+    });
+  } catch {
+    autoRunToggleShortcutRegistered = false;
+  }
+}
+
+export function initializeWorkshopOcrAutomation(): void {
+  registerAutoRunToggleShortcut();
+  emitAutoRunState();
+}
+
 export function configureWorkshopOcrHotkey(config: WorkshopOcrHotkeyConfig): WorkshopOcrHotkeyState {
   const nextShortcut = sanitizeShortcut(config.shortcut);
   const nextState: WorkshopOcrHotkeyState = {
@@ -382,6 +813,7 @@ export function configureWorkshopOcrHotkey(config: WorkshopOcrHotkeyConfig): Wor
     shortcut: nextShortcut,
     language: sanitizeLanguage(config.language),
     psm: sanitizePsm(config.psm),
+    safeMode: config.safeMode ?? currentState.safeMode ?? true,
     autoCreateMissingItems: config.autoCreateMissingItems ?? false,
     defaultCategory: config.defaultCategory ?? DEFAULT_CATEGORY,
     iconCaptureEnabled: false,
@@ -421,12 +853,93 @@ export function getWorkshopOcrHotkeyState(): WorkshopOcrHotkeyState {
     shortcut: currentState.shortcut,
     language: currentState.language,
     psm: currentState.psm,
+    safeMode: currentState.safeMode,
     autoCreateMissingItems: currentState.autoCreateMissingItems,
     defaultCategory: currentState.defaultCategory,
     iconCaptureEnabled: currentState.iconCaptureEnabled,
     strictIconMatch: currentState.strictIconMatch,
     lastResult: currentState.lastResult,
   };
+}
+
+export function configureWorkshopOcrAutoRun(config: WorkshopOcrAutoRunConfig): WorkshopOcrAutoRunState {
+  registerAutoRunToggleShortcut();
+  if (typeof config.safeMode === "boolean") {
+    currentState = {
+      ...currentState,
+      safeMode: config.safeMode,
+    };
+  }
+  const nextIntervalSeconds = sanitizeAutoRunIntervalSeconds(config.intervalSeconds);
+  const nextShowOverlay = config.showOverlay !== false;
+  const nextMaxConsecutiveFailures = sanitizeAutoRunMaxConsecutiveFailures(config.maxConsecutiveFailures);
+  if (config.tradeBoardPreset !== undefined) {
+    tradeBoardPreset = sanitizeTradeBoardPreset(config.tradeBoardPreset);
+  }
+  if (typeof config.captureDelayMs === "number" || typeof config.hideAppBeforeCapture === "boolean") {
+    const options = sanitizeCaptureOptions({
+      delayMs: config.captureDelayMs,
+      hideAppBeforeCapture: config.hideAppBeforeCapture,
+    });
+    defaultCaptureDelayMs = options.delayMs;
+    defaultHideAppBeforeCapture = options.hideAppBeforeCapture;
+  }
+
+  if (!config.enabled) {
+    autoRunLoopId += 1;
+    updateAutoRunState({
+      enabled: false,
+      running: false,
+      showOverlay: nextShowOverlay,
+      intervalSeconds: nextIntervalSeconds,
+      maxConsecutiveFailures: nextMaxConsecutiveFailures,
+      consecutiveFailureCount: 0,
+      startedAt: null,
+      nextRunAt: null,
+    });
+    return getWorkshopOcrAutoRunStateSnapshot();
+  }
+
+  const shouldRestartLoop = !autoRunState.enabled || autoRunState.intervalSeconds !== nextIntervalSeconds;
+  let loopId = autoRunLoopId;
+  if (shouldRestartLoop) {
+    autoRunLoopId += 1;
+    loopId = autoRunLoopId;
+  }
+  if (shouldRestartLoop) {
+    updateAutoRunState({
+      enabled: true,
+      running: false,
+      showOverlay: nextShowOverlay,
+      intervalSeconds: nextIntervalSeconds,
+      maxConsecutiveFailures: nextMaxConsecutiveFailures,
+      consecutiveFailureCount: 0,
+      toggleShortcut: AUTO_RUN_TOGGLE_SHORTCUT,
+      startedAt: new Date().toISOString(),
+      nextRunAt: null,
+      loopCount: 0,
+      successCount: 0,
+      failureCount: 0,
+      lastResultAt: null,
+      lastMessage: null,
+    });
+  } else {
+    updateAutoRunState({
+      enabled: true,
+      showOverlay: nextShowOverlay,
+      intervalSeconds: nextIntervalSeconds,
+      maxConsecutiveFailures: nextMaxConsecutiveFailures,
+      toggleShortcut: AUTO_RUN_TOGGLE_SHORTCUT,
+    });
+  }
+  if (shouldRestartLoop) {
+    void runAutoLoop(loopId);
+  }
+  return getWorkshopOcrAutoRunStateSnapshot();
+}
+
+export function getWorkshopOcrAutoRunState(): WorkshopOcrAutoRunState {
+  return getWorkshopOcrAutoRunStateSnapshot();
 }
 
 export async function triggerWorkshopOcrHotkeyNow(options?: WorkshopScreenCaptureOptions): Promise<WorkshopOcrHotkeyRunResult> {
@@ -445,5 +958,21 @@ export async function captureWorkshopScreenPreview(options?: WorkshopScreenCaptu
 }
 
 export function cleanupWorkshopOcrHotkey(): void {
+  autoRunLoopId += 1;
+  autoRunState = {
+    ...autoRunState,
+    enabled: false,
+    running: false,
+    nextRunAt: null,
+  };
+  unregisterAutoRunToggleShortcut();
+  if (overlayRefreshTimer) {
+    clearInterval(overlayRefreshTimer);
+    overlayRefreshTimer = null;
+  }
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.close();
+    overlayWindow = null;
+  }
   unregisterCurrentShortcut();
 }

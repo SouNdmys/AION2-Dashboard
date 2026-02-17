@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
-import { cleanupWorkshopOcrHotkey } from "./workshop-automation";
+import { cleanupWorkshopOcrHotkey, initializeWorkshopOcrAutomation } from "./workshop-automation";
+import { cleanupWorkshopOcrEngine } from "./workshop-store";
 
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
@@ -114,6 +115,7 @@ function setupAutoUpdater(): void {
 
 app.whenReady().then(() => {
   registerIpcHandlers();
+  initializeWorkshopOcrAutomation();
   createWindow();
   setupAutoUpdater();
 
@@ -132,4 +134,5 @@ app.on("window-all-closed", () => {
 
 app.on("will-quit", () => {
   cleanupWorkshopOcrHotkey();
+  cleanupWorkshopOcrEngine();
 });

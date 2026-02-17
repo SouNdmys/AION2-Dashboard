@@ -204,6 +204,8 @@ export interface WorkshopPriceHistoryQuery {
   fromAt?: string;
   toAt?: string;
   days?: number;
+  includeSuspect?: boolean;
+  market?: WorkshopPriceMarket;
 }
 
 export interface WorkshopPriceHistoryPoint {
@@ -213,6 +215,10 @@ export interface WorkshopPriceHistoryPoint {
   capturedAt: string;
   weekday: number;
   ma7: number | null;
+  market?: WorkshopPriceMarket;
+  note?: string;
+  isSuspect: boolean;
+  suspectReason?: string;
 }
 
 export interface WorkshopWeekdayAverage {
@@ -223,14 +229,17 @@ export interface WorkshopWeekdayAverage {
 
 export interface WorkshopPriceHistoryResult {
   itemId: string;
+  market?: WorkshopPriceMarket;
   fromAt: string;
   toAt: string;
   sampleCount: number;
+  suspectCount: number;
   latestPrice: number | null;
   latestCapturedAt: string | null;
   averagePrice: number | null;
   ma7Latest: number | null;
   points: WorkshopPriceHistoryPoint[];
+  suspectPoints: WorkshopPriceHistoryPoint[];
   weekdayAverages: WorkshopWeekdayAverage[];
 }
 
@@ -243,6 +252,7 @@ export interface WorkshopPriceSignalRule {
 export interface WorkshopPriceSignalQuery {
   lookbackDays?: number;
   thresholdRatio?: number;
+  market?: WorkshopPriceMarket;
 }
 
 export type WorkshopPriceTrendTag = "buy-zone" | "sell-zone" | "watch";
@@ -250,6 +260,7 @@ export type WorkshopPriceTrendTag = "buy-zone" | "sell-zone" | "watch";
 export interface WorkshopPriceSignalRow {
   itemId: string;
   itemName: string;
+  market?: WorkshopPriceMarket;
   latestPrice: number | null;
   latestCapturedAt: string | null;
   latestWeekday: number | null;
@@ -257,15 +268,20 @@ export interface WorkshopPriceSignalRow {
   deviationRatioFromWeekdayAverage: number | null;
   ma7Price: number | null;
   deviationRatioFromMa7: number | null;
+  effectiveThresholdRatio: number;
   trendTag: WorkshopPriceTrendTag;
+  confidenceScore: number;
+  reasons: string[];
   sampleCount: number;
   triggered: boolean;
 }
 
 export interface WorkshopPriceSignalResult {
   generatedAt: string;
+  market?: WorkshopPriceMarket;
   lookbackDays: number;
   thresholdRatio: number;
+  effectiveThresholdRatio: number;
   ruleEnabled: boolean;
   triggeredCount: number;
   buyZoneCount: number;
@@ -288,6 +304,7 @@ export interface WorkshopOcrExtractTextInput {
   imagePath: string;
   language?: string;
   psm?: number;
+  safeMode?: boolean;
   tradeBoardPreset?: WorkshopTradeBoardPreset | null;
 }
 
@@ -325,6 +342,7 @@ export interface WorkshopOcrHotkeyConfig {
   shortcut: string;
   language?: string;
   psm?: number;
+  safeMode?: boolean;
   captureDelayMs?: number;
   hideAppBeforeCapture?: boolean;
   autoCreateMissingItems?: boolean;
@@ -340,7 +358,9 @@ export interface WorkshopOcrHotkeyRunResult {
   message: string;
   screenshotPath: string | null;
   extractedLineCount: number;
+  expectedLineCount?: number | null;
   importedCount: number;
+  duplicateSkippedCount?: number;
   createdItemCount: number;
   unknownItemCount: number;
   invalidLineCount: number;
@@ -356,11 +376,40 @@ export interface WorkshopOcrHotkeyState {
   shortcut: string;
   language: string;
   psm: number;
+  safeMode: boolean;
   autoCreateMissingItems: boolean;
   defaultCategory: WorkshopItemCategory;
   iconCaptureEnabled: boolean;
   strictIconMatch: boolean;
   lastResult: WorkshopOcrHotkeyRunResult | null;
+}
+
+export interface WorkshopOcrAutoRunConfig {
+  enabled: boolean;
+  intervalSeconds?: number;
+  showOverlay?: boolean;
+  safeMode?: boolean;
+  captureDelayMs?: number;
+  hideAppBeforeCapture?: boolean;
+  maxConsecutiveFailures?: number;
+  tradeBoardPreset?: WorkshopTradeBoardPreset | null;
+}
+
+export interface WorkshopOcrAutoRunState {
+  enabled: boolean;
+  running: boolean;
+  intervalSeconds: number;
+  showOverlay: boolean;
+  toggleShortcut: string;
+  maxConsecutiveFailures: number;
+  consecutiveFailureCount: number;
+  startedAt: string | null;
+  nextRunAt: string | null;
+  loopCount: number;
+  successCount: number;
+  failureCount: number;
+  lastResultAt: string | null;
+  lastMessage: string | null;
 }
 
 export interface WorkshopScreenPreviewResult {
@@ -398,6 +447,7 @@ export interface WorkshopOcrPriceImportInput {
   tradeRows?: WorkshopOcrTradeRow[];
   capturedAt?: string;
   source?: WorkshopPriceSource;
+  dedupeWithinSeconds?: number;
   autoCreateMissingItems?: boolean;
   defaultCategory?: WorkshopItemCategory;
   iconCapture?: WorkshopOcrIconCaptureConfig;
@@ -407,6 +457,7 @@ export interface WorkshopOcrPriceImportInput {
 export interface WorkshopOcrPriceImportResult {
   state: WorkshopState;
   importedCount: number;
+  duplicateSkippedCount: number;
   createdItemCount: number;
   parsedLineCount: number;
   unknownItemNames: string[];
@@ -481,6 +532,7 @@ export interface WorkshopSimulationMaterialRow {
   owned: number;
   missing: number;
   latestUnitPrice: number | null;
+  latestPriceMarket?: WorkshopPriceMarket;
   requiredCost: number | null;
   missingCost: number | null;
 }
@@ -528,6 +580,7 @@ export interface WorkshopCraftOption {
   requiredMaterialCostPerRun: number | null;
   estimatedProfitPerRun: number | null;
   unknownPriceItemIds: string[];
+  materialRowsForOneRun: WorkshopSimulationMaterialRow[];
   missingRowsForOneRun: WorkshopSimulationMaterialRow[];
 }
 

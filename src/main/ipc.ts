@@ -6,6 +6,7 @@ import type {
   AppSettings,
   ApplyTaskActionInput,
   WorkshopCatalogImportFromFileInput,
+  WorkshopOcrAutoRunConfig,
   WorkshopOcrExtractTextInput,
   WorkshopOcrHotkeyConfig,
   WorkshopScreenCaptureOptions,
@@ -44,7 +45,9 @@ import {
 } from "./store";
 import {
   captureWorkshopScreenPreview,
+  configureWorkshopOcrAutoRun,
   configureWorkshopOcrHotkey,
+  getWorkshopOcrAutoRunState,
   getWorkshopOcrHotkeyState,
   triggerWorkshopOcrHotkeyNow,
 } from "./workshop-automation";
@@ -195,6 +198,10 @@ export function registerIpcHandlers(): void {
     configureWorkshopOcrHotkey(payload),
   );
   ipcMain.handle(IPC_CHANNELS.getWorkshopOcrHotkeyState, () => getWorkshopOcrHotkeyState());
+  ipcMain.handle(IPC_CHANNELS.configureWorkshopOcrAutoRun, (_event, payload: WorkshopOcrAutoRunConfig) =>
+    configureWorkshopOcrAutoRun(payload),
+  );
+  ipcMain.handle(IPC_CHANNELS.getWorkshopOcrAutoRunState, () => getWorkshopOcrAutoRunState());
   ipcMain.handle(IPC_CHANNELS.triggerWorkshopOcrHotkeyNow, async (_event, payload?: WorkshopScreenCaptureOptions) =>
     triggerWorkshopOcrHotkeyNow(payload),
   );

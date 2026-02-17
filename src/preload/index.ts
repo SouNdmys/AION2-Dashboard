@@ -10,6 +10,8 @@ import type {
   ImportDataResult,
   WorkshopCatalogImportFromFileInput,
   WorkshopCatalogImportResult,
+  WorkshopOcrAutoRunConfig,
+  WorkshopOcrAutoRunState,
   WorkshopOcrExtractTextInput,
   WorkshopOcrExtractTextResult,
   WorkshopOcrHotkeyConfig,
@@ -132,6 +134,10 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.configureWorkshopOcrHotkey, payload),
   getWorkshopOcrHotkeyState: (): Promise<WorkshopOcrHotkeyState> =>
     ipcRenderer.invoke(IPC_CHANNELS.getWorkshopOcrHotkeyState),
+  configureWorkshopOcrAutoRun: (payload: WorkshopOcrAutoRunConfig): Promise<WorkshopOcrAutoRunState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.configureWorkshopOcrAutoRun, payload),
+  getWorkshopOcrAutoRunState: (): Promise<WorkshopOcrAutoRunState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.getWorkshopOcrAutoRunState),
   triggerWorkshopOcrHotkeyNow: (payload?: WorkshopScreenCaptureOptions): Promise<WorkshopOcrHotkeyRunResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.triggerWorkshopOcrHotkeyNow, payload ?? {}),
   captureWorkshopScreenPreview: (payload?: WorkshopScreenCaptureOptions): Promise<WorkshopScreenPreviewResult> =>
@@ -141,6 +147,13 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.workshopOcrHotkeyResult, handler);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.workshopOcrHotkeyResult, handler);
+    };
+  },
+  onWorkshopOcrAutoRunState: (listener: (state: WorkshopOcrAutoRunState) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: WorkshopOcrAutoRunState) => listener(payload);
+    ipcRenderer.on(IPC_CHANNELS.workshopOcrAutoRunState, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.workshopOcrAutoRunState, handler);
     };
   },
   importWorkshopOcrPrices: (payload: WorkshopOcrPriceImportInput): Promise<WorkshopOcrPriceImportResult> =>

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { nativeImage } from "electron";
 import Store from "electron-store";
 import type {
@@ -45,10 +45,25 @@ const WORKSHOP_STATE_VERSION = 6;
 const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
 const WORKSHOP_HISTORY_DEFAULT_DAYS = 30;
 const WORKSHOP_HISTORY_MAX_DAYS = 365;
-const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.08;
-const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.01;
+const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.15;
+const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.15;
 const WORKSHOP_SIGNAL_THRESHOLD_MAX = 0.5;
+const WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT = 5;
+const WORKSHOP_PRICE_ANOMALY_BASELINE_DAYS = 30;
+const WORKSHOP_PRICE_ANOMALY_BASELINE_MIN_SAMPLES = 8;
+const WORKSHOP_PRICE_ANOMALY_SOFT_UPPER_RATIO = 2.2;
+const WORKSHOP_PRICE_ANOMALY_SOFT_LOWER_RATIO = 0.45;
+const WORKSHOP_PRICE_ANOMALY_HARD_UPPER_RATIO = 8;
+const WORKSHOP_PRICE_ANOMALY_HARD_LOWER_RATIO = 0.125;
+const WORKSHOP_PRICE_NOTE_TAG_SUSPECT = "qa:suspect:auto";
+const WORKSHOP_PRICE_NOTE_TAG_HARD = "qa:hard-outlier:auto";
 const WORKSHOP_ICON_CACHE_KEY = "iconCache";
+const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
+  "燦爛的奧里哈康礫石",
+  "純淨的奧里哈康磐石",
+  "高純度的奧里哈康磐石",
+  "新鮮的金盒花",
+]);
 const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra";
 const WORKSHOP_OCR_DEFAULT_PSM = 6;
 const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
@@ -59,6 +74,7 @@ const ICON_CAPTURE_CALIBRATION_STEP = 2;
 const ICON_CAPTURE_CALIBRATION_SAMPLE_LIMIT = 8;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_PADDLE_MAX_BUFFER = 64 * 1024 * 1024;
+const OCR_PADDLE_REQUEST_TIMEOUT_MS = 20_000;
 const OCR_PADDLE_RUNTIME_ROOT = path.join(os.tmpdir(), "aion2-paddle-runtime");
 const OCR_PADDLE_RUNTIME_USER = path.join(OCR_PADDLE_RUNTIME_ROOT, "user");
 const OCR_PADDLE_RUNTIME_CACHE = path.join(OCR_PADDLE_RUNTIME_ROOT, "cache");
@@ -91,8 +107,17 @@ except Exception as exc:
     sys.exit(0)
 
 
-def make_engine(lang):
-    attempts = [
+def parse_safe_mode(raw):
+    if raw is None:
+        return True
+    if isinstance(raw, bool):
+        return raw
+    text = str(raw).strip().lower()
+    return text not in {"0", "false", "off", "no"}
+
+
+def make_engine(lang, safe_mode):
+    strict_cpu = [
         {
             "lang": lang,
             "device": "cpu",
@@ -103,6 +128,9 @@ def make_engine(lang):
             "use_textline_orientation": False,
             "use_angle_cls": False,
         },
+        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
+    ]
+    performance = [
         {
             "lang": lang,
             "show_log": False,
@@ -112,10 +140,10 @@ def make_engine(lang):
             "use_textline_orientation": False,
             "use_angle_cls": False,
         },
-        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
         {"lang": lang, "show_log": False, "enable_mkldnn": False},
         {"lang": lang},
     ]
+    attempts = strict_cpu if safe_mode else (performance + strict_cpu)
     errors = []
     for kwargs in attempts:
         try:
@@ -199,10 +227,11 @@ def main():
     langs = [entry.strip() for entry in sys.argv[2].split(",") if entry.strip()]
     if len(langs) == 0:
         langs = ["ch"]
+    safe_mode = parse_safe_mode(os.environ.get("AION2_OCR_SAFE_MODE", "1"))
     errors = []
     for lang in langs:
         try:
-            ocr = make_engine(lang)
+            ocr = make_engine(lang, safe_mode)
             try:
                 result = ocr.ocr(image_path, cls=False)
             except TypeError:
@@ -223,6 +252,220 @@ def main():
         except Exception as exc:
             errors.append(f"{lang}: {exc}")
     print(json.dumps({"ok": False, "error": " | ".join(errors) or "paddle ocr failed"}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+`;
+const PADDLE_OCR_PYTHON_WORKER_SCRIPT = String.raw`import json
+import os
+import sys
+
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
+os.environ.setdefault("FLAGS_enable_pir_in_executor", "0")
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("FLAGS_prim_all", "0")
+
+try:
+    import paddle
+    from paddleocr import PaddleOCR
+    try:
+        paddle.set_flags(
+            {
+                "FLAGS_enable_pir_api": False,
+                "FLAGS_enable_pir_in_executor": False,
+                "FLAGS_use_mkldnn": False,
+                "FLAGS_prim_all": False,
+            }
+        )
+    except Exception:
+        pass
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": f"import paddleocr failed: {exc}"}, ensure_ascii=False), flush=True)
+    sys.exit(0)
+
+
+def parse_safe_mode(raw):
+    if raw is None:
+        return True
+    if isinstance(raw, bool):
+        return raw
+    text = str(raw).strip().lower()
+    return text not in {"0", "false", "off", "no"}
+
+
+def make_engine(lang, safe_mode):
+    strict_cpu = [
+        {
+            "lang": lang,
+            "device": "cpu",
+            "show_log": False,
+            "enable_mkldnn": False,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "use_angle_cls": False,
+        },
+        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
+    ]
+    performance = [
+        {
+            "lang": lang,
+            "show_log": False,
+            "enable_mkldnn": False,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "use_textline_orientation": False,
+            "use_angle_cls": False,
+        },
+        {"lang": lang, "show_log": False, "enable_mkldnn": False},
+        {"lang": lang},
+    ]
+    attempts = strict_cpu if safe_mode else (performance + strict_cpu)
+    errors = []
+    for kwargs in attempts:
+        try:
+            return PaddleOCR(**kwargs)
+        except Exception as exc:
+            errors.append(str(exc))
+    raise RuntimeError("create engine failed: " + " | ".join(errors))
+
+
+def parse_line(line):
+    if not isinstance(line, (list, tuple)) or len(line) < 2:
+        return None
+    box = line[0]
+    info = line[1]
+    if not isinstance(box, (list, tuple)) or len(box) == 0:
+        return None
+    xs = []
+    ys = []
+    for point in box:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            continue
+        try:
+            xs.append(float(point[0]))
+            ys.append(float(point[1]))
+        except Exception:
+            continue
+    if len(xs) == 0 or len(ys) == 0:
+        return None
+    text = ""
+    confidence = -1.0
+    if isinstance(info, (list, tuple)):
+        if len(info) >= 1 and info[0] is not None:
+            text = str(info[0]).strip()
+        if len(info) >= 2:
+            try:
+                confidence = float(info[1])
+            except Exception:
+                confidence = -1.0
+    else:
+        text = str(info).strip()
+    if not text:
+        return None
+    if confidence >= 0 and confidence <= 1.5:
+        confidence = confidence * 100.0
+    left = int(min(xs))
+    top = int(min(ys))
+    right = int(max(xs))
+    bottom = int(max(ys))
+    return {
+        "text": text,
+        "left": left,
+        "top": top,
+        "width": max(1, right - left),
+        "height": max(1, bottom - top),
+        "confidence": confidence,
+    }
+
+
+def collect_words(ocr_result):
+    words = []
+    texts = []
+    if not isinstance(ocr_result, list):
+        return words, texts
+    for block in ocr_result:
+        if not isinstance(block, list):
+            continue
+        for line in block:
+            parsed = parse_line(line)
+            if not parsed:
+                continue
+            words.append(parsed)
+            texts.append(parsed["text"])
+    return words, texts
+
+
+ENGINE_CACHE = {}
+
+
+def get_engine(lang, safe_mode):
+    key = f"{lang}|{'safe' if safe_mode else 'performance'}"
+    if key in ENGINE_CACHE:
+        return ENGINE_CACHE[key]
+    engine = make_engine(lang, safe_mode)
+    ENGINE_CACHE[key] = engine
+    return engine
+
+
+def resolve_languages(raw):
+    if isinstance(raw, list):
+        langs = [str(entry).strip() for entry in raw if str(entry).strip()]
+        return langs or ["ch"]
+    if isinstance(raw, str):
+        langs = [entry.strip() for entry in raw.split(",") if entry.strip()]
+        return langs or ["ch"]
+    return ["ch"]
+
+
+def process(req):
+    req_id = str(req.get("id", "")).strip()
+    image_path = str(req.get("image_path", "")).strip()
+    if not image_path:
+        return {"id": req_id, "ok": False, "error": "missing image_path"}
+    langs = resolve_languages(req.get("languages"))
+    safe_mode = parse_safe_mode(req.get("safe_mode", True))
+    errors = []
+    for lang in langs:
+        try:
+            ocr = get_engine(lang, safe_mode)
+            try:
+                result = ocr.ocr(image_path, cls=False)
+            except TypeError:
+                result = ocr.ocr(image_path)
+            words, texts = collect_words(result)
+            return {
+                "id": req_id,
+                "ok": True,
+                "language": lang,
+                "raw_text": "\n".join(texts),
+                "words": words,
+            }
+        except Exception as exc:
+            errors.append(f"{lang}: {exc}")
+    return {"id": req_id, "ok": False, "error": " | ".join(errors) or "paddle ocr failed"}
+
+
+def emit(payload):
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+
+
+def main():
+    emit({"ready": True})
+    for line in sys.stdin:
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            req = json.loads(text)
+            if not isinstance(req, dict):
+                emit({"ok": False, "error": "invalid request"})
+                continue
+        except Exception as exc:
+            emit({"ok": False, "error": f"invalid json: {exc}"})
+            continue
+        emit(process(req))
 
 
 if __name__ == "__main__":
@@ -286,6 +529,159 @@ function sanitizeName(raw: unknown, fallback = ""): string {
   return raw.trim();
 }
 
+type PriceAnomalyKind = "normal" | "suspect" | "hard";
+
+interface PriceAnomalyAssessment {
+  kind: PriceAnomalyKind;
+  sampleCount: number;
+  median: number | null;
+  ratio: number | null;
+}
+
+interface SnapshotQualityTag {
+  isSuspect: boolean;
+  reason: string | null;
+}
+
+function appendNoteTag(note: string | undefined, tag: string): string {
+  const current = note?.trim() ?? "";
+  if (!current) {
+    return tag;
+  }
+  const exists = current
+    .split(";")
+    .map((token) => token.trim())
+    .some((token) => token === tag);
+  if (exists) {
+    return current;
+  }
+  return `${current};${tag}`;
+}
+
+function hasNoteTag(note: string | undefined, prefix: string): boolean {
+  if (!note) {
+    return false;
+  }
+  return note
+    .split(";")
+    .map((token) => token.trim())
+    .some((token) => token.startsWith(prefix));
+}
+
+function resolveSnapshotQualityTag(note: string | undefined): SnapshotQualityTag {
+  if (hasNoteTag(note, "qa:hard-outlier")) {
+    return {
+      isSuspect: true,
+      reason: "写入时已标记为极端异常价",
+    };
+  }
+  if (hasNoteTag(note, "qa:suspect")) {
+    return {
+      isSuspect: true,
+      reason: "写入时已标记为可疑价",
+    };
+  }
+  return {
+    isSuspect: false,
+    reason: null,
+  };
+}
+
+function normalizePriceMarketForCompare(market: WorkshopPriceMarket | undefined): WorkshopPriceMarket {
+  return market ?? "single";
+}
+
+function computeMedian(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[mid];
+  }
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function assessPriceAnomaly(unitPrice: number, baselinePrices: number[]): PriceAnomalyAssessment {
+  if (baselinePrices.length < WORKSHOP_PRICE_ANOMALY_BASELINE_MIN_SAMPLES) {
+    return {
+      kind: "normal",
+      sampleCount: baselinePrices.length,
+      median: null,
+      ratio: null,
+    };
+  }
+  const median = computeMedian(baselinePrices);
+  if (median === null || median <= 0) {
+    return {
+      kind: "normal",
+      sampleCount: baselinePrices.length,
+      median: null,
+      ratio: null,
+    };
+  }
+  const ratio = unitPrice / median;
+  if (ratio >= WORKSHOP_PRICE_ANOMALY_HARD_UPPER_RATIO || ratio <= WORKSHOP_PRICE_ANOMALY_HARD_LOWER_RATIO) {
+    return {
+      kind: "hard",
+      sampleCount: baselinePrices.length,
+      median,
+      ratio,
+    };
+  }
+  if (ratio >= WORKSHOP_PRICE_ANOMALY_SOFT_UPPER_RATIO || ratio <= WORKSHOP_PRICE_ANOMALY_SOFT_LOWER_RATIO) {
+    return {
+      kind: "suspect",
+      sampleCount: baselinePrices.length,
+      median,
+      ratio,
+    };
+  }
+  return {
+    kind: "normal",
+    sampleCount: baselinePrices.length,
+    median,
+    ratio,
+  };
+}
+
+function formatAnomalyReason(assessment: PriceAnomalyAssessment): string {
+  if (assessment.kind === "normal" || assessment.median === null || assessment.ratio === null) {
+    return "";
+  }
+  const ratioText = `${assessment.ratio >= 1 ? "高于" : "低于"}中位数 ${assessment.ratio.toFixed(2)}x`;
+  return `${ratioText}（中位数 ${Math.round(assessment.median)}，样本 ${assessment.sampleCount}）`;
+}
+
+function collectBaselinePricesForItem(
+  prices: WorkshopPriceSnapshot[],
+  itemId: string,
+  market: WorkshopPriceMarket | undefined,
+  capturedAtIso: string,
+): number[] {
+  const targetMarket = normalizePriceMarketForCompare(market);
+  const capturedAtMs = new Date(capturedAtIso).getTime();
+  const hasValidCapturedAt = Number.isFinite(capturedAtMs);
+  const lookbackWindowMs = WORKSHOP_PRICE_ANOMALY_BASELINE_DAYS * 24 * 60 * 60 * 1000;
+
+  return prices
+    .filter((row) => row.itemId === itemId)
+    .filter((row) => normalizePriceMarketForCompare(row.market) === targetMarket)
+    .filter((row) => !resolveSnapshotQualityTag(row.note).isSuspect)
+    .filter((row) => {
+      if (!hasValidCapturedAt) {
+        return true;
+      }
+      const rowMs = new Date(row.capturedAt).getTime();
+      if (!Number.isFinite(rowMs)) {
+        return false;
+      }
+      return rowMs <= capturedAtMs && rowMs >= capturedAtMs - lookbackWindowMs;
+    })
+    .map((row) => row.unitPrice);
+}
+
 function sanitizeIconToken(raw: unknown): string | undefined {
   if (typeof raw !== "string") {
     return undefined;
@@ -298,8 +694,49 @@ function isCapturedImageIcon(icon: string | undefined): boolean {
   return typeof icon === "string" && icon.startsWith("icon-img-");
 }
 
+const LOOKUP_CJK_VARIANT_MAP: Record<string, string> = {
+  纯: "純",
+  純: "純",
+  净: "淨",
+  淨: "淨",
+  头: "頭",
+  頭: "頭",
+  台: "臺",
+  臺: "臺",
+  后: "後",
+  後: "後",
+  里: "裡",
+  裡: "裡",
+  矿: "礦",
+  礦: "礦",
+  铁: "鐵",
+  鐵: "鐵",
+  锭: "錠",
+  錠: "錠",
+  级: "級",
+  級: "級",
+  制: "製",
+  製: "製",
+};
+
+const OCR_QUALIFIER_PREFIXES = [
+  "純淨的",
+  "純淨",
+  "高純度",
+  "精製",
+  "特級",
+  "上級",
+  "高級",
+  "濃縮",
+  "優質",
+];
+
+function normalizeLookupCjkVariants(value: string): string {
+  return value.replace(/[纯純净淨头頭台臺后後里裡矿礦铁鐵锭錠级級制製]/gu, (char) => LOOKUP_CJK_VARIANT_MAP[char] ?? char);
+}
+
 function normalizeLookupName(name: string): string {
-  return name.trim().toLocaleLowerCase().replace(/\s+/g, "");
+  return normalizeLookupCjkVariants(name.trim().toLocaleLowerCase().replace(/\s+/g, ""));
 }
 
 function sanitizeOcrLineItemName(raw: string): string {
@@ -329,16 +766,36 @@ function buildOcrLookupCandidates(rawName: string): string[] {
   add(rawName);
   const cleaned = sanitizeOcrLineItemName(rawName).replace(/[^0-9a-zA-Z\u3400-\u9fff]/gu, "");
   add(cleaned);
-  const normalized = normalizeLookupName(cleaned);
-  const trimLimit = Math.min(6, Math.max(0, normalized.length - 2));
-  for (let index = 1; index <= trimLimit; index += 1) {
-    add(normalized.slice(index));
-  }
-  if (normalized.length > 4) {
-    add(normalized.slice(0, -1));
-    add(normalized.slice(0, -2));
+  const normalizedCleaned = normalizeLookupName(cleaned);
+  // Keep limited tolerance for OCR leading numeric noise, but do not trim arbitrary prefixes.
+  const trimmedLeadingDigits = normalizedCleaned.replace(/^[0-9]+/u, "");
+  if (trimmedLeadingDigits !== normalizedCleaned) {
+    add(trimmedLeadingDigits);
   }
   return Array.from(candidates);
+}
+
+function hasQualifiedPrefix(name: string): boolean {
+  const key = normalizeLookupName(sanitizeOcrLineItemName(name));
+  if (!key) {
+    return false;
+  }
+  return OCR_QUALIFIER_PREFIXES.some((prefix) => key.startsWith(normalizeLookupName(prefix)));
+}
+
+function isQualifiedNameCollapsedToBaseName(ocrName: string, matchedItemName: string): boolean {
+  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
+  const matchedKey = normalizeLookupName(matchedItemName);
+  if (!ocrKey || !matchedKey || ocrKey === matchedKey) {
+    return false;
+  }
+  if (!ocrKey.endsWith(matchedKey)) {
+    return false;
+  }
+  if (ocrKey.length - matchedKey.length < 2) {
+    return false;
+  }
+  return hasQualifiedPrefix(ocrName) && !hasQualifiedPrefix(matchedItemName);
 }
 
 function levenshteinDistance(left: string, right: string): number {
@@ -365,6 +822,71 @@ function levenshteinDistance(left: string, right: string): number {
     }
   }
   return prev[right.length];
+}
+
+function commonPrefixLength(left: string, right: string): number {
+  const max = Math.min(left.length, right.length);
+  let count = 0;
+  while (count < max && left[count] === right[count]) {
+    count += 1;
+  }
+  return count;
+}
+
+function commonSuffixLength(left: string, right: string): number {
+  const max = Math.min(left.length, right.length);
+  let count = 0;
+  while (count < max && left[left.length - 1 - count] === right[right.length - 1 - count]) {
+    count += 1;
+  }
+  return count;
+}
+
+function tryCorrectOcrNameByKnownItems(rawOcrName: string, items: WorkshopItem[]): string {
+  const sanitized = sanitizeOcrLineItemName(rawOcrName);
+  const ocrKey = normalizeLookupName(sanitized);
+  if (!ocrKey || ocrKey.length < 3) {
+    return sanitized || rawOcrName;
+  }
+  const hasExact = items.some((item) => normalizeLookupName(item.name) === ocrKey);
+  if (hasExact) {
+    return sanitized || rawOcrName;
+  }
+
+  const candidates: Array<{ itemName: string; score: number }> = [];
+  items.forEach((item) => {
+    const itemKey = normalizeLookupName(item.name);
+    if (!itemKey || Math.abs(itemKey.length - ocrKey.length) > 1) {
+      return;
+    }
+    const distance = levenshteinDistance(ocrKey, itemKey);
+    if (distance !== 1) {
+      return;
+    }
+    const prefix = commonPrefixLength(ocrKey, itemKey);
+    const suffix = commonSuffixLength(ocrKey, itemKey);
+    // Require at least a stable 2-char anchor (prefix or suffix) to avoid over-correction.
+    if (prefix < 2 && suffix < 2) {
+      return;
+    }
+    const score = prefix * 3 + suffix * 2 - Math.abs(itemKey.length - ocrKey.length);
+    candidates.push({ itemName: item.name, score });
+  });
+  if (candidates.length === 0) {
+    return sanitized || rawOcrName;
+  }
+  candidates.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+    return left.itemName.localeCompare(right.itemName, "zh-CN");
+  });
+  const best = candidates[0];
+  const second = candidates[1];
+  if (second && second.score >= best.score - 1) {
+    return sanitized || rawOcrName;
+  }
+  return best.itemName;
 }
 
 function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawName: string): WorkshopItem | undefined {
@@ -869,7 +1391,7 @@ function normalizePriceSnapshot(raw: unknown): WorkshopPriceSnapshot | null {
   }
 
   const unitPrice = toNonNegativeInt((raw as { unitPrice?: unknown }).unitPrice, -1);
-  if (unitPrice < 0) {
+  if (unitPrice <= 0) {
     return null;
   }
 
@@ -974,6 +1496,24 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
   };
 }
 
+function removeKnownInvalidItems(state: WorkshopState): WorkshopState {
+  const invalidItemIds = new Set(
+    state.items.filter((item) => WORKSHOP_KNOWN_INVALID_ITEM_NAMES.has(item.name.trim())).map((item) => item.id),
+  );
+  if (invalidItemIds.size === 0) {
+    return state;
+  }
+  return {
+    ...state,
+    items: state.items.filter((item) => !invalidItemIds.has(item.id)),
+    recipes: state.recipes.filter(
+      (recipe) => !invalidItemIds.has(recipe.outputItemId) && !recipe.inputs.some((input) => invalidItemIds.has(input.itemId)),
+    ),
+    prices: state.prices.filter((row) => !invalidItemIds.has(row.itemId)),
+    inventory: state.inventory.filter((row) => !invalidItemIds.has(row.itemId)),
+  };
+}
+
 function writeWorkshopState(next: WorkshopState): WorkshopState {
   const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
   const normalizedItems = next.items.map((item) => {
@@ -996,20 +1536,22 @@ function readWorkshopState(): WorkshopState {
   const rawVersion = workshopStore.get("version");
   const storedBuiltinCatalogSignature = workshopStore.get("builtinCatalogSignature");
   const normalized = normalizeWorkshopState(workshopStore.store);
+  const cleaned = removeKnownInvalidItems(normalized);
+  const currentState = cleaned === normalized ? normalized : writeWorkshopState(cleaned);
   const version = typeof rawVersion === "number" ? Math.floor(rawVersion) : 0;
   const currentBuiltinCatalogSignature = resolveBuiltinCatalogSignature();
   const shouldRebuildForCatalogChange =
     typeof storedBuiltinCatalogSignature !== "string" || storedBuiltinCatalogSignature !== currentBuiltinCatalogSignature;
   const shouldRebuildFromBuiltin =
     version !== WORKSHOP_STATE_VERSION ||
-    normalized.items.length === 0 ||
-    normalized.recipes.length === 0 ||
+    currentState.items.length === 0 ||
+    currentState.recipes.length === 0 ||
     shouldRebuildForCatalogChange;
   if (!shouldRebuildFromBuiltin) {
-    return normalized;
+    return currentState;
   }
   const builtin = buildBuiltinCatalogState();
-  const rebuilt = remapRuntimeStateToBuiltin(normalized, builtin);
+  const rebuilt = remapRuntimeStateToBuiltin(currentState, builtin);
   const persisted = writeWorkshopState(rebuilt);
   workshopStore.set("builtinCatalogSignature", currentBuiltinCatalogSignature);
   return persisted;
@@ -1111,6 +1653,59 @@ function getLatestPriceMap(state: WorkshopState): Map<string, WorkshopPriceSnaps
   return map;
 }
 
+interface LatestPriceByMarket {
+  server: WorkshopPriceSnapshot | null;
+  world: WorkshopPriceSnapshot | null;
+  single: WorkshopPriceSnapshot | null;
+}
+
+function getLatestPriceByItemAndMarketMap(state: WorkshopState): Map<string, LatestPriceByMarket> {
+  const map = new Map<string, LatestPriceByMarket>();
+  state.prices.forEach((snapshot) => {
+    const market = normalizePriceMarketForCompare(snapshot.market);
+    const current = map.get(snapshot.itemId) ?? { server: null, world: null, single: null };
+    const previous = current[market];
+    if (!previous) {
+      current[market] = snapshot;
+      map.set(snapshot.itemId, current);
+      return;
+    }
+    const prevTs = new Date(previous.capturedAt).getTime();
+    const nextTs = new Date(snapshot.capturedAt).getTime();
+    if (nextTs > prevTs || (nextTs === prevTs && snapshot.id.localeCompare(previous.id) > 0)) {
+      current[market] = snapshot;
+      map.set(snapshot.itemId, current);
+    }
+  });
+  return map;
+}
+
+function resolveCheapestMaterialPrice(
+  row: LatestPriceByMarket | undefined,
+): { unitPrice: number | null; market: WorkshopPriceMarket | undefined } {
+  if (!row) {
+    return { unitPrice: null, market: undefined };
+  }
+  const serverPrice = row.server?.unitPrice ?? null;
+  const worldPrice = row.world?.unitPrice ?? null;
+  if (serverPrice !== null && worldPrice !== null) {
+    if (serverPrice <= worldPrice) {
+      return { unitPrice: serverPrice, market: "server" };
+    }
+    return { unitPrice: worldPrice, market: "world" };
+  }
+  if (serverPrice !== null) {
+    return { unitPrice: serverPrice, market: "server" };
+  }
+  if (worldPrice !== null) {
+    return { unitPrice: worldPrice, market: "world" };
+  }
+  if (row.single?.unitPrice !== undefined) {
+    return { unitPrice: row.single.unitPrice, market: "single" };
+  }
+  return { unitPrice: null, market: undefined };
+}
+
 function buildSimulation(
   state: WorkshopState,
   recipe: WorkshopRecipe,
@@ -1122,6 +1717,7 @@ function buildSimulation(
   const itemById = new Map(state.items.map((entry) => [entry.id, entry]));
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
   const latestPriceByItemId = getLatestPriceMap(state);
+  const latestPriceByItemAndMarket = getLatestPriceByItemAndMarketMap(state);
   const requiredMaterials = new Map<string, number>();
   const craftRuns = new Map<string, number>();
   const visiting = new Set<string>();
@@ -1180,7 +1776,8 @@ function buildSimulation(
       const requiredQty = Math.max(0, Math.floor(required));
       const owned = Math.max(0, Math.floor(inventoryByItemId.get(itemId) ?? 0));
       const missing = Math.max(0, requiredQty - owned);
-      const latestUnitPrice = latestPriceByItemId.get(itemId)?.unitPrice ?? null;
+      const priceChoice = resolveCheapestMaterialPrice(latestPriceByItemAndMarket.get(itemId));
+      const latestUnitPrice = priceChoice.unitPrice;
       const requiredCost = latestUnitPrice === null ? null : latestUnitPrice * requiredQty;
       const missingCost = latestUnitPrice === null ? null : latestUnitPrice * missing;
       return {
@@ -1190,6 +1787,7 @@ function buildSimulation(
         owned,
         missing,
         latestUnitPrice,
+        latestPriceMarket: priceChoice.market,
         requiredCost,
         missingCost,
       };
@@ -1286,27 +1884,82 @@ function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
   };
 }
 
-function resolvePriceTrendTag(
+interface PriceTrendAssessment {
+  trendTag: WorkshopPriceTrendTag;
+  confidenceScore: number;
+  reasons: string[];
+}
+
+function formatRatioAsPercent(value: number): string {
+  return `${(value * 100).toFixed(2)}%`;
+}
+
+function resolvePriceTrendAssessment(
   sampleCount: number,
   deviationFromWeekdayAverage: number | null,
   deviationFromMa7: number | null,
   thresholdRatio: number,
-): WorkshopPriceTrendTag {
-  if (sampleCount < 5 || deviationFromWeekdayAverage === null) {
-    return "watch";
+): PriceTrendAssessment {
+  if (sampleCount < WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT) {
+    return {
+      trendTag: "watch",
+      confidenceScore: 20,
+      reasons: [`样本不足（${sampleCount}/${WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT}）`],
+    };
+  }
+  if (deviationFromWeekdayAverage === null) {
+    return {
+      trendTag: "watch",
+      confidenceScore: 20,
+      reasons: ["缺少同星期均价基线"],
+    };
   }
   const ma7Threshold = thresholdRatio * 0.5;
   const buyByWeekday = deviationFromWeekdayAverage <= -thresholdRatio;
   const sellByWeekday = deviationFromWeekdayAverage >= thresholdRatio;
   const buyByMa7 = deviationFromMa7 === null ? true : deviationFromMa7 <= -ma7Threshold;
   const sellByMa7 = deviationFromMa7 === null ? true : deviationFromMa7 >= ma7Threshold;
+
+  const sampleFactor = clamp(sampleCount / 20, 0.35, 1);
+  const weekdayStrength = clamp(Math.abs(deviationFromWeekdayAverage) / thresholdRatio, 0, 2.5);
+  const ma7Strength =
+    deviationFromMa7 === null ? 1 : clamp(Math.abs(deviationFromMa7) / Math.max(ma7Threshold, Number.EPSILON), 0, 2.5);
+  const confidenceScore = clamp(Math.round((weekdayStrength * 0.65 + ma7Strength * 0.35) * 42 * sampleFactor), 20, 99);
+
   if (buyByWeekday && buyByMa7) {
-    return "buy-zone";
+    return {
+      trendTag: "buy-zone",
+      confidenceScore,
+      reasons: [
+        `星期偏离 ${formatRatioAsPercent(deviationFromWeekdayAverage)} <= -${formatRatioAsPercent(thresholdRatio)}`,
+        deviationFromMa7 === null
+          ? "MA7 不可用（按星期偏离判定）"
+          : `MA7偏离 ${formatRatioAsPercent(deviationFromMa7)} <= -${formatRatioAsPercent(ma7Threshold)}`,
+      ],
+    };
   }
   if (sellByWeekday && sellByMa7) {
-    return "sell-zone";
+    return {
+      trendTag: "sell-zone",
+      confidenceScore,
+      reasons: [
+        `星期偏离 ${formatRatioAsPercent(deviationFromWeekdayAverage)} >= ${formatRatioAsPercent(thresholdRatio)}`,
+        deviationFromMa7 === null
+          ? "MA7 不可用（按星期偏离判定）"
+          : `MA7偏离 ${formatRatioAsPercent(deviationFromMa7)} >= ${formatRatioAsPercent(ma7Threshold)}`,
+      ],
+    };
   }
-  return "watch";
+  return {
+    trendTag: "watch",
+    confidenceScore: clamp(Math.round(confidenceScore * 0.45), 10, 60),
+    reasons: [
+      `星期偏离 ${formatRatioAsPercent(deviationFromWeekdayAverage)} 未达阈值 ${formatRatioAsPercent(thresholdRatio)}`,
+      deviationFromMa7 === null
+        ? "MA7 不可用（仅参考星期偏离）"
+        : `MA7偏离 ${formatRatioAsPercent(deviationFromMa7)}（确认阈值 ${formatRatioAsPercent(ma7Threshold)}）`,
+    ],
+  };
 }
 
 function buildWeekdayAverages(points: WorkshopPriceHistoryPoint[]): WorkshopWeekdayAverage[] {
@@ -1354,8 +2007,13 @@ function resolveHistoryRange(payload: WorkshopPriceHistoryQuery): { from: Date; 
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
+  const includeSuspect = payload.includeSuspect === true;
+  const targetMarket = payload.market === undefined ? undefined : sanitizePriceMarket(payload.market);
   const snapshots = state.prices
     .filter((entry) => entry.itemId === payload.itemId)
+    .filter((entry) =>
+      targetMarket === undefined ? true : normalizePriceMarketForCompare(entry.market) === normalizePriceMarketForCompare(targetMarket),
+    )
     .map((entry) => ({
       ...entry,
       ts: new Date(entry.capturedAt).getTime(),
@@ -1364,9 +2022,42 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
     .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
 
+  const anomalyWindowMs = WORKSHOP_PRICE_ANOMALY_BASELINE_DAYS * 24 * 60 * 60 * 1000;
+  const baselineByMarket = new Map<WorkshopPriceMarket, Array<{ ts: number; unitPrice: number }>>();
+  const classifiedSnapshots = snapshots.map((entry) => {
+    const market = normalizePriceMarketForCompare(entry.market);
+    const baseline = baselineByMarket.get(market) ?? [];
+    const baselineInWindow = baseline.filter((row) => row.ts >= entry.ts - anomalyWindowMs);
+    const qualityTag = resolveSnapshotQualityTag(entry.note);
+    const anomaly = qualityTag.isSuspect ? null : assessPriceAnomaly(entry.unitPrice, baselineInWindow.map((row) => row.unitPrice));
+    const isSuspect = qualityTag.isSuspect || (anomaly !== null && anomaly.kind !== "normal");
+    const suspectReason = qualityTag.reason ?? (anomaly ? formatAnomalyReason(anomaly) || null : null);
+    if (!isSuspect) {
+      baselineInWindow.push({
+        ts: entry.ts,
+        unitPrice: entry.unitPrice,
+      });
+      baselineByMarket.set(market, baselineInWindow);
+    } else {
+      baselineByMarket.set(market, baselineInWindow);
+    }
+    return {
+      id: entry.id,
+      itemId: entry.itemId,
+      unitPrice: entry.unitPrice,
+      capturedAt: new Date(entry.ts).toISOString(),
+      weekday: new Date(entry.ts).getDay(),
+      market,
+      note: entry.note,
+      isSuspect,
+      suspectReason,
+    };
+  });
+
+  const snapshotsForSeries = includeSuspect ? classifiedSnapshots : classifiedSnapshots.filter((entry) => !entry.isSuspect);
   let rollingSum = 0;
   const rollingWindow: number[] = [];
-  const points: WorkshopPriceHistoryPoint[] = snapshots.map((entry) => {
+  const points: WorkshopPriceHistoryPoint[] = snapshotsForSeries.map((entry) => {
     rollingWindow.push(entry.unitPrice);
     rollingSum += entry.unitPrice;
     if (rollingWindow.length > 7) {
@@ -1380,11 +2071,36 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
       id: entry.id,
       itemId: entry.itemId,
       unitPrice: entry.unitPrice,
-      capturedAt: new Date(entry.ts).toISOString(),
-      weekday: new Date(entry.ts).getDay(),
+      capturedAt: entry.capturedAt,
+      weekday: entry.weekday,
       ma7,
+      market: entry.market,
+      note: entry.note,
+      isSuspect: entry.isSuspect,
+      suspectReason: entry.suspectReason ?? undefined,
     };
   });
+  const pointById = new Map(points.map((point) => [point.id, point]));
+  const suspectPoints: WorkshopPriceHistoryPoint[] = classifiedSnapshots
+    .filter((entry) => entry.isSuspect)
+    .map((entry) => {
+      const inSeries = pointById.get(entry.id);
+      if (inSeries) {
+        return inSeries;
+      }
+      return {
+        id: entry.id,
+        itemId: entry.itemId,
+        unitPrice: entry.unitPrice,
+        capturedAt: entry.capturedAt,
+        weekday: entry.weekday,
+        ma7: null,
+        market: entry.market,
+        note: entry.note,
+        isSuspect: true,
+        suspectReason: entry.suspectReason ?? undefined,
+      };
+    });
 
   const sampleCount = points.length;
   const averagePrice = sampleCount > 0 ? points.reduce((acc, point) => acc + point.unitPrice, 0) / sampleCount : null;
@@ -1392,14 +2108,17 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
 
   return {
     itemId: payload.itemId,
+    market: targetMarket,
     fromAt: from.toISOString(),
     toAt: to.toISOString(),
     sampleCount,
+    suspectCount: suspectPoints.length,
     latestPrice: latestPoint?.unitPrice ?? null,
     latestCapturedAt: latestPoint?.capturedAt ?? null,
     averagePrice,
     ma7Latest: latestPoint?.ma7 ?? null,
     points,
+    suspectPoints,
     weekdayAverages: buildWeekdayAverages(points),
   };
 }
@@ -1499,6 +2218,7 @@ function parseIntLike(raw: unknown): number | null {
 function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
   source: "manual" | "import";
   capturedAt: string;
+  dedupeWithinSeconds: number;
   autoCreateMissingItems: boolean;
   strictIconMatch: boolean;
   defaultCategory: WorkshopItemCategory;
@@ -1509,6 +2229,9 @@ function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
 } {
   const source = payload.source === "manual" ? "manual" : "import";
   const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
+  const dedupeWithinSecondsRaw = parseIntLike(payload.dedupeWithinSeconds);
+  const dedupeWithinSeconds =
+    dedupeWithinSecondsRaw === null ? 0 : clamp(dedupeWithinSecondsRaw, 0, 600);
   const autoCreateMissingItems = payload.autoCreateMissingItems ?? false;
   const strictIconMatch = false;
   const defaultCategory = sanitizeCategory(payload.defaultCategory);
@@ -1519,6 +2242,7 @@ function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
   return {
     source,
     capturedAt,
+    dedupeWithinSeconds,
     autoCreateMissingItems,
     strictIconMatch,
     defaultCategory,
@@ -1799,14 +2523,30 @@ function parseOcrTradeRows(
     const lineNumber = Number.isFinite(row.lineNumber) ? Math.max(1, Math.floor(row.lineNumber)) : index + 1;
     const rawName = typeof row.itemName === "string" ? row.itemName : "";
     const itemName = sanitizeOcrLineItemName(rawName);
-    const serverPrice = normalizeNumericToken(String(row.serverPrice ?? ""));
-    const worldPrice = normalizeNumericToken(String(row.worldPrice ?? ""));
+    const serverPriceRaw = String(row.serverPrice ?? "").trim();
+    const worldPriceRaw = String(row.worldPrice ?? "").trim();
+    const parsedServerPrice = normalizeNumericToken(serverPriceRaw);
+    const parsedWorldPrice = normalizeNumericToken(worldPriceRaw);
+    const serverPrice = parsedServerPrice !== null && parsedServerPrice > 0 ? parsedServerPrice : null;
+    const worldPrice = parsedWorldPrice !== null && parsedWorldPrice > 0 ? parsedWorldPrice : null;
     if (!itemName) {
       invalidLines.push(`#${lineNumber} ${rawName || "<空名称>"}`);
       return;
     }
+    if (serverPriceRaw && parsedServerPrice === null) {
+      invalidLines.push(`#${lineNumber} ${itemName} <伺服器价格无效: ${serverPriceRaw}>`);
+    } else if (serverPriceRaw && parsedServerPrice !== null && parsedServerPrice <= 0) {
+      invalidLines.push(`#${lineNumber} ${itemName} <伺服器价格无效(<=0): ${serverPriceRaw}>`);
+    }
+    if (worldPriceRaw && parsedWorldPrice === null) {
+      invalidLines.push(`#${lineNumber} ${itemName} <世界价格无效: ${worldPriceRaw}>`);
+    } else if (worldPriceRaw && parsedWorldPrice !== null && parsedWorldPrice <= 0) {
+      invalidLines.push(`#${lineNumber} ${itemName} <世界价格无效(<=0): ${worldPriceRaw}>`);
+    }
     if (serverPrice === null && worldPrice === null) {
-      invalidLines.push(`#${lineNumber} ${itemName} <双价格均为空>`);
+      if (!serverPriceRaw && !worldPriceRaw) {
+        invalidLines.push(`#${lineNumber} ${itemName} <双价格均为空>`);
+      }
       return;
     }
     if (serverPrice !== null) {
@@ -1854,6 +2594,10 @@ function sanitizeOcrPsm(raw: unknown): number {
     return WORKSHOP_OCR_DEFAULT_PSM;
   }
   return clamp(Math.floor(raw), 3, 13);
+}
+
+function sanitizeOcrSafeMode(raw: unknown): boolean {
+  return raw !== false;
 }
 
 function buildPaddleLanguageCandidates(language: string): string[] {
@@ -1920,7 +2664,7 @@ function sanitizeTradeBoardPreset(raw: unknown): WorkshopTradeBoardPreset | null
     return null;
   }
   const rowCountRaw = parseIntLike(entity.rowCount);
-  const rowCount = rowCountRaw === null ? 7 : clamp(rowCountRaw, 1, 30);
+  const rowCount = rowCountRaw === null ? 0 : clamp(rowCountRaw, 0, 30);
   return {
     enabled: true,
     rowCount,
@@ -1961,6 +2705,8 @@ interface PaddleOcrPayloadWord {
 }
 
 interface PaddleOcrPayload {
+  id?: unknown;
+  ready?: unknown;
   ok?: unknown;
   error?: unknown;
   language?: unknown;
@@ -1975,6 +2721,24 @@ interface PaddleOcrOutcome {
   words: OcrTsvWord[];
   errorMessage?: string;
 }
+
+interface PaddleCommandAttempt {
+  command: string;
+  args: string[];
+  label: string;
+}
+
+interface PaddleWorkerPendingRequest {
+  resolve: (value: PaddleOcrOutcome) => void;
+  reject: (reason: Error) => void;
+  timeoutId: NodeJS.Timeout;
+}
+
+let paddleWorkerProcess: ChildProcessWithoutNullStreams | null = null;
+let paddleWorkerStartPromise: Promise<void> | null = null;
+let paddleWorkerStdoutBuffer = "";
+let paddleWorkerStderrBuffer = "";
+const paddleWorkerPendingRequests = new Map<string, PaddleWorkerPendingRequest>();
 
 function normalizePaddleWord(raw: PaddleOcrPayloadWord): OcrTsvWord | null {
   const text = typeof raw.text === "string" ? raw.text.trim() : "";
@@ -2046,6 +2810,10 @@ function parsePaddlePayload(stdout: string): PaddleOcrOutcome {
       errorMessage: `PaddleOCR 输出 JSON 解析失败：${parseError || "未知错误"}。`,
     };
   }
+  return parsePaddlePayloadObject(parsed);
+}
+
+function parsePaddlePayloadObject(parsed: PaddleOcrPayload): PaddleOcrOutcome {
   const ok = parsed.ok === true;
   if (!ok) {
     const errorMessage = typeof parsed.error === "string" ? parsed.error : "PaddleOCR 执行失败。";
@@ -2071,10 +2839,7 @@ function parsePaddlePayload(stdout: string): PaddleOcrOutcome {
   };
 }
 
-async function runPaddleWithCommand(
-  command: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string; ok: boolean; errorMessage?: string }> {
+function ensurePaddleRuntimeDirectories(): void {
   try {
     fs.mkdirSync(OCR_PADDLE_RUNTIME_ROOT, { recursive: true });
     fs.mkdirSync(OCR_PADDLE_RUNTIME_USER, { recursive: true });
@@ -2083,7 +2848,10 @@ async function runPaddleWithCommand(
   } catch {
     // best effort; if mkdir fails, spawn will still try with current env
   }
-  const env = {
+}
+
+function createPaddleEnv(safeMode: boolean): NodeJS.ProcessEnv {
+  return {
     ...process.env,
     HOME: OCR_PADDLE_RUNTIME_USER,
     USERPROFILE: OCR_PADDLE_RUNTIME_USER,
@@ -2096,11 +2864,206 @@ async function runPaddleWithCommand(
     FLAGS_prim_all: "0",
     PYTHONUTF8: "1",
     PYTHONIOENCODING: "utf-8",
+    AION2_OCR_SAFE_MODE: safeMode ? "1" : "0",
   };
+}
+
+function buildPaddleCommandAttempts(
+  script: string,
+  scriptArgs: string[],
+  unbuffered = false,
+): PaddleCommandAttempt[] {
+  const bufferArg = unbuffered ? ["-u"] : [];
+  return [
+    { command: "py", args: ["-3.11", ...bufferArg, "-c", script, ...scriptArgs], label: "py-3.11" },
+    { command: "py", args: ["-3", ...bufferArg, "-c", script, ...scriptArgs], label: "py-3" },
+    { command: "python", args: [...bufferArg, "-c", script, ...scriptArgs], label: "python" },
+  ];
+}
+
+function trimBuffer(input: string): string {
+  if (input.length <= OCR_PADDLE_MAX_BUFFER) {
+    return input;
+  }
+  return input.slice(input.length - OCR_PADDLE_MAX_BUFFER);
+}
+
+function resetPaddleWorkerState(reason: string): void {
+  const worker = paddleWorkerProcess;
+  paddleWorkerProcess = null;
+  paddleWorkerStartPromise = null;
+  paddleWorkerStdoutBuffer = "";
+  paddleWorkerStderrBuffer = "";
+  const error = new Error(`OCR 常驻进程不可用：${reason}`);
+  paddleWorkerPendingRequests.forEach((pending) => {
+    clearTimeout(pending.timeoutId);
+    pending.reject(error);
+  });
+  paddleWorkerPendingRequests.clear();
+  if (worker && !worker.killed) {
+    try {
+      worker.kill();
+    } catch {
+      // ignore worker termination failure
+    }
+  }
+}
+
+function processPaddleWorkerStdoutLine(rawLine: string): void {
+  const line = rawLine.trim();
+  if (!line) {
+    return;
+  }
+  let parsed: PaddleOcrPayload | null = null;
+  try {
+    parsed = JSON.parse(line) as PaddleOcrPayload;
+  } catch {
+    return;
+  }
+  if (!parsed || parsed.ready === true) {
+    return;
+  }
+  const requestId = typeof parsed.id === "string" ? parsed.id : "";
+  if (!requestId) {
+    return;
+  }
+  const pending = paddleWorkerPendingRequests.get(requestId);
+  if (!pending) {
+    return;
+  }
+  paddleWorkerPendingRequests.delete(requestId);
+  clearTimeout(pending.timeoutId);
+  pending.resolve(parsePaddlePayloadObject(parsed));
+}
+
+function attachPaddleWorkerListeners(worker: ChildProcessWithoutNullStreams): void {
+  worker.stdout.setEncoding("utf8");
+  worker.stderr.setEncoding("utf8");
+  worker.stdout.on("data", (chunk: string) => {
+    paddleWorkerStdoutBuffer = trimBuffer(paddleWorkerStdoutBuffer + chunk);
+    let lineBreakIndex = paddleWorkerStdoutBuffer.indexOf("\n");
+    while (lineBreakIndex >= 0) {
+      const line = paddleWorkerStdoutBuffer.slice(0, lineBreakIndex).replace(/\r$/u, "");
+      paddleWorkerStdoutBuffer = paddleWorkerStdoutBuffer.slice(lineBreakIndex + 1);
+      processPaddleWorkerStdoutLine(line);
+      lineBreakIndex = paddleWorkerStdoutBuffer.indexOf("\n");
+    }
+  });
+  worker.stderr.on("data", (chunk: string) => {
+    paddleWorkerStderrBuffer = trimBuffer(paddleWorkerStderrBuffer + chunk);
+  });
+  worker.on("error", (err) => {
+    if (paddleWorkerProcess !== worker) {
+      return;
+    }
+    resetPaddleWorkerState(err.message || "进程异常");
+  });
+  worker.on("close", (code) => {
+    if (paddleWorkerProcess !== worker) {
+      return;
+    }
+    const stderrTail = paddleWorkerStderrBuffer.trim();
+    const detail = stderrTail ? `退出码 ${code ?? -1} / ${stderrTail}` : `退出码 ${code ?? -1}`;
+    resetPaddleWorkerState(detail);
+  });
+}
+
+async function startPaddleWorker(): Promise<void> {
+  if (paddleWorkerProcess && !paddleWorkerProcess.killed) {
+    return;
+  }
+  if (paddleWorkerStartPromise) {
+    return paddleWorkerStartPromise;
+  }
+  paddleWorkerStartPromise = (async () => {
+    ensurePaddleRuntimeDirectories();
+    const attempts = buildPaddleCommandAttempts(PADDLE_OCR_PYTHON_WORKER_SCRIPT, [], true);
+    const errors: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        const worker = await new Promise<ChildProcessWithoutNullStreams>((resolve, reject) => {
+          let settled = false;
+          const child = spawn(attempt.command, attempt.args, {
+            windowsHide: true,
+            env: createPaddleEnv(true),
+            shell: false,
+          });
+          const finishResolve = (): void => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            resolve(child);
+          };
+          const finishReject = (message: string): void => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            reject(new Error(message));
+          };
+          child.once("spawn", finishResolve);
+          child.once("error", (err) => finishReject(err.message || "启动失败"));
+          child.once("close", (code) => finishReject(`启动后立即退出: ${code ?? -1}`));
+        });
+        paddleWorkerProcess = worker;
+        paddleWorkerStdoutBuffer = "";
+        paddleWorkerStderrBuffer = "";
+        attachPaddleWorkerListeners(worker);
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "启动失败";
+        errors.push(`${attempt.label}: ${message}`);
+      }
+    }
+    throw new Error(errors.join(" | ") || "无法启动 OCR 常驻进程。");
+  })();
+  try {
+    await paddleWorkerStartPromise;
+  } finally {
+    paddleWorkerStartPromise = null;
+  }
+}
+
+async function runPaddleWithWorker(imagePath: string, candidates: string[], safeMode: boolean): Promise<PaddleOcrOutcome> {
+  await startPaddleWorker();
+  const worker = paddleWorkerProcess;
+  if (!worker || worker.killed || worker.stdin.destroyed) {
+    throw new Error("OCR 常驻进程未就绪。");
+  }
+  const requestId = randomUUID();
+  return new Promise<PaddleOcrOutcome>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      if (paddleWorkerPendingRequests.delete(requestId)) {
+        resetPaddleWorkerState("请求超时");
+        reject(new Error(`OCR 常驻请求超时（>${OCR_PADDLE_REQUEST_TIMEOUT_MS}ms）`));
+      }
+    }, OCR_PADDLE_REQUEST_TIMEOUT_MS);
+    paddleWorkerPendingRequests.set(requestId, { resolve, reject, timeoutId });
+    try {
+      worker.stdin.write(
+        `${JSON.stringify({ id: requestId, image_path: imagePath, languages: candidates, safe_mode: safeMode })}\n`,
+        "utf8",
+      );
+    } catch (err) {
+      clearTimeout(timeoutId);
+      paddleWorkerPendingRequests.delete(requestId);
+      const message = err instanceof Error ? err.message : "发送请求失败";
+      reject(new Error(message));
+    }
+  });
+}
+
+async function runPaddleWithCommand(
+  command: string,
+  args: string[],
+  safeMode: boolean,
+): Promise<{ stdout: string; stderr: string; ok: boolean; errorMessage?: string }> {
+  ensurePaddleRuntimeDirectories();
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       windowsHide: true,
-      env,
+      env: createPaddleEnv(safeMode),
       shell: false,
     });
     let stdout = "";
@@ -2166,14 +3129,9 @@ async function runPaddleWithCommand(
   });
 }
 
-async function runPaddleExtract(imagePath: string, language: string): Promise<PaddleOcrOutcome> {
+async function runPaddleExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
   const candidates = buildPaddleLanguageCandidates(language);
   const langArg = candidates.join(",");
-  const attempts: Array<{ command: string; args: string[] }> = [
-    { command: "py", args: ["-3.11", "-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
-    { command: "py", args: ["-3", "-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
-    { command: "python", args: ["-c", PADDLE_OCR_PYTHON_SCRIPT, imagePath, langArg] },
-  ];
   const attemptErrors: string[] = [];
 
   const isInterpreterNotAvailable = (message: string): boolean => {
@@ -2185,11 +3143,30 @@ async function runPaddleExtract(imagePath: string, language: string): Promise<Pa
     return message.toLocaleLowerCase().includes("import paddleocr failed");
   };
 
+  try {
+    const fromWorker = await runPaddleWithWorker(imagePath, candidates, safeMode);
+    if (fromWorker.ok) {
+      return fromWorker;
+    }
+    const payloadError = fromWorker.errorMessage ?? "输出无效";
+    attemptErrors.push(`worker: ${payloadError}`);
+    if (!isImportFailure(payloadError) && !isInterpreterNotAvailable(payloadError)) {
+      return {
+        ...fromWorker,
+        errorMessage: `worker: ${payloadError}`,
+      };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "worker 失败";
+    attemptErrors.push(`worker: ${message}`);
+  }
+
+  const attempts = buildPaddleCommandAttempts(PADDLE_OCR_PYTHON_SCRIPT, [imagePath, langArg]);
   for (const attempt of attempts) {
-    const result = await runPaddleWithCommand(attempt.command, attempt.args);
+    const result = await runPaddleWithCommand(attempt.command, attempt.args, safeMode);
     if (!result.ok) {
       const detail = (result.errorMessage ?? result.stderr.trim()) || "执行失败";
-      attemptErrors.push(`${attempt.command}: ${detail}`);
+      attemptErrors.push(`${attempt.label}: ${detail}`);
       if (!isInterpreterNotAvailable(detail)) {
         break;
       }
@@ -2200,11 +3177,11 @@ async function runPaddleExtract(imagePath: string, language: string): Promise<Pa
       return payload;
     }
     const payloadError = payload.errorMessage ?? "输出无效";
-    attemptErrors.push(`${attempt.command}: ${payloadError}`);
+    attemptErrors.push(`${attempt.label}: ${payloadError}`);
     if (!isImportFailure(payloadError) && !isInterpreterNotAvailable(payloadError)) {
       return {
         ...payload,
-        errorMessage: `${attempt.command}: ${payloadError}`,
+        errorMessage: `${attempt.label}: ${payloadError}`,
       };
     }
   }
@@ -2216,6 +3193,13 @@ async function runPaddleExtract(imagePath: string, language: string): Promise<Pa
     words: [],
     errorMessage: attemptErrors.join(" | ") || "PaddleOCR 调用失败。",
   };
+}
+
+export function cleanupWorkshopOcrEngine(): void {
+  if (!paddleWorkerProcess && paddleWorkerPendingRequests.size === 0) {
+    return;
+  }
+  resetPaddleWorkerState("应用退出");
 }
 
 function stringifyOcrWords(words: OcrTsvWord[]): string {
@@ -2336,6 +3320,67 @@ function parseNonEmptyLines(text: string): string[] {
     .filter(Boolean);
 }
 
+function estimateRowCountFromWords(words: OcrTsvWord[]): number | null {
+  const effectiveWords = words.filter((word) => sanitizeOcrLineItemName(word.text).trim().length > 0);
+  if (effectiveWords.length === 0) {
+    return null;
+  }
+  const points = effectiveWords
+    .map((word) => ({
+      centerY: word.top + word.height / 2,
+      height: Math.max(1, word.height),
+    }))
+    .sort((left, right) => left.centerY - right.centerY);
+  if (points.length === 0) {
+    return null;
+  }
+  const heights = points.map((entry) => entry.height).sort((left, right) => left - right);
+  const medianHeight = heights[Math.floor(heights.length / 2)] ?? 1;
+  const mergeDistance = Math.max(8, Math.floor(medianHeight * 0.65));
+
+  let clusterCount = 0;
+  let clusterCenter = 0;
+  points.forEach((entry) => {
+    if (clusterCount === 0) {
+      clusterCount = 1;
+      clusterCenter = entry.centerY;
+      return;
+    }
+    if (Math.abs(entry.centerY - clusterCenter) <= mergeDistance) {
+      clusterCenter = (clusterCenter + entry.centerY) / 2;
+      return;
+    }
+    clusterCount += 1;
+    clusterCenter = entry.centerY;
+  });
+  return clamp(clusterCount, 1, 30);
+}
+
+function resolveTradeBoardRowCount(
+  configuredRowCount: number,
+  nameWords: OcrTsvWord[],
+  nameRawText: string,
+  warnings: string[],
+): number {
+  if (configuredRowCount > 0) {
+    return configuredRowCount;
+  }
+  const fromWords = estimateRowCountFromWords(nameWords);
+  const fallbackLineCount = clamp(parseNonEmptyLines(nameRawText).length, 0, 30);
+  const candidates: number[] = [];
+  if (fromWords !== null && fromWords > 0) {
+    candidates.push(fromWords);
+  }
+  if (fallbackLineCount > 0) {
+    candidates.push(fallbackLineCount);
+  }
+  const resolved = candidates.length > 0 ? clamp(Math.max(...candidates), 1, 30) : 7;
+  warnings.push(
+    `交易行可见行数自动识别：${resolved} 行（词框=${fromWords ?? "--"}，文本行=${fallbackLineCount || "--"}）。`,
+  );
+  return resolved;
+}
+
 function groupWordsByRow<T extends OcrTsvWord>(words: T[], rowCount: number, totalHeight: number, startTop = 0): T[][] {
   const buckets: T[][] = Array.from({ length: rowCount }, () => []);
   const rowHeight = totalHeight / rowCount;
@@ -2414,15 +3459,18 @@ function detectTradePriceRoleByHeaderText(rawText: string): "server" | "world" |
   if (!normalized) {
     return null;
   }
-  if (normalized.includes("世界") || normalized.includes("world")) {
+  const worldHints = ["世界", "world"];
+  const serverHints = ["伺服器", "服务器", "本服", "server"];
+  const worldHit = worldHints.some((hint) => normalized.includes(hint));
+  const serverHit = serverHints.some((hint) => normalized.includes(hint));
+
+  if (worldHit && serverHit) {
+    return null;
+  }
+  if (worldHit) {
     return "world";
   }
-  if (
-    normalized.includes("伺服器") ||
-    normalized.includes("服务器") ||
-    normalized.includes("本服") ||
-    normalized.includes("server")
-  ) {
+  if (serverHit) {
     return "server";
   }
   return null;
@@ -2432,6 +3480,7 @@ async function resolveDualPriceRolesByHeader(
   imagePath: string,
   pricesRect: WorkshopRect,
   language: string,
+  safeMode: boolean,
   fallbackLeftRole: "server" | "world",
   fallbackRightRole: "server" | "world",
   warnings: string[],
@@ -2457,7 +3506,7 @@ async function resolveDualPriceRolesByHeader(
     let tempPath: string | null = null;
     try {
       tempPath = cropImageToTempFile(imagePath, rect, 2);
-      const extract = await runPaddleExtract(tempPath, headerLanguage);
+      const extract = await runPaddleExtract(tempPath, headerLanguage, safeMode);
       if (!extract.ok) {
         warnings.push(`${label}表头识别失败：${extract.errorMessage ?? "未知错误"}`);
         return "";
@@ -2523,13 +3572,14 @@ async function extractPriceRowsForRect(
   rect: WorkshopRect,
   rowCount: number,
   scale: number,
+  safeMode: boolean,
   column: "left" | "right",
   warnings: string[],
   warningPrefix: string,
 ): Promise<PriceRowsOcrOutcome> {
   const tempPath = cropImageToTempFile(imagePath, rect, scale);
   try {
-    const extract = await runPaddleExtract(tempPath, "en");
+    const extract = await runPaddleExtract(tempPath, "en", safeMode);
     if (!extract.ok) {
       throw new Error(`${warningPrefix}OCR 失败：${extract.errorMessage ?? "未知错误"}`);
     }
@@ -2571,12 +3621,13 @@ async function extractDualPriceRowsForRect(
   rect: WorkshopRect,
   rowCount: number,
   scale: number,
+  safeMode: boolean,
   warnings: string[],
 ): Promise<DualPriceRowsOcrOutcome> {
   let fastModeError: string | null = null;
   const tempPath = cropImageToTempFile(imagePath, rect, scale);
   try {
-    const extract = await runPaddleExtract(tempPath, "en");
+    const extract = await runPaddleExtract(tempPath, "en", safeMode);
     if (!extract.ok) {
       throw new Error(extract.errorMessage ?? "未知错误");
     }
@@ -2630,8 +3681,8 @@ async function extractDualPriceRowsForRect(
     height: rect.height,
   };
   const [leftOutcome, rightOutcome] = await Promise.all([
-    extractPriceRowsForRect(imagePath, leftRect, rowCount, scale, "left", warnings, "左列价格："),
-    extractPriceRowsForRect(imagePath, rightRect, rowCount, scale, "left", warnings, "右列价格："),
+    extractPriceRowsForRect(imagePath, leftRect, rowCount, scale, safeMode, "left", warnings, "左列价格："),
+    extractPriceRowsForRect(imagePath, rightRect, rowCount, scale, safeMode, "left", warnings, "右列价格："),
   ]);
   return {
     leftValues: leftOutcome.values,
@@ -2650,6 +3701,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
   const imagePath = resolveCatalogImportFilePath(imageRawPath);
   const language = sanitizeOcrLanguage(payload.language);
   const psm = sanitizeOcrPsm(payload.psm);
+  const safeMode = sanitizeOcrSafeMode(payload.safeMode);
   const warnings: string[] = [];
   const tradeBoardPreset = sanitizeTradeBoardPreset(payload.tradeBoardPreset);
 
@@ -2660,13 +3712,19 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
       const namesScale = 2;
       const pricesScale = 2;
       namesTempPath = cropImageToTempFile(imagePath, tradeBoardPreset.namesRect, namesScale);
-      const namesExtract = await runPaddleExtract(namesTempPath, namesLanguage);
+      const namesExtract = await runPaddleExtract(namesTempPath, namesLanguage, safeMode);
       if (!namesExtract.ok) {
         throw new Error(`名称区 OCR 失败：${formatPaddleOcrError(namesExtract.errorMessage)}`);
       }
+      const effectiveRowCount = resolveTradeBoardRowCount(
+        tradeBoardPreset.rowCount,
+        namesExtract.words,
+        namesExtract.rawText,
+        warnings,
+      );
       const nameRowsFromTsv = buildNameRowsFromWords(
         namesExtract.words,
-        tradeBoardPreset.rowCount,
+        effectiveRowCount,
         Math.floor(tradeBoardPreset.namesRect.height * namesScale),
       );
       const nameRowsTsvSanitized = nameRowsFromTsv.map((row) => {
@@ -2676,8 +3734,8 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
       const nameLinesFallback = parseNonEmptyLines(namesExtract.rawText)
         .map((line) => sanitizeOcrLineItemName(line))
         .filter(Boolean)
-        .slice(0, tradeBoardPreset.rowCount);
-      const nameRowsFallback = Array.from({ length: tradeBoardPreset.rowCount }, (_, index) => nameLinesFallback[index] ?? null);
+        .slice(0, effectiveRowCount);
+      const nameRowsFallback = Array.from({ length: effectiveRowCount }, (_, index) => nameLinesFallback[index] ?? null);
       const nameRows =
         nameRowsTsvSanitized.filter((entry) => entry !== null).length >= nameLinesFallback.length
           ? nameRowsTsvSanitized
@@ -2692,23 +3750,23 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
       let pricesEngine = "";
 
       if (tradeBoardPreset.priceMode === "dual") {
-        if (tradeBoardPreset.leftPriceRole === tradeBoardPreset.rightPriceRole) {
-          const detectedRoles = await resolveDualPriceRolesByHeader(
-            imagePath,
-            tradeBoardPreset.pricesRect,
-            namesLanguage,
-            effectiveLeftRole,
-            effectiveRightRole,
-            warnings,
-          );
-          effectiveLeftRole = detectedRoles.leftRole;
-          effectiveRightRole = detectedRoles.rightRole;
-        }
+        const detectedRoles = await resolveDualPriceRolesByHeader(
+          imagePath,
+          tradeBoardPreset.pricesRect,
+          namesLanguage,
+          safeMode,
+          effectiveLeftRole,
+          effectiveRightRole,
+          warnings,
+        );
+        effectiveLeftRole = detectedRoles.leftRole;
+        effectiveRightRole = detectedRoles.rightRole;
         const dualOutcome = await extractDualPriceRowsForRect(
           imagePath,
           tradeBoardPreset.pricesRect,
-          tradeBoardPreset.rowCount,
+          effectiveRowCount,
           pricesScale,
+          safeMode,
           warnings,
         );
         leftValues = dualOutcome.leftValues;
@@ -2725,18 +3783,19 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
         const singleOutcome = await extractPriceRowsForRect(
           imagePath,
           tradeBoardPreset.pricesRect,
-          tradeBoardPreset.rowCount,
+          effectiveRowCount,
           pricesScale,
+          safeMode,
           tradeBoardPreset.priceColumn,
           warnings,
           "",
         );
         if (tradeBoardPreset.priceColumn === "right") {
-          leftValues = Array.from({ length: tradeBoardPreset.rowCount }, () => null);
+          leftValues = Array.from({ length: effectiveRowCount }, () => null);
           rightValues = singleOutcome.values;
         } else {
           leftValues = singleOutcome.values;
-          rightValues = Array.from({ length: tradeBoardPreset.rowCount }, () => null);
+          rightValues = Array.from({ length: effectiveRowCount }, () => null);
         }
         rawPriceSection = singleOutcome.rawText;
         rawPriceTsvSection = singleOutcome.tsvText;
@@ -2744,7 +3803,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
       }
 
       const tradeRows: WorkshopOcrExtractTextResult["tradeRows"] = [];
-      for (let index = 0; index < tradeBoardPreset.rowCount; index += 1) {
+      for (let index = 0; index < effectiveRowCount; index += 1) {
         const itemName = nameRows[index];
         if (!itemName) {
           continue;
@@ -2790,8 +3849,8 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
           return `${row.itemName} ${primary}`;
         })
         .filter((entry): entry is string => entry !== null);
-      if (tradeRows.length < tradeBoardPreset.rowCount) {
-        warnings.push(`识别行不足：有效行 ${tradeRows.length}/${tradeBoardPreset.rowCount}。`);
+      if (tradeRows.length < effectiveRowCount) {
+        warnings.push(`识别行不足：有效行 ${tradeRows.length}/${effectiveRowCount}。`);
       }
       const text = textLines.join("\n");
       return {
@@ -2809,7 +3868,7 @@ export async function extractWorkshopOcrText(payload: WorkshopOcrExtractTextInpu
     }
   }
 
-  const primary = await runPaddleExtract(imagePath, language);
+  const primary = await runPaddleExtract(imagePath, language, safeMode);
   if (!primary.ok) {
     throw new Error(
       `PaddleOCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}。请先使用 Python 3.10/3.11 安装：pip install paddleocr paddlepaddle`,
@@ -2974,13 +4033,21 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
   const state = readWorkshopState();
   ensureItemExists(state, payload.itemId);
   const unitPrice = toNonNegativeInt(payload.unitPrice, -1);
-  if (unitPrice < 0) {
-    throw new Error("价格必须是大于等于 0 的整数。");
+  if (unitPrice <= 0) {
+    throw new Error("价格必须是大于 0 的整数。");
   }
 
   const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
   const source = payload.source === "import" ? "import" : "manual";
   const market = sanitizePriceMarket(payload.market);
+  const baselinePrices = collectBaselinePricesForItem(state.prices, payload.itemId, market, capturedAt);
+  const anomaly = assessPriceAnomaly(unitPrice, baselinePrices);
+  let note = payload.note?.trim() || undefined;
+  if (anomaly.kind === "hard") {
+    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_HARD);
+  } else if (anomaly.kind === "suspect") {
+    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
+  }
   const nextSnapshot: WorkshopPriceSnapshot = {
     id: randomUUID(),
     itemId: payload.itemId,
@@ -2988,7 +4055,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
     capturedAt,
     source,
     market,
-    note: payload.note?.trim() || undefined,
+    note,
   };
 
   return writeWorkshopState({
@@ -3010,6 +4077,44 @@ export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
   });
 }
 
+function isDuplicatePriceSnapshotByWindow(
+  prices: WorkshopPriceSnapshot[],
+  itemId: string,
+  market: WorkshopPriceMarket | undefined,
+  unitPrice: number,
+  capturedAtIso: string,
+  dedupeWithinSeconds: number,
+): boolean {
+  if (dedupeWithinSeconds <= 0) {
+    return false;
+  }
+  const capturedAtMs = new Date(capturedAtIso).getTime();
+  if (!Number.isFinite(capturedAtMs)) {
+    return false;
+  }
+  const dedupeWindowMs = dedupeWithinSeconds * 1000;
+  for (let index = prices.length - 1; index >= 0; index -= 1) {
+    const row = prices[index];
+    if (row.itemId !== itemId) {
+      continue;
+    }
+    if ((row.market ?? "single") !== (market ?? "single")) {
+      continue;
+    }
+    if (row.unitPrice !== unitPrice) {
+      continue;
+    }
+    const rowMs = new Date(row.capturedAt).getTime();
+    if (!Number.isFinite(rowMs)) {
+      continue;
+    }
+    if (Math.abs(capturedAtMs - rowMs) <= dedupeWindowMs) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): WorkshopOcrPriceImportResult {
   const state = readWorkshopState();
   const sanitized = sanitizeOcrImportPayload(payload);
@@ -3019,7 +4124,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
   }
 
   const tradeRowsParsed = parseOcrTradeRows(sanitized.tradeRows);
-  const parsedFromTradeRows = tradeRowsParsed.parsedLines.length > 0;
+  const parsedFromTradeRows = hasStructuredTradeRows;
   const { parsedLines, invalidLines } = parsedFromTradeRows ? tradeRowsParsed : parseOcrPriceLines(sanitized.text);
   const items = [...state.items];
   const prices = [...state.prices];
@@ -3041,29 +4146,47 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
 
   const unknownItemNameSet = new Set<string>();
   const importedEntries: WorkshopOcrPriceImportResult["importedEntries"] = [];
+  const nameCorrectionWarnings: string[] = [];
+  const priceQualityWarnings: string[] = [];
   let importedCount = 0;
+  let duplicateSkippedCount = 0;
   let createdItemCount = 0;
 
   parsedLines.forEach((line) => {
-    const key = normalizeLookupName(line.itemName);
+    const correctedLineName = tryCorrectOcrNameByKnownItems(line.itemName, items);
+    const normalizedLineName = correctedLineName || line.itemName;
+    if (normalizedLineName !== line.itemName && nameCorrectionWarnings.length < 20) {
+      nameCorrectionWarnings.push(`名称纠错：${line.itemName} -> ${normalizedLineName}`);
+    }
+    if (!Number.isFinite(line.unitPrice) || line.unitPrice <= 0) {
+      if (priceQualityWarnings.length < 40) {
+        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：价格无效（${line.unitPrice}）。`);
+      }
+      return;
+    }
+    const key = normalizeLookupName(normalizedLineName);
     const capturedIcon = iconCaptureOutcome.iconByLineNumber.get(line.lineNumber);
     const exactMatchedItem = itemByLookupName.get(key);
     let item = exactMatchedItem;
     let matchedByExactName = Boolean(exactMatchedItem);
     if (!item && !sanitized.strictIconMatch) {
-      item = resolveItemByOcrName(itemByLookupName, line.itemName);
+      item = resolveItemByOcrName(itemByLookupName, normalizedLineName);
       if (item) {
         itemByLookupName.set(key, item);
       }
     }
     const iconMatchedItem = resolveUniqueItemByIcon(items, capturedIcon);
+    if (item && !matchedByExactName && !iconMatchedItem && isQualifiedNameCollapsedToBaseName(normalizedLineName, item.name)) {
+      unknownItemNameSet.add(`${normalizedLineName}（限定词前缀疑似被折叠，已跳过）`);
+      return;
+    }
 
     if (sanitized.strictIconMatch) {
       if (!capturedIcon) {
         const canFallbackByExactName =
-          item !== undefined && !isCapturedImageIcon(item.icon) && isExactOcrNameMatch(item, line.itemName);
+          item !== undefined && !isCapturedImageIcon(item.icon) && isExactOcrNameMatch(item, normalizedLineName);
         if (!canFallbackByExactName) {
-          unknownItemNameSet.add(`${line.itemName}（严格模式需开启图标抓取）`);
+          unknownItemNameSet.add(`${normalizedLineName}（严格模式需开启图标抓取）`);
           return;
         }
       }
@@ -3072,24 +4195,24 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
         itemByLookupName.set(key, item);
       }
       if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
-        unknownItemNameSet.add(`${line.itemName}（名称与图标冲突）`);
+        unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
         return;
       }
       if (item && capturedIcon && isCapturedImageIcon(item.icon) && item.icon !== capturedIcon) {
-        unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
+        unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
         return;
       }
-      if (item && !isCapturedImageIcon(item.icon) && !isExactOcrNameMatch(item, line.itemName)) {
-        unknownItemNameSet.add(`${line.itemName}（严格模式缺少图标基线）`);
+      if (item && !isCapturedImageIcon(item.icon) && !isExactOcrNameMatch(item, normalizedLineName)) {
+        unknownItemNameSet.add(`${normalizedLineName}（严格模式缺少图标基线）`);
         return;
       }
-      if (item && !isExactOcrNameMatch(item, line.itemName) && !iconMatchedItem) {
-        unknownItemNameSet.add(`${line.itemName}（严格模式下名称不精确）`);
+      if (item && !isExactOcrNameMatch(item, normalizedLineName) && !iconMatchedItem) {
+        unknownItemNameSet.add(`${normalizedLineName}（严格模式下名称不精确）`);
         return;
       }
     } else {
       if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
-        unknownItemNameSet.add(`${line.itemName}（名称与图标冲突）`);
+        unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
         return;
       }
       if (!item && iconMatchedItem) {
@@ -3097,8 +4220,8 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
         itemByLookupName.set(key, item);
       }
       // Only block fuzzy/heuristic matches; exact key matches should be trusted.
-      if (item && !matchedByExactName && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, line.itemName, items)) {
-        unknownItemNameSet.add(`${line.itemName}（名称歧义，已跳过）`);
+      if (item && !matchedByExactName && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, normalizedLineName, items)) {
+        unknownItemNameSet.add(`${normalizedLineName}（名称歧义，已跳过）`);
         return;
       }
     }
@@ -3106,15 +4229,15 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     let createdItem = false;
     if (!item) {
       if (!sanitized.autoCreateMissingItems) {
-        unknownItemNameSet.add(line.itemName);
+        unknownItemNameSet.add(normalizedLineName);
         return;
       }
       const nowIso = new Date().toISOString();
       item = {
         id: randomUUID(),
-        name: line.itemName,
+        name: normalizedLineName,
         category: sanitized.defaultCategory,
-        icon: resolveItemIconWithCache(iconCache, line.itemName, sanitized.defaultCategory, capturedIcon),
+        icon: resolveItemIconWithCache(iconCache, normalizedLineName, sanitized.defaultCategory, capturedIcon),
         createdAt: nowIso,
         updatedAt: nowIso,
       };
@@ -3125,7 +4248,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     } else if (capturedIcon && item) {
       const currentItem = item;
       if (sanitized.strictIconMatch && isCapturedImageIcon(currentItem.icon) && currentItem.icon !== capturedIcon) {
-        unknownItemNameSet.add(`${line.itemName}（图标不匹配）`);
+        unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
         return;
       }
       const canRefreshIcon =
@@ -3148,6 +4271,35 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       }
     }
 
+    const anomalyBaseline = collectBaselinePricesForItem(prices, item.id, line.market, sanitized.capturedAt);
+    const anomaly = assessPriceAnomaly(line.unitPrice, anomalyBaseline);
+    if (anomaly.kind === "hard") {
+      unknownItemNameSet.add(`${normalizedLineName}（价格异常偏离，已自动过滤）`);
+      if (priceQualityWarnings.length < 40) {
+        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：${formatAnomalyReason(anomaly)}`);
+      }
+      return;
+    }
+
+    const duplicated = isDuplicatePriceSnapshotByWindow(
+      prices,
+      item.id,
+      line.market,
+      line.unitPrice,
+      sanitized.capturedAt,
+      sanitized.dedupeWithinSeconds,
+    );
+    if (duplicated) {
+      duplicateSkippedCount += 1;
+      return;
+    }
+    let note = `ocr-import#${line.market}#line-${line.lineNumber}`;
+    if (anomaly.kind === "suspect") {
+      note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
+      if (priceQualityWarnings.length < 40) {
+        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」标记可疑：${formatAnomalyReason(anomaly)}`);
+      }
+    }
     prices.push({
       id: randomUUID(),
       itemId: item.id,
@@ -3155,7 +4307,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       capturedAt: sanitized.capturedAt,
       source: sanitized.source,
       market: line.market,
-      note: `ocr-import#${line.market}#line-${line.lineNumber}`,
+      note,
     });
     importedEntries.push({
       lineNumber: line.lineNumber,
@@ -3180,13 +4332,14 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
   return {
     state: nextState,
     importedCount,
+    duplicateSkippedCount,
     createdItemCount,
     parsedLineCount: parsedLines.length,
     unknownItemNames: Array.from(unknownItemNameSet).sort((left, right) => left.localeCompare(right, "zh-CN")),
     invalidLines,
     iconCapturedCount: iconCaptureOutcome.iconCapturedCount,
     iconSkippedCount: iconCaptureOutcome.iconSkippedCount,
-    iconCaptureWarnings,
+    iconCaptureWarnings: [...iconCaptureWarnings, ...nameCorrectionWarnings, ...priceQualityWarnings],
     importedEntries,
   };
 }
@@ -3496,7 +4649,9 @@ export function getWorkshopCraftOptions(payload?: { taxRate?: number }): Worksho
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
 
   const options = state.recipes.map((recipe) => {
-    const simulation = buildSimulation(state, recipe, 1, taxRate, "expanded");
+    // Reverse suggestion should reflect direct recipe inputs (not expanded sub-recipes),
+    // so missing/unknown material hints stay aligned with what players see in the recipe.
+    const simulation = buildSimulation(state, recipe, 1, taxRate, "direct");
     const craftableCountFromInventory =
       simulation.materialRows.length === 0
         ? 0
@@ -3517,6 +4672,7 @@ export function getWorkshopCraftOptions(payload?: { taxRate?: number }): Worksho
       requiredMaterialCostPerRun: simulation.requiredMaterialCost,
       estimatedProfitPerRun: simulation.estimatedProfit,
       unknownPriceItemIds: simulation.unknownPriceItemIds,
+      materialRowsForOneRun: simulation.materialRows,
       missingRowsForOneRun: simulation.materialRows.filter((row) => row.missing > 0),
     };
   });
@@ -3566,10 +4722,13 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     payload?.thresholdRatio === undefined
       ? state.signalRule.dropBelowWeekdayAverageRatio
       : sanitizeSignalThresholdRatio(payload.thresholdRatio);
+  const targetMarket = payload?.market === undefined ? undefined : sanitizePriceMarket(payload.market);
+  const effectiveThresholdRatio = sanitizeSignalThresholdRatio(thresholdRatio);
   const rows: WorkshopPriceSignalRow[] = state.items.map((item) => {
     const history = buildWorkshopPriceHistoryResult(state, {
       itemId: item.id,
       days: lookbackDays,
+      market: targetMarket,
     });
     const latestPoint = history.points[history.points.length - 1] ?? null;
     const latestWeekday = latestPoint?.weekday ?? null;
@@ -3583,17 +4742,18 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       history.latestPrice === null || history.ma7Latest === null || history.ma7Latest <= 0
         ? null
         : (history.latestPrice - history.ma7Latest) / history.ma7Latest;
-    const trendTag = resolvePriceTrendTag(
+    const assessment = resolvePriceTrendAssessment(
       history.sampleCount,
       deviationRatioFromWeekdayAverage,
       deviationRatioFromMa7,
-      thresholdRatio,
+      effectiveThresholdRatio,
     );
-    const triggered = state.signalRule.enabled && trendTag === "buy-zone";
+    const triggered = state.signalRule.enabled && assessment.trendTag === "buy-zone";
 
     return {
       itemId: item.id,
       itemName: item.name,
+      market: targetMarket,
       latestPrice: history.latestPrice,
       latestCapturedAt: history.latestCapturedAt,
       latestWeekday,
@@ -3601,7 +4761,10 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       deviationRatioFromWeekdayAverage,
       ma7Price: history.ma7Latest,
       deviationRatioFromMa7,
-      trendTag,
+      effectiveThresholdRatio,
+      trendTag: assessment.trendTag,
+      confidenceScore: assessment.confidenceScore,
+      reasons: assessment.reasons,
       sampleCount: history.sampleCount,
       triggered,
     };
@@ -3615,6 +4778,9 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     const rightTrendRank = right.trendTag === "buy-zone" ? 0 : right.trendTag === "sell-zone" ? 1 : 2;
     if (leftTrendRank !== rightTrendRank) {
       return leftTrendRank - rightTrendRank;
+    }
+    if (left.confidenceScore !== right.confidenceScore) {
+      return right.confidenceScore - left.confidenceScore;
     }
     const leftDeviation = left.deviationRatioFromWeekdayAverage;
     const rightDeviation = right.deviationRatioFromWeekdayAverage;
@@ -3638,8 +4804,10 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
 
   return {
     generatedAt: new Date().toISOString(),
+    market: targetMarket,
     lookbackDays,
     thresholdRatio,
+    effectiveThresholdRatio,
     ruleEnabled: state.signalRule.enabled,
     triggeredCount: rows.filter((row) => row.triggered).length,
     buyZoneCount: rows.filter((row) => row.trendTag === "buy-zone").length,

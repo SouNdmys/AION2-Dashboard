@@ -298,6 +298,10 @@ export function App(): JSX.Element {
   const [shopAodePurchaseUsedInput, setShopAodePurchaseUsedInput] = useState("0");
   const [shopDailyDungeonTicketPurchaseUsedInput, setShopDailyDungeonTicketPurchaseUsedInput] = useState("0");
   const [transformAodeUsedInput, setTransformAodeUsedInput] = useState("0");
+  const [workshopHistoryJumpItemId, setWorkshopHistoryJumpItemId] = useState<string | null>(null);
+  const [workshopHistoryJumpSnapshotId, setWorkshopHistoryJumpSnapshotId] = useState<string | null>(null);
+  const [workshopHistoryJumpNonce, setWorkshopHistoryJumpNonce] = useState(0);
+  const [workshopPriceChangeNonce, setWorkshopPriceChangeNonce] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -2560,7 +2564,17 @@ export function App(): JSX.Element {
               ))
             : null}
 
-          {viewMode === "workshop" ? <WorkshopView /> : null}
+          {viewMode === "workshop" ? (
+            <WorkshopView
+              externalPriceChangeNonce={workshopPriceChangeNonce}
+              onJumpToHistoryManager={({ itemId, snapshotId }) => {
+                setViewMode("workshop");
+                setWorkshopHistoryJumpItemId(itemId);
+                setWorkshopHistoryJumpSnapshotId(snapshotId ?? null);
+                setWorkshopHistoryJumpNonce((prev) => prev + 1);
+              }}
+            />
+          ) : null}
 
           {viewMode === "settings" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
@@ -2769,7 +2783,14 @@ export function App(): JSX.Element {
             </div>
           </article>
 
-          {viewMode === "workshop" ? <WorkshopSidebarHistoryCard /> : null}
+          {viewMode === "workshop" ? (
+            <WorkshopSidebarHistoryCard
+              focusItemId={workshopHistoryJumpItemId}
+              focusSnapshotId={workshopHistoryJumpSnapshotId}
+              focusNonce={workshopHistoryJumpNonce}
+              onPriceDataChanged={() => setWorkshopPriceChangeNonce((prev) => prev + 1)}
+            />
+          ) : null}
 
           {viewMode === "dashboard" ? (
             <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
