@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { nativeImage } from "electron";
+import { app, nativeImage } from "electron";
 import Store from "electron-store";
 import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
 import { tify } from "chinese-conv";
@@ -4797,11 +4797,37 @@ function resolveCatalogImportFilePath(raw: string): string {
 }
 
 function resolveBuiltinCatalogFilePath(): string {
-  const candidates = [
-    path.resolve(process.cwd(), BUILTIN_CATALOG_FILE_NAME),
-    path.resolve(process.cwd(), "..", BUILTIN_CATALOG_FILE_NAME),
-    path.resolve(process.cwd(), "..", "..", BUILTIN_CATALOG_FILE_NAME),
-  ];
+  const candidates: string[] = [];
+  const pushCandidate = (entry: string): void => {
+    if (!entry || candidates.includes(entry)) {
+      return;
+    }
+    candidates.push(entry);
+  };
+
+  const tryResolveWithBase = (baseDir: string): void => {
+    if (!baseDir) {
+      return;
+    }
+    pushCandidate(path.resolve(baseDir, BUILTIN_CATALOG_FILE_NAME));
+    pushCandidate(path.resolve(baseDir, "..", BUILTIN_CATALOG_FILE_NAME));
+    pushCandidate(path.resolve(baseDir, "..", "..", BUILTIN_CATALOG_FILE_NAME));
+  };
+
+  // Dev mode / "npm run dev"
+  tryResolveWithBase(process.cwd());
+  // Packaged app resources (Windows installer / portable)
+  if (process.resourcesPath) {
+    tryResolveWithBase(process.resourcesPath);
+    tryResolveWithBase(path.resolve(process.resourcesPath, "app.asar.unpacked"));
+  }
+  // App path fallback when cwd/resources layout is unexpected
+  try {
+    tryResolveWithBase(app.getAppPath());
+  } catch {
+    // ignore before app ready
+  }
+
   const hit = candidates.find((entry) => fs.existsSync(entry));
   if (!hit) {
     throw new Error(`未找到内置目录文件: ${BUILTIN_CATALOG_FILE_NAME}`);
