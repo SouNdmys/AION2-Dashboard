@@ -15,6 +15,16 @@ import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh,
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import {
+  clearHistoryAction,
+  exportDashboardDataAction,
+  importDashboardDataAction,
+  resetWeeklyStatsAction,
+  saveDashboardSettingsAction,
+  saveWeeklyCompletionsAction,
+  undoMultiStepAction,
+  undoSingleStepAction,
+} from "./features/dashboard/actions/dashboardMaintenanceActions";
+import {
   addAccountAction,
   addCharacterAction,
   deleteAccountAction,
@@ -26,7 +36,6 @@ import {
   selectCharacterAction,
 } from "./features/dashboard/actions/accountCharacterActions";
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
-import { clearHistoryAction, undoMultiStepAction, undoSingleStepAction } from "./features/dashboard/actions/historyActions";
 import {
   applyQuickEntryAction,
   endOverviewCardDragAction,
@@ -41,12 +50,6 @@ import {
   saveShopPlanAction,
   saveTransformPlanAction,
 } from "./features/dashboard/actions/resourceAndCorridorActions";
-import {
-  exportDashboardDataAction,
-  importDashboardDataAction,
-  saveDashboardSettingsAction,
-} from "./features/dashboard/actions/settingsDataActions";
-import { resetWeeklyStatsAction, saveWeeklyCompletionsAction } from "./features/dashboard/actions/weeklyStatsActions";
 import {
   buildCompleteDialog,
   buildCorridorCompleteDialog,
