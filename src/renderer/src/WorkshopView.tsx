@@ -8,12 +8,12 @@ import { createWorkshopSignalHandlers } from "./features/workshop/actions/create
 import { useWorkshopLifecycle } from "./features/workshop/hooks/useWorkshopLifecycle";
 import { useWorkshopHistoryLoader } from "./features/workshop/hooks/useWorkshopHistoryLoader";
 import { useWorkshopViewSyncEffects } from "./features/workshop/hooks/useWorkshopViewSyncEffects";
+import { useWorkshopSimulationModels } from "./features/workshop/hooks/useWorkshopSimulationModels";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
   type ReverseCraftSuggestionRow,
   type ReverseScoreMode,
-  type SimulationRecipeOption,
   HISTORY_QUICK_DAY_OPTIONS,
   buildDualHistoryChartModel,
   buildHistoryInsightModel,
@@ -310,57 +310,13 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       });
   }, [classifiedItemOptions, historyItemsByMainCategory, historySubCategory, historyKeyword, focusStarOnly, starItemIdSet]);
 
-  const simulationRecipeOptions = useMemo<SimulationRecipeOption[]>(() => {
-    if (!state) {
-      return [];
-    }
-    return state.recipes
-      .map((recipe) => {
-        const outputItem = itemById.get(recipe.outputItemId);
-        const outputName = outputItem?.name ?? recipe.outputItemId;
-        const rawCategory = parseItemRawCategory(outputItem?.notes);
-        const sourceTag = parseItemSourceTag(outputItem?.notes);
-        const explicitMainCategory = parseItemMainCategory(outputItem?.notes);
-        const subCategory = inferRecipeSubCategory(rawCategory, outputName, outputItem?.category ?? "other");
-        return {
-          id: recipe.id,
-          outputName,
-          mainCategory: inferMainCategoryByContext(explicitMainCategory, sourceTag, subCategory, rawCategory, outputName),
-          subCategory,
-        };
-      });
-  }, [state, itemById]);
-
-  const simulationMainCategoryOptions = useMemo(() => {
-    const unique = Array.from(new Set(simulationRecipeOptions.map((entry) => entry.mainCategory).filter(Boolean)));
-    if (unique.length === 0) {
-      return ["鐵匠"];
-    }
-    return unique.sort(sortMainCategoryText);
-  }, [simulationRecipeOptions]);
-
-  const simulationRecipesByMainCategory = useMemo(() => {
-    return simulationRecipeOptions.filter((entry) => {
-      if (simulateMainCategory && entry.mainCategory !== simulateMainCategory) {
-        return false;
-      }
-      return true;
+  const { simulationRecipeOptions, simulationMainCategoryOptions, filteredSimulationRecipes, simulationSubCategoryOptions } =
+    useWorkshopSimulationModels({
+      state,
+      itemById,
+      simulateMainCategory,
+      simulateSubCategory,
     });
-  }, [simulationRecipeOptions, simulateMainCategory]);
-
-  const filteredSimulationRecipes = useMemo(() => {
-    return simulationRecipesByMainCategory.filter((entry) => {
-      if (simulateSubCategory !== "all" && entry.subCategory !== simulateSubCategory) {
-        return false;
-      }
-      return true;
-    });
-  }, [simulationRecipesByMainCategory, simulateSubCategory]);
-
-  const simulationSubCategoryOptions = useMemo(() => {
-    const unique = Array.from(new Set(simulationRecipesByMainCategory.map((entry) => entry.subCategory).filter(Boolean)));
-    return unique.sort(sortCategoryText);
-  }, [simulationRecipesByMainCategory]);
 
   const latestPriceMetaByItemId = useMemo(() => {
     if (!state) return new Map<string, LatestPriceMetaByMarket>();
