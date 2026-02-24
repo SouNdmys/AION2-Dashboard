@@ -124,6 +124,7 @@
 - `9fff9f3` `refactor(workshop): extract market analysis panel into dedicated view` (1.2 视图层拆分进展)
 - `ea02385` `refactor(workshop): extract simulation panel into dedicated view` (1.2 视图层拆分进展)
 - `bbe9d59` `refactor(workshop): extract inventory and reverse recommendation panel` (1.2 视图层拆分进展)
+- `9b0046f` `refactor(workshop): extract OCR panel into dedicated view` (1.2 视图层拆分进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
