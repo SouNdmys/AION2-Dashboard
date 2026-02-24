@@ -546,6 +546,7 @@ function normalizeState(raw: unknown): AppState {
 
 function persistState(state: AppState): AppState {
   store.store = state as unknown as Record<string, unknown>;
+  maybeCreateDailyAutoBackup(state);
   return state;
 }
 
@@ -663,13 +664,10 @@ function maybeCreateDailyAutoBackup(state: AppState): void {
 
 export function getAppState(): AppState {
   const current = normalizeState(store.store);
-  const refreshed = {
+  return {
     ...current,
     characters: refreshAllCharacters(current.characters, current.settings),
   };
-  const persisted = persistState(refreshed);
-  maybeCreateDailyAutoBackup(persisted);
-  return persisted;
 }
 
 export function addAccount(name: string, regionTag?: string): AppState {

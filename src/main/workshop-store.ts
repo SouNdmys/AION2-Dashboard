@@ -1789,7 +1789,20 @@ function removeKnownInvalidItems(state: WorkshopState): WorkshopState {
   };
 }
 
+function buildWorkshopStateSignature(state: WorkshopState): string {
+  return JSON.stringify({
+    version: state.version,
+    items: state.items,
+    recipes: state.recipes,
+    prices: state.prices,
+    inventory: state.inventory,
+    signalRule: state.signalRule,
+  });
+}
+
 function writeWorkshopState(next: WorkshopState): WorkshopState {
+  const currentState = normalizeWorkshopState(workshopStore.store);
+  const currentIconCache = serializeIconCache(normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY)));
   const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
   const normalizedItems = next.items.map((item) => {
     const icon = resolveItemIconWithCache(iconCache, item.name, item.category, item.icon);
@@ -1797,13 +1810,29 @@ function writeWorkshopState(next: WorkshopState): WorkshopState {
     aliases.forEach((alias) => cacheIconByName(iconCache, alias, icon));
     return icon === item.icon ? item : { ...item, icon };
   });
-  workshopStore.set("version", next.version);
-  workshopStore.set("items", normalizedItems);
-  workshopStore.set("recipes", next.recipes);
-  workshopStore.set("prices", next.prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT));
-  workshopStore.set("inventory", next.inventory);
-  workshopStore.set("signalRule", normalizeSignalRule(next.signalRule));
-  workshopStore.set(WORKSHOP_ICON_CACHE_KEY, serializeIconCache(iconCache));
+  const candidateState: WorkshopState = {
+    version: next.version,
+    items: normalizedItems,
+    recipes: next.recipes,
+    prices: next.prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+    inventory: [...next.inventory].sort((left, right) => left.itemId.localeCompare(right.itemId)),
+    signalRule: normalizeSignalRule(next.signalRule),
+  };
+  const candidateIconCache = serializeIconCache(iconCache);
+
+  const stateChanged = buildWorkshopStateSignature(currentState) !== buildWorkshopStateSignature(candidateState);
+  const iconCacheChanged = JSON.stringify(currentIconCache) !== JSON.stringify(candidateIconCache);
+  if (!stateChanged && !iconCacheChanged) {
+    return currentState;
+  }
+
+  workshopStore.set("version", candidateState.version);
+  workshopStore.set("items", candidateState.items);
+  workshopStore.set("recipes", candidateState.recipes);
+  workshopStore.set("prices", candidateState.prices);
+  workshopStore.set("inventory", candidateState.inventory);
+  workshopStore.set("signalRule", candidateState.signalRule);
+  workshopStore.set(WORKSHOP_ICON_CACHE_KEY, candidateIconCache);
   return normalizeWorkshopState(workshopStore.store);
 }
 
