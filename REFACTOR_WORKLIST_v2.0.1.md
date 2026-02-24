@@ -13,7 +13,7 @@
 任务:
 - [ ] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
 - [x] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
-- [ ] 1.2 将 `src/renderer/src/WorkshopView.tsx` 拆为 `features/workshop/*` 子模块（OCR、历史、模拟、库存）。
+- [x] 1.2 将 `src/renderer/src/WorkshopView.tsx` 拆为 `features/workshop/*` 子模块（OCR、历史、模拟、库存）。
 - [ ] 1.3 将 `src/main/workshop-store.ts` 拆为 `catalog/ocr/pricing/simulation/store` 模块。
 - [x] 1.4 将 `src/main/ipc.ts` 按域拆分注册（app/account/character/workshop）。
 
@@ -161,3 +161,16 @@
 - `git checkout backup/v2.0.1`
 - `git checkout -B main`
 - `git push origin main --force-with-lease`
+
+## 交接记录（2026-02-24）
+
+- 今日停点提交（可直接作为明日继续起点）:
+  - `9b5bd16` `refactor(workshop): move panel prop builder into hooks layer`
+  - `3cc319c` `docs(refactor): log panel prop builder layer cleanup`
+- `1.2` 已收尾完成（面板拆分 + view state / view model 聚合 + 分层清理）。
+- 今日所有相关改动已通过:
+  - `npm run typecheck`
+  - `npm run build`
+- 明日（2026-02-25）计划:
+  - 启动 `1.3`：拆分 `src/main/workshop-store.ts` 为 `catalog/ocr/pricing/simulation/store` 模块。
+  - 建议先做“只迁文件与调用接线，不改行为”的第一刀，再跑 `typecheck/build` 与页面回归。
