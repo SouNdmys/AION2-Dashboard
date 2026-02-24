@@ -72,6 +72,9 @@
 - `708f4bd` `refactor(workshop): move view helpers and persistence config out of WorkshopView` (1.2 阶段进展)
 - `5ada73d` `refactor(dashboard): split toolbar and dashboard side panels into view components` (1.1 第二阶段进展)
 - `040f6f4` `refactor(workshop): extract loading and overview header views` (1.2 第二阶段进展)
+- `7b26ae4` `docs(refactor): log phase-2 dashboard/workshop view split commits`
+- `648ef56` `refactor(dashboard): extract character task board into dedicated view component` (1.1 第二阶段进展)
+- `95db1ec` `refactor(dashboard): extract overview board into dedicated view component` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
