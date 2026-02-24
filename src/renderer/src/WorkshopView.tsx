@@ -6,6 +6,7 @@ import { createWorkshopCorrectionHandlers } from "./features/workshop/actions/cr
 import { createWorkshopOcrConfigHandlers } from "./features/workshop/actions/createWorkshopOcrConfigHandlers";
 import { createWorkshopSignalHandlers } from "./features/workshop/actions/createWorkshopSignalHandlers";
 import { useWorkshopLifecycle } from "./features/workshop/hooks/useWorkshopLifecycle";
+import { useWorkshopHistoryLoader } from "./features/workshop/hooks/useWorkshopHistoryLoader";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
@@ -189,7 +190,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   const [ocrDragRect, setOcrDragRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [simulationMaterialDraft, setSimulationMaterialDraft] = useState<Record<string, { unitPrice: string; owned: string }>>({});
   const [simulationOutputPriceDraft, setSimulationOutputPriceDraft] = useState("");
-  const historyQuerySeqRef = useRef(0);
   const historyChartAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const taxRate = Number(taxMode);
@@ -867,92 +867,24 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     };
   }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt]);
 
-  useEffect(() => {
-    const days = toInt(historyDaysInput);
-    if (!historyItemId || days === null || days <= 0) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      void onLoadPriceHistory(days, { silent: true });
-    }, 120);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [historyItemId, historyDaysInput, historyIncludeSuspect]);
-
-  useEffect(() => {
-    if (externalPriceChangeNonce <= 0) {
-      return;
-    }
-    const days = toInt(historyDaysInput);
-    void (async () => {
-      try {
-        await Promise.all([loadState(), loadCraftOptions(), loadSignals()]);
-        if (historyItemId && days !== null && days > 0) {
-          await onLoadPriceHistory(days, { silent: true });
-        }
-      } catch {
-        // sidebar mutation sync should be best-effort and silent
-      }
-    })();
-  }, [externalPriceChangeNonce]);
+  const { onLoadPriceHistory } = useWorkshopHistoryLoader({
+    workshopActions,
+    historyItemId,
+    historyDaysInput,
+    historyIncludeSuspect,
+    externalPriceChangeNonce,
+    loadState,
+    loadCraftOptions,
+    loadSignals,
+    setError,
+    setHistoryLoading,
+    setHistoryServerResult,
+    setHistoryWorldResult,
+    setHistoryHasLoaded,
+  });
 
   function isStarredItem(itemId: string): boolean {
     return starItemIdSet.has(itemId);
-  }
-
-  async function onLoadPriceHistory(daysOverride?: number, options?: { silent?: boolean }): Promise<void> {
-    const silent = options?.silent ?? false;
-    if (!historyItemId) {
-      if (!silent) {
-        setError("请先选择要查询的物品。");
-      }
-      return;
-    }
-    const days = daysOverride ?? toInt(historyDaysInput);
-    if (days === null || days <= 0) {
-      if (!silent) {
-        setError("查询天数必须是正整数。");
-      }
-      return;
-    }
-    const seq = historyQuerySeqRef.current + 1;
-    historyQuerySeqRef.current = seq;
-    if (!silent) {
-      setError(null);
-    }
-    setHistoryLoading(true);
-    try {
-      const [serverResult, worldResult] = await Promise.all([
-        workshopActions.getWorkshopPriceHistory({
-          itemId: historyItemId,
-          days,
-          includeSuspect: historyIncludeSuspect,
-          market: "server",
-        }),
-        workshopActions.getWorkshopPriceHistory({
-          itemId: historyItemId,
-          days,
-          includeSuspect: historyIncludeSuspect,
-          market: "world",
-        }),
-      ]);
-      if (historyQuerySeqRef.current !== seq) {
-        return;
-      }
-      setHistoryServerResult(serverResult);
-      setHistoryWorldResult(worldResult);
-      setHistoryHasLoaded(true);
-    } catch (err) {
-      if (historyQuerySeqRef.current !== seq) {
-        return;
-      }
-      setError(err instanceof Error ? err.message : "价格历史查询失败");
-    } finally {
-      if (historyQuerySeqRef.current === seq) {
-        setHistoryLoading(false);
-      }
-    }
   }
 
   const {
