@@ -12,6 +12,7 @@ import { useWorkshopSimulationModels } from "./features/workshop/hooks/useWorksh
 import { useWorkshopEconomyModels } from "./features/workshop/hooks/useWorkshopEconomyModels";
 import { useWorkshopInsightModels } from "./features/workshop/hooks/useWorkshopInsightModels";
 import { useWorkshopOcrDisplayModels } from "./features/workshop/hooks/useWorkshopOcrDisplayModels";
+import { useWorkshopOcrPreviewModels } from "./features/workshop/hooks/useWorkshopOcrPreviewModels";
 import {
   type ClassifiedItemOption,
   type ReverseScoreMode,
@@ -27,7 +28,6 @@ import {
   parseItemSourceTag,
   sortCategoryText,
   sortMainCategoryText,
-  toInt,
   toPercent,
   toSignedPercent,
   trendTagLabel,
@@ -56,9 +56,6 @@ import {
   serializeRawString,
   serializeStringArray,
 } from "./features/workshop/workshop-persistence";
-import {
-  createWorkshopOcrPreviewHandlers,
-} from "./features/workshop/workshop-ocr-handlers";
 import { WorkshopLoadingCard, WorkshopOverviewHeader } from "./features/workshop/views/WorkshopOverviewHeader";
 import { usePersistedState } from "./hooks/usePersistedState";
 import type {
@@ -356,27 +353,37 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     ocrAutoRunNowMs,
   });
 
-  const ocrTradeNamesRect = useMemo(() => {
-    const x = toInt(ocrTradeNamesX);
-    const y = toInt(ocrTradeNamesY);
-    const width = toInt(ocrTradeNamesWidth);
-    const height = toInt(ocrTradeNamesHeight);
-    if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
-      return null;
-    }
-    return { x, y, width, height };
-  }, [ocrTradeNamesX, ocrTradeNamesY, ocrTradeNamesWidth, ocrTradeNamesHeight]);
-
-  const ocrTradePricesRect = useMemo(() => {
-    const x = toInt(ocrTradePricesX);
-    const y = toInt(ocrTradePricesY);
-    const width = toInt(ocrTradePricesWidth);
-    const height = toInt(ocrTradePricesHeight);
-    if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
-      return null;
-    }
-    return { x, y, width, height };
-  }, [ocrTradePricesX, ocrTradePricesY, ocrTradePricesWidth, ocrTradePricesHeight]);
+  const { ocrTradeNamesRect, ocrTradePricesRect, onPreviewMouseDown, onPreviewMouseMove, onPreviewMouseUp } =
+    useWorkshopOcrPreviewModels({
+      ocrTradePresetKey,
+      ocrCalibrationTarget,
+      ocrTradeNamesX,
+      ocrTradeNamesY,
+      ocrTradeNamesWidth,
+      ocrTradeNamesHeight,
+      ocrTradePricesX,
+      ocrTradePricesY,
+      ocrTradePricesWidth,
+      ocrTradePricesHeight,
+      ocrDragMode,
+      ocrDragOffset,
+      ocrDragStart,
+      ocrDragRect,
+      ocrScreenPreview,
+      setOcrTradePresetKey,
+      setOcrTradeNamesX,
+      setOcrTradeNamesY,
+      setOcrTradeNamesWidth,
+      setOcrTradeNamesHeight,
+      setOcrTradePricesX,
+      setOcrTradePricesY,
+      setOcrTradePricesWidth,
+      setOcrTradePricesHeight,
+      setOcrDragMode,
+      setOcrDragOffset,
+      setOcrDragStart,
+      setOcrDragRect,
+    });
   const { loadState, loadCraftOptions, loadSignals } = useWorkshopLifecycle({
     workshopActions,
     taxRate,
@@ -411,34 +418,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     }
   }
 
-  const { onPreviewMouseDown, onPreviewMouseMove, onPreviewMouseUp } = createWorkshopOcrPreviewHandlers({
-    ocrTradePresetKey,
-    ocrCalibrationTarget,
-    ocrTradeNamesRect,
-    ocrTradePricesRect,
-    ocrDragMode,
-    ocrDragOffset,
-    ocrDragStart,
-    ocrDragRect,
-    ocrScreenPreview,
-    setOcrTradePresetKey,
-    setOcrTradeNamesRectInputs: (rect) => {
-      setOcrTradeNamesX(String(rect.x));
-      setOcrTradeNamesY(String(rect.y));
-      setOcrTradeNamesWidth(String(rect.width));
-      setOcrTradeNamesHeight(String(rect.height));
-    },
-    setOcrTradePricesRectInputs: (rect) => {
-      setOcrTradePricesX(String(rect.x));
-      setOcrTradePricesY(String(rect.y));
-      setOcrTradePricesWidth(String(rect.width));
-      setOcrTradePricesHeight(String(rect.height));
-    },
-    setOcrDragMode,
-    setOcrDragOffset,
-    setOcrDragStart,
-    setOcrDragRect,
-  });
   useWorkshopViewSyncEffects({
     itemMainCategory,
     itemMainCategoryOptions,
