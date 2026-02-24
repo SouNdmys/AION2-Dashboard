@@ -18,22 +18,7 @@ import { useDashboardSync } from "./features/dashboard/actions/useDashboardSync"
 import { createDashboardDialogHandlers } from "./features/dashboard/actions/createDashboardDialogHandlers";
 import { createDashboardOverviewHandlers } from "./features/dashboard/actions/createDashboardOverviewHandlers";
 import { createDashboardMaintenanceHandlers } from "./features/dashboard/actions/createDashboardMaintenanceHandlers";
-import {
-  addAccountAction,
-  addCharacterAction,
-  applyCorridorCompletionFromSettingsAction,
-  applyCorridorSettingsAction,
-  assignExtraAodeCharacterAction,
-  deleteAccountAction,
-  deleteCharacterAction,
-  renameAccountAction,
-  renameCharacterAction,
-  saveShopPlanAction,
-  saveTransformPlanAction,
-  saveCharacterProfileAction,
-  selectAccountAction,
-  selectCharacterAction,
-} from "./features/dashboard/actions/dashboardAccountResourceActions";
+import { createDashboardAccountResourceHandlers } from "./features/dashboard/actions/createDashboardAccountResourceHandlers";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -924,148 +909,48 @@ export function App(): JSX.Element {
     setState,
     confirm: window.confirm,
   });
-
-  function onAddAccount(): void {
-    addAccountAction({
-      newAccountName,
-      newAccountRegion,
-      appActions,
-      sync,
-      onInputCleared: () => {
-        setNewAccountName("");
-        setNewAccountRegion("");
-      },
-    });
-  }
-
-  function onSelectAccount(accountId: string): void {
-    selectAccountAction({
-      accountId,
-      appActions,
-      sync,
-    });
-  }
-
-  function onRenameAccount(): void {
-    renameAccountAction({
-      selectedAccount,
-      accountNameInput: accountEditor.name,
-      accountRegionInput: accountEditor.regionTag,
-      appActions,
-      sync,
-    });
-  }
-
-  function onDeleteAccount(): void {
-    deleteAccountAction({
-      selectedAccount,
-      appActions,
-      sync,
-      confirm: window.confirm,
-    });
-  }
-
-  function onAddCharacter(): void {
-    addCharacterAction({
-      selectedAccount,
-      canAddCharacterInSelectedAccount,
-      newCharacterName,
-      appActions,
-      sync,
-      onError: setError,
-      onInputCleared: () => setNewCharacterName(""),
-    });
-  }
-
-  function onRenameCharacter(): void {
-    renameCharacterAction({
-      selectedCharacter: selected,
-      renameInput: renameName,
-      appActions,
-      sync,
-    });
-  }
-
-  function onSaveCharacterProfile(): void {
-    saveCharacterProfileAction({
-      selectedCharacter: selected,
-      profileClassTagInput,
-      profileGearScoreInput,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onDeleteCharacter(): void {
-    deleteCharacterAction({
-      selectedCharacter: selected,
-      appActions,
-      sync,
-      confirm: window.confirm,
-    });
-  }
-
-  function onSelectCharacter(characterId: string): void {
-    selectCharacterAction({
-      characterId,
-      appActions,
-      sync,
-      onBeforeSelect: () => setDashboardMode("character"),
-    });
-  }
-
-  function onApplyCorridorSettings(): void {
-    void applyCorridorSettingsAction({
-      selectedAccountId: selectedAccount?.id ?? null,
-      corridorDraft,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onApplyCorridorCompletionFromSettings(): void {
-    void applyCorridorCompletionFromSettingsAction({
-      selectedCharacterId: selected?.id ?? null,
-      corridorDraft,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onSaveShopPlan(): void {
-    void saveShopPlanAction({
-      selectedCharacterId: selected?.id ?? null,
-      shopAodePurchaseUsedInput,
-      shopDailyDungeonTicketPurchaseUsedInput,
-      purchaseLimit: selectedAodeLimits.purchaseLimit,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onSaveTransformPlan(): void {
-    void saveTransformPlanAction({
-      selectedCharacterId: selected?.id ?? null,
-      transformAodeUsedInput,
-      convertLimit: selectedAodeLimits.convertLimit,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onAssignExtraAodeCharacter(assignExtra: boolean): void {
-    void assignExtraAodeCharacterAction({
-      selectedCharacterId: selected?.id ?? null,
-      assignExtra,
-      appActions,
-      sync,
-    });
-  }
+  const {
+    onAddAccount,
+    onSelectAccount,
+    onRenameAccount,
+    onDeleteAccount,
+    onAddCharacter,
+    onRenameCharacter,
+    onSaveCharacterProfile,
+    onDeleteCharacter,
+    onSelectCharacter,
+    onApplyCorridorSettings,
+    onApplyCorridorCompletionFromSettings,
+    onSaveShopPlan,
+    onSaveTransformPlan,
+    onAssignExtraAodeCharacter,
+  } = createDashboardAccountResourceHandlers({
+    newAccountName,
+    newAccountRegion,
+    selectedAccount,
+    accountNameInput: accountEditor.name,
+    accountRegionInput: accountEditor.regionTag,
+    canAddCharacterInSelectedAccount,
+    newCharacterName,
+    selectedCharacter: selected,
+    renameInput: renameName,
+    profileClassTagInput,
+    profileGearScoreInput,
+    corridorDraft,
+    selectedAodePurchaseLimit: selectedAodeLimits.purchaseLimit,
+    selectedAodeConvertLimit: selectedAodeLimits.convertLimit,
+    shopAodePurchaseUsedInput,
+    shopDailyDungeonTicketPurchaseUsedInput,
+    transformAodeUsedInput,
+    appActions,
+    sync,
+    setDashboardMode,
+    setError,
+    setNewAccountName,
+    setNewAccountRegion,
+    setNewCharacterName,
+    confirm: window.confirm,
+  });
 
   if (!state || !settingsDraft) {
     return (
