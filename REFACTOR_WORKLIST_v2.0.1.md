@@ -77,6 +77,7 @@
 - `95db1ec` `refactor(dashboard): extract overview board into dedicated view component` (1.1 第二阶段进展)
 - `351791a` `refactor(dashboard): extract character header controls into dedicated view component` (1.1 第二阶段进展)
 - `99e11a2` `refactor(dashboard): extract character resource panels into dedicated view component` (1.1 第二阶段进展)
+- `ab091bc` `refactor(dashboard): compose character main section into dedicated view` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
