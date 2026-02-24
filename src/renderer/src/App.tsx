@@ -14,11 +14,7 @@ import {
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
-import { useDashboardSync } from "./features/dashboard/actions/useDashboardSync";
-import { createDashboardDialogHandlers } from "./features/dashboard/actions/createDashboardDialogHandlers";
-import { createDashboardOverviewHandlers } from "./features/dashboard/actions/createDashboardOverviewHandlers";
-import { createDashboardMaintenanceHandlers } from "./features/dashboard/actions/createDashboardMaintenanceHandlers";
-import { createDashboardAccountResourceHandlers } from "./features/dashboard/actions/createDashboardAccountResourceHandlers";
+import { useDashboardHandlers } from "./features/dashboard/actions/useDashboardHandlers";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -828,13 +824,6 @@ export function App(): JSX.Element {
   const selectedTransformAodeRemaining = selected
     ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.transformAodeUsed)
     : 0;
-  const sync = useDashboardSync({
-    setBusy,
-    setError,
-    setDialogError,
-    setInfoMessage,
-    setState,
-  });
   const {
     openCompleteDialog,
     openUseTicketDialog,
@@ -845,47 +834,12 @@ export function App(): JSX.Element {
     onSyncCorridorStatus,
     onApplyCorridorCompletion,
     onConfirmDialog,
-  } = createDashboardDialogHandlers({
-    dialog,
-    selectedCharacter: selected,
-    selectedAccountId: selectedAccount?.id ?? null,
-    corridorDraft,
-    taskById,
-    appActions,
-    sync,
-    setDialog,
-    setDialogError,
-    setCorridorDraft,
-  });
-  const {
     onOverviewCardDragStart,
     onOverviewCardDragOver,
     onOverviewCardDrop,
     onOverviewCardDragEnd,
     onSwitchToOverview,
     onApplyQuickAction,
-  } = createDashboardOverviewHandlers({
-    overviewSortKey,
-    busy,
-    state,
-    draggingCharacterId,
-    dragOverCharacterId,
-    selectedCharacterId: selected?.id ?? null,
-    quickCharacterId,
-    quickTaskId,
-    quickAction,
-    quickAmountInput: quickAmount,
-    quickCorridorTask,
-    characterNameById,
-    taskById,
-    appActions,
-    sync,
-    setDashboardMode,
-    setDraggingCharacterId,
-    setDragOverCharacterId,
-    setError: (message) => setError(message),
-  });
-  const {
     onResetWeeklyStats,
     onSaveWeeklyCompletions,
     onUndoSingleStep,
@@ -894,22 +848,6 @@ export function App(): JSX.Element {
     onSaveSettings,
     onExportData,
     onImportData,
-  } = createDashboardMaintenanceHandlers({
-    state,
-    selectedCharacterId: selected?.id ?? null,
-    weeklyExpeditionCompletedInput,
-    weeklyTranscendenceCompletedInput,
-    undoStepsInput: undoSteps,
-    settingsDraft,
-    appActions,
-    sync,
-    setBusy,
-    setError,
-    setInfoMessage,
-    setState,
-    confirm: window.confirm,
-  });
-  const {
     onAddAccount,
     onSelectAccount,
     onRenameAccount,
@@ -924,28 +862,52 @@ export function App(): JSX.Element {
     onSaveShopPlan,
     onSaveTransformPlan,
     onAssignExtraAodeCharacter,
-  } = createDashboardAccountResourceHandlers({
+  } = useDashboardHandlers({
+    appActions,
+    state,
+    dialog,
+    settingsDraft,
+    selectedCharacter: selected,
+    selectedAccount,
+    taskById,
+    corridorDraft,
+    overviewSortKey,
+    busy,
+    draggingCharacterId,
+    dragOverCharacterId,
+    quickCharacterId,
+    quickTaskId,
+    quickAction,
+    quickAmountInput: quickAmount,
+    quickCorridorTask,
+    characterNameById,
+    weeklyExpeditionCompletedInput,
+    weeklyTranscendenceCompletedInput,
+    undoStepsInput: undoSteps,
     newAccountName,
     newAccountRegion,
-    selectedAccount,
     accountNameInput: accountEditor.name,
     accountRegionInput: accountEditor.regionTag,
     canAddCharacterInSelectedAccount,
     newCharacterName,
-    selectedCharacter: selected,
     renameInput: renameName,
     profileClassTagInput,
     profileGearScoreInput,
-    corridorDraft,
     selectedAodePurchaseLimit: selectedAodeLimits.purchaseLimit,
     selectedAodeConvertLimit: selectedAodeLimits.convertLimit,
     shopAodePurchaseUsedInput,
     shopDailyDungeonTicketPurchaseUsedInput,
     transformAodeUsedInput,
-    appActions,
-    sync,
-    setDashboardMode,
+    setBusy,
     setError,
+    setDialogError,
+    setInfoMessage,
+    setState,
+    setDialog,
+    setCorridorDraft,
+    setDashboardMode,
+    setDraggingCharacterId,
+    setDragOverCharacterId,
     setNewAccountName,
     setNewAccountRegion,
     setNewCharacterName,
