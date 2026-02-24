@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkshopActions } from "./features/workshop/actions/useWorkshopActions";
+import { createWorkshopHistoryHandlers } from "./features/workshop/actions/createWorkshopHistoryHandlers";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
@@ -1197,63 +1198,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     return starItemIdSet.has(itemId);
   }
 
-  function onToggleStarItem(itemId: string): void {
-    const itemName = itemById.get(itemId)?.name ?? itemId;
-    const nextStarred = !isStarredItem(itemId);
-    setStarItemIds((prev) => {
-      if (nextStarred) {
-        return prev.includes(itemId) ? prev : [...prev, itemId];
-      }
-      return prev.filter((entry) => entry !== itemId);
-    });
-    setMessage(nextStarred ? `已加入重点关注：${itemName}` : `已取消重点关注：${itemName}`);
-  }
-
-  function onJumpHistoryManagerForCurrentItem(): void {
-    if (!historyItemId) {
-      setError("请先选择要管理历史价格的物品。");
-      return;
-    }
-    onJumpToHistoryManager?.({ itemId: historyItemId });
-  }
-
-  function onJumpHistoryManagerForSnapshot(snapshotId: string, capturedAt: string): void {
-    if (!historyItemId) {
-      setError("请先选择要管理历史价格的物品。");
-      return;
-    }
-    onJumpToHistoryManager?.({
-      itemId: historyItemId,
-      snapshotId,
-    });
-    setMessage(`已定位到历史价格管理：${formatDateTime(capturedAt)}`);
-  }
-
-  function onViewHistoryCurveForItem(itemId: string, options?: { scroll?: boolean; market?: WorkshopPriceMarket }): void {
-    const shouldScroll = options?.scroll ?? true;
-    if (options?.market === "server" || options?.market === "world") {
-      setSelectedItemPriceMarket(options.market);
-    }
-    const target = classifiedItemOptions.find((entry) => entry.id === itemId);
-    if (!target) {
-      setError("无法定位该物品的行情曲线。");
-      return;
-    }
-    setHistoryKeyword("");
-    setHistoryMainCategory(target.mainCategory);
-    setHistorySubCategory(target.subCategory);
-    setHistoryItemId(itemId);
-    const days = toInt(historyDaysInput);
-    if (days !== null && days > 0) {
-      void onLoadPriceHistory(days, { silent: true });
-    }
-    if (shouldScroll) {
-      window.setTimeout(() => {
-        historyChartAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    }
-  }
-
   function onJumpSimulationRecipe(recipeId: string): void {
     const target = simulationRecipeOptions.find((entry) => entry.id === recipeId);
     if (!target) {
@@ -1477,6 +1421,30 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       setBusy(false);
     }
   }
+
+  const {
+    onToggleStarItem,
+    onJumpHistoryManagerForCurrentItem,
+    onJumpHistoryManagerForSnapshot,
+    onViewHistoryCurveForItem,
+  } = createWorkshopHistoryHandlers({
+    historyItemId,
+    historyDaysInput,
+    starItemIdSet,
+    itemById,
+    classifiedItemOptions,
+    onLoadPriceHistory,
+    onJumpToHistoryManager,
+    setSelectedItemPriceMarket,
+    setHistoryKeyword,
+    setHistoryMainCategory,
+    setHistorySubCategory,
+    setHistoryItemId,
+    setStarItemIds,
+    setError,
+    setMessage,
+    historyChartAnchorRef,
+  });
 
   const historyMarketPanels = [
     {
