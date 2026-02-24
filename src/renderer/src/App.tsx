@@ -28,12 +28,12 @@ import {
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
 import { clearHistoryAction, undoMultiStepAction, undoSingleStepAction } from "./features/dashboard/actions/historyActions";
 import {
+  applyQuickEntryAction,
   endOverviewCardDragAction,
   overviewCardDragOverAction,
   overviewCardDropAction,
   startOverviewCardDragAction,
-} from "./features/dashboard/actions/overviewCardActions";
-import { applyQuickEntryAction } from "./features/dashboard/actions/quickEntryActions";
+} from "./features/dashboard/actions/overviewInteractionActions";
 import {
   applyCorridorCompletionFromSettingsAction,
   applyCorridorSettingsAction,
