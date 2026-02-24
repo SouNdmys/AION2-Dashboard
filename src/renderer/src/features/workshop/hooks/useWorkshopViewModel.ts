@@ -15,7 +15,7 @@ import { useWorkshopOcrPreviewModels } from "./useWorkshopOcrPreviewModels";
 import { useWorkshopSimulationModels } from "./useWorkshopSimulationModels";
 import { useWorkshopViewState } from "./useWorkshopViewState";
 import { useWorkshopViewSyncEffects } from "./useWorkshopViewSyncEffects";
-import { buildWorkshopPanelProps } from "../views/buildWorkshopPanelProps";
+import { buildWorkshopPanelProps } from "./buildWorkshopPanelProps";
 
 interface UseWorkshopViewModelParams {
   onJumpToHistoryManager?: (payload: { itemId: string; snapshotId?: string }) => void;

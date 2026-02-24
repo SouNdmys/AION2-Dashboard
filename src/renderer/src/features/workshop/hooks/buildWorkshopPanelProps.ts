@@ -1,10 +1,10 @@
 import type { ComponentProps } from "react";
 import type { WorkshopPriceHistoryResult } from "../../../../../shared/types";
 import type { HistoryInsightModel } from "../workshop-view-helpers";
-import { WorkshopInventoryPanel } from "./WorkshopInventoryPanel";
-import { WorkshopMarketAnalysisPanel } from "./WorkshopMarketAnalysisPanel";
-import { WorkshopOcrPanel } from "./WorkshopOcrPanel";
-import { WorkshopSimulationPanel } from "./WorkshopSimulationPanel";
+import { WorkshopInventoryPanel } from "../views/WorkshopInventoryPanel";
+import { WorkshopMarketAnalysisPanel } from "../views/WorkshopMarketAnalysisPanel";
+import { WorkshopOcrPanel } from "../views/WorkshopOcrPanel";
+import { WorkshopSimulationPanel } from "../views/WorkshopSimulationPanel";
 
 interface BuildWorkshopPanelPropsParams {
   ocrPanelProps: Omit<ComponentProps<typeof WorkshopOcrPanel>, "busy">;
