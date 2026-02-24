@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkshopActions } from "./features/workshop/actions/useWorkshopActions";
 import { createWorkshopHistoryHandlers } from "./features/workshop/actions/createWorkshopHistoryHandlers";
 import { createWorkshopSimulationHandlers } from "./features/workshop/actions/createWorkshopSimulationHandlers";
+import { createWorkshopCorrectionHandlers } from "./features/workshop/actions/createWorkshopCorrectionHandlers";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
@@ -1150,51 +1151,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     })();
   }, [externalPriceChangeNonce]);
 
-  function onSaveSelectedPrice(): void {
-    if (!selectedItemId) {
-      setError("请先选择物品。");
-      return;
-    }
-    const unitPrice = toInt(selectedItemPrice);
-    if (unitPrice === null || unitPrice <= 0) {
-      setError("价格必须是大于 0 的整数。");
-      return;
-    }
-    void commit(
-      () =>
-        workshopActions.addWorkshopPriceSnapshot({
-          itemId: selectedItemId,
-          unitPrice,
-          source: "manual",
-          market: selectedItemPriceMarket,
-        }),
-      "已记录价格快照",
-    );
-  }
-
-  function onSaveSelectedInventory(): void {
-    if (!selectedItemId) {
-      setError("请先选择物品。");
-      return;
-    }
-    const quantity = toInt(selectedItemInventory);
-    if (quantity === null || quantity < 0) {
-      setError("库存必须是大于等于 0 的整数。");
-      return;
-    }
-    void commit(() => workshopActions.upsertWorkshopInventory({ itemId: selectedItemId, quantity }), "已更新库存");
-  }
-
-  function onPickItemForCorrection(itemId: string): void {
-    setSelectedItemId(itemId);
-    const latestMeta = latestPriceMetaByItemId.get(itemId);
-    const priceByMarket = selectedItemPriceMarket === "server" ? latestMeta?.server : latestMeta?.world;
-    const price = priceByMarket?.price ?? latestMeta?.single?.price ?? 0;
-    const inventory = inventoryByItemId.get(itemId) ?? 0;
-    setSelectedItemPrice(String(price));
-    setSelectedItemInventory(String(inventory));
-  }
-
   function isStarredItem(itemId: string): boolean {
     return starItemIdSet.has(itemId);
   }
@@ -1334,6 +1290,20 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setSimulateRecipeId,
     loadCraftOptions,
     loadSignals,
+  });
+  const { onSaveSelectedPrice, onSaveSelectedInventory, onPickItemForCorrection } = createWorkshopCorrectionHandlers({
+    selectedItemId,
+    selectedItemPrice,
+    selectedItemInventory,
+    selectedItemPriceMarket,
+    latestPriceMetaByItemId,
+    inventoryByItemId,
+    workshopActions,
+    commit,
+    setError,
+    setSelectedItemId,
+    setSelectedItemPrice,
+    setSelectedItemInventory,
   });
 
   const historyMarketPanels = [
