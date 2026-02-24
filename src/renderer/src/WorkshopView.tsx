@@ -10,12 +10,11 @@ import { useWorkshopHistoryLoader } from "./features/workshop/hooks/useWorkshopH
 import { useWorkshopViewSyncEffects } from "./features/workshop/hooks/useWorkshopViewSyncEffects";
 import { useWorkshopSimulationModels } from "./features/workshop/hooks/useWorkshopSimulationModels";
 import { useWorkshopEconomyModels } from "./features/workshop/hooks/useWorkshopEconomyModels";
+import { useWorkshopInsightModels } from "./features/workshop/hooks/useWorkshopInsightModels";
 import {
   type ClassifiedItemOption,
   type ReverseScoreMode,
   HISTORY_QUICK_DAY_OPTIONS,
-  buildDualHistoryChartModel,
-  buildHistoryInsightModel,
   formatDateLabel,
   formatDateTime,
   formatGold,
@@ -334,39 +333,22 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     reverseFocusMaterialId,
     reverseScoreMode,
   });
-
-  const activeHistoryQuickDays = useMemo(() => {
-    const current = toInt(historyDaysInput);
-    if (current === null) {
-      return null;
-    }
-    return HISTORY_QUICK_DAY_OPTIONS.find((days) => days === current) ?? null;
-  }, [historyDaysInput]);
-
-  const historyServerInsight = useMemo(() => buildHistoryInsightModel(historyServerResult), [historyServerResult]);
-  const historyWorldInsight = useMemo(() => buildHistoryInsightModel(historyWorldResult), [historyWorldResult]);
-
-  const triggeredSignalRows = useMemo(() => {
-    if (!signalResult) {
-      return [];
-    }
-    return signalResult.rows
-      .filter((row) => row.triggered)
-      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
-      .sort((left, right) => {
-        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
-        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
-        if (leftStar !== rightStar) {
-          return rightStar - leftStar;
-        }
-        const leftDeviation = Math.abs(left.deviationRatioFromWeekdayAverage ?? 0);
-        const rightDeviation = Math.abs(right.deviationRatioFromWeekdayAverage ?? 0);
-        if (rightDeviation !== leftDeviation) {
-          return rightDeviation - leftDeviation;
-        }
-        return right.sampleCount - left.sampleCount;
-      });
-  }, [signalResult, focusStarOnly, starItemIdSet]);
+  const {
+    activeHistoryQuickDays,
+    historyServerInsight,
+    historyWorldInsight,
+    triggeredSignalRows,
+    buyZoneRows,
+    sellZoneRows,
+    dualHistoryChartModel,
+  } = useWorkshopInsightModels({
+    historyDaysInput,
+    historyServerResult,
+    historyWorldResult,
+    signalResult,
+    focusStarOnly,
+    starItemIdSet,
+  });
 
   const recentOcrImportedEntries = useMemo(() => {
     return (ocrHotkeyLastResult?.importedEntries ?? [])
@@ -390,55 +372,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     }
     return Math.max(0, Math.ceil(diff / 1000));
   }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt, ocrAutoRunNowMs]);
-
-  const buyZoneRows = useMemo(() => {
-    if (!signalResult) {
-      return [];
-    }
-    return [...signalResult.rows]
-      .filter((row) => row.trendTag === "buy-zone")
-      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
-      .sort((left, right) => {
-        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
-        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
-        if (leftStar !== rightStar) {
-          return rightStar - leftStar;
-        }
-        const leftDeviation = left.deviationRatioFromWeekdayAverage ?? Number.POSITIVE_INFINITY;
-        const rightDeviation = right.deviationRatioFromWeekdayAverage ?? Number.POSITIVE_INFINITY;
-        if (leftDeviation !== rightDeviation) {
-          return leftDeviation - rightDeviation;
-        }
-        return right.sampleCount - left.sampleCount;
-      });
-  }, [signalResult, focusStarOnly, starItemIdSet]);
-
-  const sellZoneRows = useMemo(() => {
-    if (!signalResult) {
-      return [];
-    }
-    return [...signalResult.rows]
-      .filter((row) => row.trendTag === "sell-zone")
-      .filter((row) => (focusStarOnly ? starItemIdSet.has(row.itemId) : true))
-      .sort((left, right) => {
-        const leftStar = starItemIdSet.has(left.itemId) ? 1 : 0;
-        const rightStar = starItemIdSet.has(right.itemId) ? 1 : 0;
-        if (leftStar !== rightStar) {
-          return rightStar - leftStar;
-        }
-        const leftDeviation = left.deviationRatioFromWeekdayAverage ?? Number.NEGATIVE_INFINITY;
-        const rightDeviation = right.deviationRatioFromWeekdayAverage ?? Number.NEGATIVE_INFINITY;
-        if (leftDeviation !== rightDeviation) {
-          return rightDeviation - leftDeviation;
-        }
-        return right.sampleCount - left.sampleCount;
-      });
-  }, [signalResult, focusStarOnly, starItemIdSet]);
-
-  const dualHistoryChartModel = useMemo(
-    () => buildDualHistoryChartModel(historyServerResult, historyWorldResult),
-    [historyServerResult, historyWorldResult],
-  );
 
   const ocrTradeNamesRect = useMemo(() => {
     const x = toInt(ocrTradeNamesX);
