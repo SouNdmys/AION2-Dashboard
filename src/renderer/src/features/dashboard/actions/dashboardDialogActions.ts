@@ -22,6 +22,29 @@ interface ConfirmDashboardDialogParams {
   onCorridorDraftSyncCompletion: (completed: number, lane: "lower" | "middle") => void;
 }
 
+interface ConfirmDashboardDialogActionParams {
+  dialog: DialogState | null;
+  selected: CharacterState | null;
+  selectedAccountId: string | null;
+  appActions: DialogAppActions;
+  taskById: Map<TaskId, TaskDefinition>;
+  sync: SyncRunner;
+  onDialogError: (message: string) => void;
+  onDialogClose: () => void;
+  onCorridorDraftSyncCounts: (lower: number, middle: number) => void;
+  onCorridorDraftSyncCompletion: (completed: number, lane: "lower" | "middle") => void;
+}
+
+export async function confirmDashboardDialogAction(params: ConfirmDashboardDialogActionParams): Promise<void> {
+  const { dialog, selected, ...rest } = params;
+  if (!dialog || !selected) return;
+  await confirmDashboardDialog({
+    dialog,
+    selected,
+    ...rest,
+  });
+}
+
 export async function confirmDashboardDialog(params: ConfirmDashboardDialogParams): Promise<void> {
   const {
     dialog,

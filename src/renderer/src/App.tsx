@@ -49,7 +49,7 @@ import {
   startOverviewCardDragAction,
 } from "./features/dashboard/actions/overviewInteractionActions";
 import {
-  confirmDashboardDialog,
+  confirmDashboardDialogAction,
   openCompleteTaskDialogAction,
   openCorridorCompleteDialogAction,
   openCorridorSyncDialogAction,
@@ -1229,33 +1229,29 @@ export function App(): JSX.Element {
   }
 
   function onConfirmDialog(): void {
-    if (!selected || !dialog) return;
-
-    void (async () => {
-      await confirmDashboardDialog({
-        dialog,
-        selected,
-        selectedAccountId: selectedAccount?.id ?? null,
-        appActions,
-        taskById,
-        sync,
-        onDialogError: setDialogError,
-        onDialogClose: () => {
-          setDialog(null);
-          setDialogError(null);
-        },
-        onCorridorDraftSyncCounts: (lower, middle) => {
-          setCorridorDraft((prev) => ({
-            ...prev,
-            lowerAvailable: String(lower),
-            middleAvailable: String(middle),
-          }));
-        },
-        onCorridorDraftSyncCompletion: (completed, lane) => {
-          setCorridorDraft((prev) => ({ ...prev, completeAmount: String(completed), completeLane: lane }));
-        },
-      });
-    })();
+    void confirmDashboardDialogAction({
+      dialog,
+      selected,
+      selectedAccountId: selectedAccount?.id ?? null,
+      appActions,
+      taskById,
+      sync,
+      onDialogError: setDialogError,
+      onDialogClose: () => {
+        setDialog(null);
+        setDialogError(null);
+      },
+      onCorridorDraftSyncCounts: (lower, middle) => {
+        setCorridorDraft((prev) => ({
+          ...prev,
+          lowerAvailable: String(lower),
+          middleAvailable: String(middle),
+        }));
+      },
+      onCorridorDraftSyncCompletion: (completed, lane) => {
+        setCorridorDraft((prev) => ({ ...prev, completeAmount: String(completed), completeLane: lane }));
+      },
+    });
   }
 
   if (!state || !settingsDraft) {
