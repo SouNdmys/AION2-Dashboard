@@ -83,6 +83,8 @@
 - `49fcc33` `refactor(dashboard): extract right sidebar into dedicated view component` (1.1 第二阶段进展)
 - `e7873fc` `refactor(dashboard): extract dialog modal renderer into dedicated view component` (1.1 第二阶段进展)
 - `55182b5` `refactor(dashboard): extract left account sidebar into dedicated view component` (1.1 第二阶段进展)
+- `54c1684` `refactor(dashboard): extract dialog confirm dispatcher into action module` (1.1 第二阶段进展)
+- `684053f` `refactor(dashboard): extract dialog state builders into action helpers` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
