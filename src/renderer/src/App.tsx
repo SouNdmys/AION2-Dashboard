@@ -23,6 +23,11 @@ import {
   saveTransformPlanAction,
 } from "./features/dashboard/actions/resourceAndCorridorActions";
 import {
+  exportDashboardDataAction,
+  importDashboardDataAction,
+  saveDashboardSettingsAction,
+} from "./features/dashboard/actions/settingsDataActions";
+import {
   buildCompleteDialog,
   buildCorridorCompleteDialog,
   buildCorridorSyncDialog,
@@ -59,10 +64,8 @@ import {
   getPriorityWeightFactor,
   getPriorityWeightLevel,
   getQuickActionsForTask,
-  parseOptionalCap,
   toGoldText,
   toInt,
-  toNumber,
 } from "./features/dashboard/dashboard-utils";
 import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
@@ -1212,141 +1215,31 @@ export function App(): JSX.Element {
   }
 
   function onSaveSettings(): void {
-    if (!settingsDraft) return;
-    const expeditionGoldPerRunWan = toNumber(settingsDraft.expeditionGoldPerRun);
-    const transcendenceGoldPerRunWan = toNumber(settingsDraft.transcendenceGoldPerRun);
-    const expeditionGoldPerRun =
-      expeditionGoldPerRunWan === null ? null : Math.max(0, Math.round(expeditionGoldPerRunWan * 10_000));
-    const transcendenceGoldPerRun =
-      transcendenceGoldPerRunWan === null ? null : Math.max(0, Math.round(transcendenceGoldPerRunWan * 10_000));
-    const expeditionWarn = toInt(settingsDraft.expeditionWarnThreshold);
-    const transcendenceWarn = toInt(settingsDraft.transcendenceWarnThreshold);
-    const expeditionRunCap = parseOptionalCap(settingsDraft.expeditionRunCap);
-    const transcendenceRunCap = parseOptionalCap(settingsDraft.transcendenceRunCap);
-    const nightmareRunCap = parseOptionalCap(settingsDraft.nightmareRunCap);
-    const awakeningRunCap = parseOptionalCap(settingsDraft.awakeningRunCap);
-    const suppressionRunCap = parseOptionalCap(settingsDraft.suppressionRunCap);
-    const priorityWeightAode = toInt(settingsDraft.priorityWeightAode);
-    const priorityWeightSanctum = toInt(settingsDraft.priorityWeightSanctum);
-    const priorityWeightCorridor = toInt(settingsDraft.priorityWeightCorridor);
-    const priorityWeightDungeon = toInt(settingsDraft.priorityWeightDungeon);
-    const priorityWeightWeekly = toInt(settingsDraft.priorityWeightWeekly);
-    const priorityWeightMission = toInt(settingsDraft.priorityWeightMission);
-    const priorityWeightLeisure = toInt(settingsDraft.priorityWeightLeisure);
-
-    if (expeditionGoldPerRun === null || expeditionGoldPerRunWan === null || expeditionGoldPerRunWan < 0) {
-      setError("远征金币收益参数无效（单位: 万）");
-      return;
-    }
-    if (transcendenceGoldPerRun === null || transcendenceGoldPerRunWan === null || transcendenceGoldPerRunWan < 0) {
-      setError("超越金币收益参数无效（单位: 万）");
-      return;
-    }
-    if (expeditionWarn === null || expeditionWarn <= 0) {
-      setError("远征阈值参数无效");
-      return;
-    }
-    if (transcendenceWarn === null || transcendenceWarn <= 0) {
-      setError("超越阈值参数无效");
-      return;
-    }
-    if (
-      expeditionRunCap === "invalid" ||
-      transcendenceRunCap === "invalid" ||
-      nightmareRunCap === "invalid" ||
-      awakeningRunCap === "invalid" ||
-      suppressionRunCap === "invalid"
-    ) {
-      setError("次数上限参数无效，请填写正整数或留空");
-      return;
-    }
-    if (
-      priorityWeightAode === null ||
-      priorityWeightSanctum === null ||
-      priorityWeightCorridor === null ||
-      priorityWeightDungeon === null ||
-      priorityWeightWeekly === null ||
-      priorityWeightMission === null ||
-      priorityWeightLeisure === null ||
-      priorityWeightAode < 1 ||
-      priorityWeightAode > 5 ||
-      priorityWeightSanctum < 1 ||
-      priorityWeightSanctum > 5 ||
-      priorityWeightCorridor < 1 ||
-      priorityWeightCorridor > 5 ||
-      priorityWeightDungeon < 1 ||
-      priorityWeightDungeon > 5 ||
-      priorityWeightWeekly < 1 ||
-      priorityWeightWeekly > 5 ||
-      priorityWeightMission < 1 ||
-      priorityWeightMission > 5 ||
-      priorityWeightLeisure < 1 ||
-      priorityWeightLeisure > 5
-    ) {
-      setError("优先级偏好需填写 1-5 的整数");
-      return;
-    }
-
-    void sync(
-      appActions.updateSettings({
-        expeditionGoldPerRun,
-        transcendenceGoldPerRun,
-        expeditionRunCap,
-        transcendenceRunCap,
-        nightmareRunCap,
-        awakeningRunCap,
-        suppressionRunCap,
-        expeditionWarnThreshold: expeditionWarn,
-        transcendenceWarnThreshold: transcendenceWarn,
-        priorityWeightAode,
-        priorityWeightSanctum,
-        priorityWeightCorridor,
-        priorityWeightDungeon,
-        priorityWeightWeekly,
-        priorityWeightMission,
-        priorityWeightLeisure,
-      }),
-      "设置已保存",
-    );
+    void saveDashboardSettingsAction({
+      settingsDraft,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   async function onExportData(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setInfoMessage(null);
-    try {
-      const result = await appActions.exportData();
-      if (result.cancelled) {
-        return;
-      }
-      setInfoMessage(`导出成功: ${result.path}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "导出失败";
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
+    await exportDashboardDataAction({
+      appActions,
+      onBusyChange: setBusy,
+      onError: setError,
+      onInfoMessage: setInfoMessage,
+    });
   }
 
   async function onImportData(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setInfoMessage(null);
-    try {
-      const result = await appActions.importData();
-      if (result.cancelled) {
-        return;
-      }
-      if (result.state) {
-        setState(result.state);
-      }
-      setInfoMessage(`导入成功: ${result.path}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "导入失败";
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
+    await importDashboardDataAction({
+      appActions,
+      onBusyChange: setBusy,
+      onError: setError,
+      onInfoMessage: setInfoMessage,
+      onStateImported: setState,
+    });
   }
 
   function onConfirmDialog(): void {
