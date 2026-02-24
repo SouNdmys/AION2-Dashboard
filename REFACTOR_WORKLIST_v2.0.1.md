@@ -68,6 +68,8 @@
 - `e57d0f9` `refactor(ipc): split handler registration by domain with payload guards`
 - `8290ad8` `refactor(renderer): extract usePersistedState and remove repeated localStorage effects`
 - `31b9bcc` `refactor(renderer): centralize aionApi access via app/workshop action hooks`
+- `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
+- `708f4bd` `refactor(workshop): move view helpers and persistence config out of WorkshopView` (1.2 阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
