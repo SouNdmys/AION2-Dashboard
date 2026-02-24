@@ -116,6 +116,7 @@
 - `5a7f769` `fix(workshop): persist simulation material edits to active price market` (1.2 第二阶段修复)
 - `6907dd0` `refactor(workshop): extract simulation option derivation into hook` (1.2 第二阶段进展)
 - `211c500` `refactor(workshop): extract economy and reverse suggestion models into hook` (1.2 第二阶段进展)
+- `636e4f0` `refactor(workshop): extract signal and history insight models into hook` (1.2 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
