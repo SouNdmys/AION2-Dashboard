@@ -4,6 +4,7 @@ import { createWorkshopHistoryHandlers } from "./features/workshop/actions/creat
 import { createWorkshopSimulationHandlers } from "./features/workshop/actions/createWorkshopSimulationHandlers";
 import { createWorkshopCorrectionHandlers } from "./features/workshop/actions/createWorkshopCorrectionHandlers";
 import { createWorkshopOcrConfigHandlers } from "./features/workshop/actions/createWorkshopOcrConfigHandlers";
+import { createWorkshopSignalHandlers } from "./features/workshop/actions/createWorkshopSignalHandlers";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
@@ -1027,43 +1028,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     }
   }
 
-  async function onSaveSignalRule(): Promise<void> {
-    const lookbackDays = toInt(signalLookbackDaysInput);
-    if (lookbackDays === null || lookbackDays <= 0) {
-      setError("周期性波动提示配置失败：回看天数必须是正整数。");
-      return;
-    }
-    const thresholdPercent = Number(signalThresholdPercentInput);
-    if (!Number.isFinite(thresholdPercent) || thresholdPercent < 15) {
-      setError("周期性波动提示配置失败：阈值必须是 >= 15 的数字。");
-      return;
-    }
-
-    await commit(
-      () =>
-        workshopActions.updateWorkshopSignalRule({
-          enabled: signalRuleEnabled,
-          lookbackDays,
-          dropBelowWeekdayAverageRatio: thresholdPercent / 100,
-        }),
-      "周期性波动提示规则已保存",
-    );
-  }
-
-  async function onRefreshSignals(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      await loadSignals();
-      setMessage("周期性波动提示已刷新");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "周期性波动提示刷新失败");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const {
     onToggleStarItem,
     onJumpHistoryManagerForCurrentItem,
@@ -1162,6 +1126,17 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       setOcrAutoRunOverlayEnabled,
       setOcrAutoRunFailLimit,
     });
+  const { onSaveSignalRule, onRefreshSignals } = createWorkshopSignalHandlers({
+    signalLookbackDaysInput,
+    signalThresholdPercentInput,
+    signalRuleEnabled,
+    workshopActions,
+    commit,
+    loadSignals,
+    setBusy,
+    setError,
+    setMessage,
+  });
 
   const historyMarketPanels = [
     {
