@@ -52,8 +52,7 @@ import {
 } from "./features/dashboard/dashboard-utils";
 import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
 import { DashboardCharacterTasksPanel } from "./features/dashboard/views/DashboardCharacterTasksPanel";
-import { DashboardCharacterHeaderPanel } from "./features/dashboard/views/DashboardCharacterHeaderPanel";
-import { DashboardCharacterResourcePanels } from "./features/dashboard/views/DashboardCharacterResourcePanels";
+import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
 import { DashboardHistoryPanel, DashboardCountdownPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./features/dashboard/views/DashboardSidebarPanels";
 import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
@@ -1940,58 +1939,49 @@ export function App(): JSX.Element {
             onSelectCharacter={onSelectCharacter}
           />
 
-          {viewMode === "dashboard" && dashboardMode === "character" ? (
-            <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
-              <DashboardCharacterHeaderPanel
-                visible={viewMode === "dashboard" && dashboardMode === "character"}
-                busy={busy}
-                characterName={selected.name}
-                accountName={selectedAccount?.name ?? "--"}
-                accountRegionTag={selectedAccount?.regionTag ?? null}
-                estimatedGoldText={toGoldText(selectedEstimatedGold)}
-                classTag={selected.classTag?.trim() || "未填写"}
-                gearScore={selected.gearScore}
-                weeklyGoldEarnedText={toGoldText(selected.stats.goldEarned)}
-                corridorLowerAvailable={selected.activities.corridorLowerAvailable}
-                corridorMiddleAvailable={selected.activities.corridorMiddleAvailable}
-                renameName={renameName}
-                profileClassTagInput={profileClassTagInput}
-                profileGearScoreInput={profileGearScoreInput}
-                canDeleteCharacter={selectedAccountCharacterCount > 1}
-                onSwitchToOverview={onSwitchToOverview}
-                onRenameNameChange={setRenameName}
-                onProfileClassTagInputChange={setProfileClassTagInput}
-                onProfileGearScoreInputChange={setProfileGearScoreInput}
-                onSaveCharacterProfile={onSaveCharacterProfile}
-                onRenameCharacter={onRenameCharacter}
-                onDeleteCharacter={onDeleteCharacter}
-                onOpenEnergyDialog={openEnergyDialog}
-                onSyncCorridorStatus={onSyncCorridorStatus}
-                onApplyCorridorCompletion={onApplyCorridorCompletion}
-                onResetWeeklyStats={onResetWeeklyStats}
-              />
-
-              <DashboardCharacterResourcePanels
-                busy={busy}
-                selected={selected}
-                selectedAodeLimits={selectedAodeLimits}
-                selectedIsAodeExtra={selectedIsAodeExtra}
-                selectedAccountExtraCharacterName={selectedAccountExtraCharacterName}
-                selectedShopAodePurchaseRemaining={selectedShopAodePurchaseRemaining}
-                selectedShopDailyDungeonTicketPurchaseRemaining={selectedShopDailyDungeonTicketPurchaseRemaining}
-                selectedTransformAodeRemaining={selectedTransformAodeRemaining}
-                shopAodePurchaseUsedInput={shopAodePurchaseUsedInput}
-                shopDailyDungeonTicketPurchaseUsedInput={shopDailyDungeonTicketPurchaseUsedInput}
-                transformAodeUsedInput={transformAodeUsedInput}
-                onShopAodePurchaseUsedInputChange={setShopAodePurchaseUsedInput}
-                onShopDailyDungeonTicketPurchaseUsedInputChange={setShopDailyDungeonTicketPurchaseUsedInput}
-                onTransformAodeUsedInputChange={setTransformAodeUsedInput}
-                onSaveShopPlan={onSaveShopPlan}
-                onAssignExtraAodeCharacter={onAssignExtraAodeCharacter}
-                onSaveTransformPlan={onSaveTransformPlan}
-              />
-            </article>
-          ) : null}
+          <DashboardCharacterMainPanel
+            visible={viewMode === "dashboard" && dashboardMode === "character"}
+            busy={busy}
+            selected={selected}
+            accountName={selectedAccount?.name ?? "--"}
+            accountRegionTag={selectedAccount?.regionTag ?? null}
+            estimatedGoldText={toGoldText(selectedEstimatedGold)}
+            classTag={selected.classTag?.trim() || "未填写"}
+            gearScore={selected.gearScore}
+            weeklyGoldEarnedText={toGoldText(selected.stats.goldEarned)}
+            corridorLowerAvailable={selected.activities.corridorLowerAvailable}
+            corridorMiddleAvailable={selected.activities.corridorMiddleAvailable}
+            renameName={renameName}
+            profileClassTagInput={profileClassTagInput}
+            profileGearScoreInput={profileGearScoreInput}
+            canDeleteCharacter={selectedAccountCharacterCount > 1}
+            selectedAodeLimits={selectedAodeLimits}
+            selectedIsAodeExtra={selectedIsAodeExtra}
+            selectedAccountExtraCharacterName={selectedAccountExtraCharacterName}
+            selectedShopAodePurchaseRemaining={selectedShopAodePurchaseRemaining}
+            selectedShopDailyDungeonTicketPurchaseRemaining={selectedShopDailyDungeonTicketPurchaseRemaining}
+            selectedTransformAodeRemaining={selectedTransformAodeRemaining}
+            shopAodePurchaseUsedInput={shopAodePurchaseUsedInput}
+            shopDailyDungeonTicketPurchaseUsedInput={shopDailyDungeonTicketPurchaseUsedInput}
+            transformAodeUsedInput={transformAodeUsedInput}
+            onSwitchToOverview={onSwitchToOverview}
+            onRenameNameChange={setRenameName}
+            onProfileClassTagInputChange={setProfileClassTagInput}
+            onProfileGearScoreInputChange={setProfileGearScoreInput}
+            onSaveCharacterProfile={onSaveCharacterProfile}
+            onRenameCharacter={onRenameCharacter}
+            onDeleteCharacter={onDeleteCharacter}
+            onOpenEnergyDialog={openEnergyDialog}
+            onSyncCorridorStatus={onSyncCorridorStatus}
+            onApplyCorridorCompletion={onApplyCorridorCompletion}
+            onResetWeeklyStats={onResetWeeklyStats}
+            onShopAodePurchaseUsedInputChange={setShopAodePurchaseUsedInput}
+            onShopDailyDungeonTicketPurchaseUsedInputChange={setShopDailyDungeonTicketPurchaseUsedInput}
+            onTransformAodeUsedInputChange={setTransformAodeUsedInput}
+            onSaveShopPlan={onSaveShopPlan}
+            onAssignExtraAodeCharacter={onAssignExtraAodeCharacter}
+            onSaveTransformPlan={onSaveTransformPlan}
+          />
 
           <WeeklyStatsPanel
             visible={viewMode === "dashboard"}
