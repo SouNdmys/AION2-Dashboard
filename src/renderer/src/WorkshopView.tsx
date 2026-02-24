@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useWorkshopActions } from "./features/workshop/actions/useWorkshopActions";
 import { usePersistedState } from "./hooks/usePersistedState";
 import type {
   WorkshopCraftOption,
@@ -653,6 +654,7 @@ interface WorkshopViewProps {
 
 export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   const { onJumpToHistoryManager, externalPriceChangeNonce = 0 } = props;
+  const workshopActions = useWorkshopActions();
   const [state, setState] = useState<WorkshopState | null>(null);
   const [craftOptions, setCraftOptions] = useState<WorkshopCraftOption[]>([]);
   const [simulation, setSimulation] = useState<WorkshopCraftSimulationResult | null>(null);
@@ -1233,19 +1235,19 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   }, [ocrTradePricesX, ocrTradePricesY, ocrTradePricesWidth, ocrTradePricesHeight]);
 
   async function loadState(): Promise<void> {
-    const next = await window.aionApi.getWorkshopState();
+    const next = await workshopActions.getWorkshopState();
     setState(next);
   }
 
   async function loadCraftOptions(): Promise<void> {
-    const next = await window.aionApi.getWorkshopCraftOptions({ taxRate });
+    const next = await workshopActions.getWorkshopCraftOptions({ taxRate });
     setCraftOptions(next);
   }
 
   async function loadSignals(): Promise<void> {
     const [serverResult, worldResult] = await Promise.all([
-      window.aionApi.getWorkshopPriceSignals({ market: "server" }),
-      window.aionApi.getWorkshopPriceSignals({ market: "world" }),
+      workshopActions.getWorkshopPriceSignals({ market: "server" }),
+      workshopActions.getWorkshopPriceSignals({ market: "world" }),
     ]);
     const rows = [
       ...serverResult.rows.map((row) => ({ ...row, market: row.market ?? "server" })),
@@ -1267,14 +1269,14 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   }
 
   async function loadOcrHotkeyState(): Promise<void> {
-    const next = await window.aionApi.getWorkshopOcrHotkeyState();
+    const next = await workshopActions.getWorkshopOcrHotkeyState();
     setOcrHotkeyState(next);
     setOcrHotkeyShortcut(next.shortcut);
     setOcrHotkeyLastResult(next.lastResult);
   }
 
   async function loadOcrAutoRunState(): Promise<void> {
-    const next = await window.aionApi.getWorkshopOcrAutoRunState();
+    const next = await workshopActions.getWorkshopOcrAutoRunState();
     setOcrAutoRunState(next);
     setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
     setOcrAutoRunOverlayEnabled(next.showOverlay);
@@ -1528,7 +1530,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setError(null);
     setMessage(null);
     try {
-      const next = await window.aionApi.configureWorkshopOcrHotkey({
+      const next = await workshopActions.configureWorkshopOcrHotkey({
         enabled: nextEnabled,
         shortcut,
         language: OCR_HOTKEY_DEFAULT_LANGUAGE,
@@ -1567,7 +1569,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setError(null);
     setMessage(null);
     try {
-      const result = await window.aionApi.triggerWorkshopOcrHotkeyNow(captureParsed.options ?? undefined);
+      const result = await workshopActions.triggerWorkshopOcrHotkeyNow(captureParsed.options ?? undefined);
       setOcrHotkeyLastResult(result);
       await Promise.all([loadState(), loadCraftOptions(), loadSignals()]);
       setMessage(result.message);
@@ -1588,7 +1590,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setError(null);
     setMessage(null);
     try {
-      const preview = await window.aionApi.captureWorkshopScreenPreview(captureParsed.options ?? undefined);
+      const preview = await workshopActions.captureWorkshopScreenPreview(captureParsed.options ?? undefined);
       setOcrScreenPreview(preview);
       setMessage(`校准图已捕获：${preview.width}x${preview.height}`);
     } catch (err) {
@@ -1623,7 +1625,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setError(null);
     setMessage(null);
     try {
-      const next = await window.aionApi.configureWorkshopOcrAutoRun({
+      const next = await workshopActions.configureWorkshopOcrAutoRun({
         enabled: nextEnabled,
         intervalSeconds: intervalParsed.intervalSeconds ?? undefined,
         showOverlay: ocrAutoRunOverlayEnabled,
@@ -1650,7 +1652,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const off = window.aionApi.onWorkshopOcrHotkeyResult((result) => {
+    const off = workshopActions.onWorkshopOcrHotkeyResult((result) => {
       setOcrHotkeyLastResult(result);
       setMessage(result.message);
       if (!result.success) {
@@ -1664,7 +1666,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const off = window.aionApi.onWorkshopOcrAutoRunState((next) => {
+    const off = workshopActions.onWorkshopOcrAutoRunState((next) => {
       setOcrAutoRunState(next);
       setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
       setOcrAutoRunOverlayEnabled(next.showOverlay);
@@ -1861,7 +1863,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     }
     void commit(
       () =>
-        window.aionApi.addWorkshopPriceSnapshot({
+        workshopActions.addWorkshopPriceSnapshot({
           itemId: selectedItemId,
           unitPrice,
           source: "manual",
@@ -1881,7 +1883,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       setError("库存必须是大于等于 0 的整数。");
       return;
     }
-    void commit(() => window.aionApi.upsertWorkshopInventory({ itemId: selectedItemId, quantity }), "已更新库存");
+    void commit(() => workshopActions.upsertWorkshopInventory({ itemId: selectedItemId, quantity }), "已更新库存");
   }
 
   function onPickItemForCorrection(itemId: string): void {
@@ -1981,7 +1983,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setError(null);
     setMessage(null);
     try {
-      const result = await window.aionApi.simulateWorkshopCraft({
+      const result = await workshopActions.simulateWorkshopCraft({
         recipeId: simulateRecipeId,
         runs,
         taxRate,
@@ -2021,7 +2023,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
           throw new Error(`成品「${simulation.outputItemName}」售价必须是大于 0 的整数。`);
         }
         if (simulation.outputUnitPrice === null || outputUnitPrice !== simulation.outputUnitPrice) {
-          await window.aionApi.addWorkshopPriceSnapshot({
+          await workshopActions.addWorkshopPriceSnapshot({
             itemId: simulation.outputItemId,
             unitPrice: outputUnitPrice,
             source: "manual",
@@ -2040,7 +2042,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
           throw new Error(`材料「${row.itemName}」库存必须是大于等于 0 的整数。`);
         }
         if (owned !== row.owned) {
-          await window.aionApi.upsertWorkshopInventory({ itemId: row.itemId, quantity: owned });
+          await workshopActions.upsertWorkshopInventory({ itemId: row.itemId, quantity: owned });
         }
         const priceText = draft.unitPrice.trim();
         if (priceText) {
@@ -2049,7 +2051,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
             throw new Error(`材料「${row.itemName}」单价必须是大于 0 的整数。`);
           }
           if (row.latestUnitPrice === null || unitPrice !== row.latestUnitPrice) {
-            await window.aionApi.addWorkshopPriceSnapshot({
+            await workshopActions.addWorkshopPriceSnapshot({
               itemId: row.itemId,
               unitPrice,
               source: "manual",
@@ -2060,8 +2062,8 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       }
 
       const [nextState, rerun] = await Promise.all([
-        window.aionApi.getWorkshopState(),
-        window.aionApi.simulateWorkshopCraft({
+        workshopActions.getWorkshopState(),
+        workshopActions.simulateWorkshopCraft({
           recipeId: simulation.recipeId,
           runs: simulation.runs,
           taxRate,
@@ -2111,13 +2113,13 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setHistoryLoading(true);
     try {
       const [serverResult, worldResult] = await Promise.all([
-        window.aionApi.getWorkshopPriceHistory({
+        workshopActions.getWorkshopPriceHistory({
           itemId: historyItemId,
           days,
           includeSuspect: historyIncludeSuspect,
           market: "server",
         }),
-        window.aionApi.getWorkshopPriceHistory({
+        workshopActions.getWorkshopPriceHistory({
           itemId: historyItemId,
           days,
           includeSuspect: historyIncludeSuspect,
@@ -2156,7 +2158,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
 
     await commit(
       () =>
-        window.aionApi.updateWorkshopSignalRule({
+        workshopActions.updateWorkshopSignalRule({
           enabled: signalRuleEnabled,
           lookbackDays,
           dropBelowWeekdayAverageRatio: thresholdPercent / 100,
@@ -3491,3 +3493,4 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     </div>
   );
 }
+

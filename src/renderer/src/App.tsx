@@ -21,6 +21,7 @@ import {
 } from "../../shared/engine";
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppSettings, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
+import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { WorkshopView } from "./WorkshopView";
 import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
@@ -151,20 +152,6 @@ function toGoldText(value: number): string {
   const wanValue = value / 10_000;
   const text = Number.isInteger(wanValue) ? numberFormatter.format(wanValue) : wanValue.toFixed(1);
   return `${text} 万金币`;
-}
-
-async function loadState(): Promise<AppState> {
-  if (!window.aionApi) {
-    throw new Error("Preload API unavailable: window.aionApi is undefined");
-  }
-  return window.aionApi.getState();
-}
-
-async function loadBuildInfo(): Promise<AppBuildInfo> {
-  if (!window.aionApi) {
-    throw new Error("Preload API unavailable: window.aionApi is undefined");
-  }
-  return window.aionApi.getBuildInfo();
 }
 
 function toInt(raw: string): number | null {
@@ -314,6 +301,7 @@ function buildCountOptions(min: number, max: number, currentValue?: string): str
 }
 
 export function App(): JSX.Element {
+  const appActions = useAppActions();
   const [state, setState] = useState<AppState | null>(null);
   const [buildInfo, setBuildInfo] = useState<AppBuildInfo | null>(null);
   const [busy, setBusy] = useState(false);
@@ -357,14 +345,14 @@ export function App(): JSX.Element {
   useEffect(() => {
     void (async () => {
       try {
-        const [next, buildMeta] = await Promise.all([loadState(), loadBuildInfo()]);
+        const [next, buildMeta] = await Promise.all([appActions.getState(), appActions.getBuildInfo()]);
         setState(next);
         setBuildInfo(buildMeta);
       } catch (err) {
         setError(err instanceof Error ? err.message : "初始化失败");
       }
     })();
-  }, []);
+  }, [appActions]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -1106,13 +1094,13 @@ export function App(): JSX.Element {
     const name = newAccountName.trim();
     if (!name) return;
     const regionTag = newAccountRegion.trim();
-    void sync(window.aionApi.addAccount(name, regionTag || undefined));
+    void sync(appActions.addAccount(name, regionTag || undefined));
     setNewAccountName("");
     setNewAccountRegion("");
   }
 
   function onSelectAccount(accountId: string): void {
-    void sync(window.aionApi.selectAccount(accountId));
+    void sync(appActions.selectAccount(accountId));
   }
 
   function onRenameAccount(): void {
@@ -1121,7 +1109,7 @@ export function App(): JSX.Element {
     if (!name) return;
     const regionTag = accountEditor.regionTag.trim();
     void sync(
-      window.aionApi.renameAccount(selectedAccount.id, name, regionTag || undefined),
+      appActions.renameAccount(selectedAccount.id, name, regionTag || undefined),
       "账号信息已更新",
     );
   }
@@ -1130,7 +1118,7 @@ export function App(): JSX.Element {
     if (!selectedAccount) return;
     const ok = window.confirm(`确认删除账号「${selectedAccount.name}」及其所有角色？`);
     if (!ok) return;
-    void sync(window.aionApi.deleteAccount(selectedAccount.id));
+    void sync(appActions.deleteAccount(selectedAccount.id));
   }
 
   function onAddCharacter(): void {
@@ -1141,7 +1129,7 @@ export function App(): JSX.Element {
     }
     const name = newCharacterName.trim();
     if (!name) return;
-    void sync(window.aionApi.addCharacter(name, selectedAccount.id));
+    void sync(appActions.addCharacter(name, selectedAccount.id));
     setNewCharacterName("");
   }
 
@@ -1149,7 +1137,7 @@ export function App(): JSX.Element {
     if (!selected) return;
     const next = renameName.trim();
     if (!next) return;
-    void sync(window.aionApi.renameCharacter(selected.id, next));
+    void sync(appActions.renameCharacter(selected.id, next));
   }
 
   function onSaveCharacterProfile(): void {
@@ -1162,7 +1150,7 @@ export function App(): JSX.Element {
       return;
     }
     void sync(
-      window.aionApi.updateCharacterProfile(selected.id, {
+      appActions.updateCharacterProfile(selected.id, {
         classTag: classTag || null,
         gearScore: gearScoreRaw === null ? null : gearScoreRaw,
       }),
@@ -1174,12 +1162,12 @@ export function App(): JSX.Element {
     if (!selected) return;
     const ok = window.confirm(`确认删除角色「${selected.name}」？`);
     if (!ok) return;
-    void sync(window.aionApi.deleteCharacter(selected.id));
+    void sync(appActions.deleteCharacter(selected.id));
   }
 
   function onSelectCharacter(characterId: string): void {
     setDashboardMode("character");
-    void sync(window.aionApi.selectCharacter(characterId));
+    void sync(appActions.selectCharacter(characterId));
   }
 
   function onOverviewCardDragStart(characterId: string): void {
@@ -1222,7 +1210,7 @@ export function App(): JSX.Element {
     ids.splice(toIndex, 0, moved);
     setDraggingCharacterId(null);
     setDragOverCharacterId(null);
-    void sync(window.aionApi.reorderCharacters(ids), "角色卡片排序已更新");
+    void sync(appActions.reorderCharacters(ids), "角色卡片排序已更新");
   }
 
   function onOverviewCardDragEnd(): void {
@@ -1259,7 +1247,7 @@ export function App(): JSX.Element {
       }
       const completed = Math.min(rawAmount, 3);
       void sync(
-        window.aionApi.setCorridorCompleted(characterId, quickCorridorTask.lane, completed),
+        appActions.setCorridorCompleted(characterId, quickCorridorTask.lane, completed),
         `${characterName} ${quickCorridorTask.title} 已录入`,
       );
       return;
@@ -1291,7 +1279,7 @@ export function App(): JSX.Element {
     }
 
     void sync(
-      window.aionApi.applyTaskAction({
+      appActions.applyTaskAction({
         characterId,
         taskId: task.id,
         action: quickAction,
@@ -1453,7 +1441,7 @@ export function App(): JSX.Element {
     }
     const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
     void sync(
-      window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
+      appActions.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
       "已同步深渊回廊到当前账号角色",
     );
   }
@@ -1466,7 +1454,7 @@ export function App(): JSX.Element {
       return;
     }
     void sync(
-      window.aionApi.applyCorridorCompletion(selected.id, corridorDraft.completeLane, completed),
+      appActions.applyCorridorCompletion(selected.id, corridorDraft.completeLane, completed),
       "已录入深渊回廊完成次数",
     );
   }
@@ -1474,7 +1462,7 @@ export function App(): JSX.Element {
   function onResetWeeklyStats(): void {
     const ok = window.confirm("确认重置本周收益统计？仅重置统计，不影响任务进度。");
     if (!ok) return;
-    void sync(window.aionApi.resetWeeklyStats());
+    void sync(appActions.resetWeeklyStats());
   }
 
   function onSaveWeeklyCompletions(): void {
@@ -1486,7 +1474,7 @@ export function App(): JSX.Element {
       return;
     }
     void sync(
-      window.aionApi.updateWeeklyCompletions(selected.id, {
+      appActions.updateWeeklyCompletions(selected.id, {
         expeditionCompleted,
         transcendenceCompleted,
       }),
@@ -1515,7 +1503,7 @@ export function App(): JSX.Element {
       return;
     }
     void sync(
-      window.aionApi.updateAodePlan(selected.id, {
+      appActions.updateAodePlan(selected.id, {
         shopAodePurchaseUsed,
         shopDailyDungeonTicketPurchaseUsed,
       }),
@@ -1535,7 +1523,7 @@ export function App(): JSX.Element {
       return;
     }
     void sync(
-      window.aionApi.updateAodePlan(selected.id, {
+      appActions.updateAodePlan(selected.id, {
         transformAodeUsed,
       }),
       "已保存变换记录",
@@ -1545,7 +1533,7 @@ export function App(): JSX.Element {
   function onAssignExtraAodeCharacter(assignExtra: boolean): void {
     if (!selected) return;
     void sync(
-      window.aionApi.updateAodePlan(selected.id, {
+      appActions.updateAodePlan(selected.id, {
         assignExtra,
       }),
       assignExtra ? "已设为本账号微风商店额外角色" : "已取消本角色额外资格",
@@ -1554,7 +1542,7 @@ export function App(): JSX.Element {
 
   function onUndoSingleStep(): void {
     if (!state || state.history.length === 0) return;
-    void sync(window.aionApi.undoOperations(1), "已撤销一步");
+    void sync(appActions.undoOperations(1), "已撤销一步");
   }
 
   function onUndoMultiStep(): void {
@@ -1564,14 +1552,14 @@ export function App(): JSX.Element {
       setError("请输入有效的撤销步数");
       return;
     }
-    void sync(window.aionApi.undoOperations(steps), `已撤销 ${steps} 步`);
+    void sync(appActions.undoOperations(steps), `已撤销 ${steps} 步`);
   }
 
   function onClearHistory(): void {
     if (!state || state.history.length === 0) return;
     const ok = window.confirm("确认清空所有操作历史日志？该操作不可撤销。");
     if (!ok) return;
-    void sync(window.aionApi.clearHistory(), "已清空操作历史");
+    void sync(appActions.clearHistory(), "已清空操作历史");
   }
 
   function onSaveSettings(): void {
@@ -1651,7 +1639,7 @@ export function App(): JSX.Element {
     }
 
     void sync(
-      window.aionApi.updateSettings({
+      appActions.updateSettings({
         expeditionGoldPerRun,
         transcendenceGoldPerRun,
         expeditionRunCap,
@@ -1678,7 +1666,7 @@ export function App(): JSX.Element {
     setError(null);
     setInfoMessage(null);
     try {
-      const result = await window.aionApi.exportData();
+      const result = await appActions.exportData();
       if (result.cancelled) {
         return;
       }
@@ -1696,7 +1684,7 @@ export function App(): JSX.Element {
     setError(null);
     setInfoMessage(null);
     try {
-      const result = await window.aionApi.importData();
+      const result = await appActions.importData();
       if (result.cancelled) {
         return;
       }
@@ -1724,7 +1712,7 @@ export function App(): JSX.Element {
           return;
         }
         const ok = await sync(
-          window.aionApi.applyTaskAction({
+          appActions.applyTaskAction({
             characterId: selected.id,
             taskId: dialog.taskId,
             action: "complete_once",
@@ -1745,7 +1733,7 @@ export function App(): JSX.Element {
           return;
         }
         const ok = await sync(
-          window.aionApi.applyTaskAction({
+          appActions.applyTaskAction({
             characterId: selected.id,
             taskId: dialog.taskId,
             action: "use_ticket",
@@ -1767,7 +1755,7 @@ export function App(): JSX.Element {
         }
         const capped = Math.min(amount, dialog.task.setCompletedTotal ?? 0);
         const ok = await sync(
-          window.aionApi.applyTaskAction({
+          appActions.applyTaskAction({
             characterId: selected.id,
             taskId: dialog.task.id,
             action: "set_completed",
@@ -1788,7 +1776,7 @@ export function App(): JSX.Element {
           setDialogError("请输入有效的能量数值");
           return;
         }
-        const ok = await sync(window.aionApi.updateEnergySegments(selected.id, base, bonus));
+        const ok = await sync(appActions.updateEnergySegments(selected.id, base, bonus));
         if (ok) {
           setDialog(null);
           setDialogError(null);
@@ -1816,7 +1804,7 @@ export function App(): JSX.Element {
         }
         const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
         const ok = await sync(
-          window.aionApi.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
+          appActions.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
           "已同步深渊回廊到当前账号角色",
         );
         if (ok) {
@@ -1838,7 +1826,7 @@ export function App(): JSX.Element {
           return;
         }
         const ok = await sync(
-          window.aionApi.applyCorridorCompletion(selected.id, dialog.lane, completed),
+          appActions.applyCorridorCompletion(selected.id, dialog.lane, completed),
           "已录入深渊回廊完成次数",
         );
         if (ok) {
@@ -1866,7 +1854,7 @@ export function App(): JSX.Element {
         let ok = false;
         if (dialog.taskId === "expedition") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               expeditionRemaining: remaining,
               expeditionTicketBonus: bonus,
               expeditionBossRemaining: boss ?? undefined,
@@ -1874,7 +1862,7 @@ export function App(): JSX.Element {
           );
         } else if (dialog.taskId === "transcendence") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               transcendenceRemaining: remaining,
               transcendenceTicketBonus: bonus,
               transcendenceBossRemaining: boss ?? undefined,
@@ -1882,35 +1870,35 @@ export function App(): JSX.Element {
           );
         } else if (dialog.taskId === "nightmare") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               nightmareRemaining: remaining,
               nightmareTicketBonus: bonus,
             }),
           );
         } else if (dialog.taskId === "awakening") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               awakeningRemaining: remaining,
               awakeningTicketBonus: bonus,
             }),
           );
         } else if (dialog.taskId === "daily_dungeon") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               dailyDungeonRemaining: remaining,
               dailyDungeonTicketStored: bonus,
             }),
           );
         } else if (dialog.taskId === "mini_game") {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               miniGameRemaining: remaining,
               miniGameTicketBonus: bonus,
             }),
           );
         } else {
           ok = await sync(
-            window.aionApi.updateRaidCounts(selected.id, {
+            appActions.updateRaidCounts(selected.id, {
               suppressionRemaining: remaining,
               suppressionTicketBonus: bonus,
             }),
@@ -1931,7 +1919,7 @@ export function App(): JSX.Element {
           return;
         }
         const ok = await sync(
-          window.aionApi.updateRaidCounts(selected.id, {
+          appActions.updateRaidCounts(selected.id, {
             sanctumRaidRemaining: raidRemaining,
             sanctumBoxRemaining: boxRemaining,
           }),
@@ -3481,3 +3469,4 @@ export function App(): JSX.Element {
     </main>
   );
 }
+
