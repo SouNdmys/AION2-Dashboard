@@ -103,6 +103,7 @@
 - `6567dd8` `refactor(dashboard): extract overview and maintenance handler factories` (1.1 第二阶段进展)
 - `5a86065` `refactor(dashboard): extract account and resource handler factory` (1.1 第二阶段进展)
 - `8063cce` `refactor(dashboard): aggregate page handlers via useDashboardHandlers hook` (1.1 第二阶段进展)
+- `342121d` `refactor(workshop): extract ocr parsing and preview interaction handlers` (1.2 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
