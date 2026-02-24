@@ -50,6 +50,7 @@ import { DashboardOverviewSummaryCards } from "./features/dashboard/views/Dashbo
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
 import { DashboardCharacterModePanels } from "./features/dashboard/views/DashboardCharacterModePanels";
 import { DashboardDialogModal } from "./features/dashboard/views/DashboardDialogModal";
+import { DashboardLeftSidebar } from "./features/dashboard/views/DashboardLeftSidebar";
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
 import { DashboardRightSidebar } from "./features/dashboard/views/DashboardRightSidebar";
 import { DashboardSettingsPanel } from "./features/dashboard/views/DashboardSettingsPanel";
@@ -1737,138 +1738,30 @@ export function App(): JSX.Element {
   return (
     <main className="min-h-screen p-5 text-slate-100">
       <div className="grid min-h-[calc(100vh-2.5rem)] w-full grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-5">
-        <aside className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-          <h1 className="mb-3 text-lg font-semibold tracking-wide">AION 2</h1>
-          <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="text-xs font-semibold tracking-wide text-slate-200">账号管理</p>
-            <div className="mt-2 space-y-2">
-              <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                placeholder="新账号名称"
-                value={newAccountName}
-                onChange={(event) => setNewAccountName(event.target.value)}
-                disabled={busy}
-              />
-              <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                placeholder="大区(可选)"
-                value={newAccountRegion}
-                onChange={(event) => setNewAccountRegion(event.target.value)}
-                disabled={busy}
-              />
-              <button className="pill-btn w-full" onClick={onAddAccount} disabled={busy || !newAccountName.trim()}>
-                新增账号
-              </button>
-            </div>
-
-            <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
-              {state.accounts.map((account) => {
-                const active = selectedAccount?.id === account.id;
-                const count = state.characters.filter((item) => item.accountId === account.id).length;
-                return (
-                  <button
-                    key={account.id}
-                    onClick={() => onSelectAccount(account.id)}
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                      active
-                        ? "border-white/25 bg-white/15"
-                        : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
-                    }`}
-                    disabled={busy}
-                  >
-                    <p className="truncate font-medium">{account.name}</p>
-                    <p className="truncate text-xs text-slate-300">
-                      {account.regionTag ? `${account.regionTag} | ` : ""}
-                      角色 {count}/{MAX_CHARACTERS_PER_ACCOUNT}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedAccount ? (
-              <div className="mt-3 space-y-2">
-                <input
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={accountEditor.name}
-                  onChange={(event) => setAccountEditor({ ...accountEditor, name: event.target.value })}
-                  disabled={busy}
-                  placeholder="账号名称"
-                />
-                <input
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={accountEditor.regionTag}
-                  onChange={(event) => setAccountEditor({ ...accountEditor, regionTag: event.target.value })}
-                  disabled={busy}
-                  placeholder="大区(可选)"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <button className="pill-btn w-full" onClick={onRenameAccount} disabled={busy || !accountEditor.name.trim()}>
-                    保存账号
-                  </button>
-                  <button
-                    className="pill-btn w-full"
-                    onClick={onDeleteAccount}
-                    disabled={busy || state.accounts.length <= 1}
-                  >
-                    删除账号
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold tracking-wide text-slate-200">角色管理</p>
-            <p className="text-xs text-slate-300">
-              {selectedAccountCharacterCount}/{MAX_CHARACTERS_PER_ACCOUNT}
-            </p>
-          </div>
-          <div className="mb-4 space-y-2">
-            <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              placeholder={selectedAccount ? `新增到 ${selectedAccount.name}` : "新角色名称"}
-              value={newCharacterName}
-              onChange={(event) => setNewCharacterName(event.target.value)}
-              disabled={busy || !selectedAccount}
-            />
-            <button
-              className="pill-btn w-full"
-              onClick={onAddCharacter}
-              disabled={busy || !selectedAccount || !newCharacterName.trim() || !canAddCharacterInSelectedAccount}
-            >
-              新增角色
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {accountCharacters.map((item) => {
-              const active = item.id === selected.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectCharacter(item.id)}
-                  className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition ${
-                    active
-                      ? "border-white/25 bg-white/15"
-                      : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
-                  }`}
-                  disabled={busy}
-                >
-                  <div className="avatar-ring">
-                    <span className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{item.name}</p>
-                    <p className="truncate text-xs text-slate-300">
-                      奥德 {item.energy.baseCurrent}(+{item.energy.bonusCurrent})/{item.energy.baseCap}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
+        <DashboardLeftSidebar
+          busy={busy}
+          state={state}
+          selectedAccount={selectedAccount}
+          selected={selected}
+          newAccountName={newAccountName}
+          newAccountRegion={newAccountRegion}
+          onNewAccountNameChange={setNewAccountName}
+          onNewAccountRegionChange={setNewAccountRegion}
+          onAddAccount={onAddAccount}
+          accountEditor={accountEditor}
+          onAccountEditorChange={setAccountEditor}
+          onRenameAccount={onRenameAccount}
+          onDeleteAccount={onDeleteAccount}
+          onSelectAccount={onSelectAccount}
+          maxCharactersPerAccount={MAX_CHARACTERS_PER_ACCOUNT}
+          selectedAccountCharacterCount={selectedAccountCharacterCount}
+          newCharacterName={newCharacterName}
+          onNewCharacterNameChange={setNewCharacterName}
+          onAddCharacter={onAddCharacter}
+          canAddCharacterInSelectedAccount={canAddCharacterInSelectedAccount}
+          accountCharacters={accountCharacters}
+          onSelectCharacter={onSelectCharacter}
+        />
 
         <section className="min-w-0 w-full space-y-5">
           <DashboardToolbar
