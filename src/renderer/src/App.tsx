@@ -28,6 +28,12 @@ import {
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
 import { clearHistoryAction, undoMultiStepAction, undoSingleStepAction } from "./features/dashboard/actions/historyActions";
 import {
+  endOverviewCardDragAction,
+  overviewCardDragOverAction,
+  overviewCardDropAction,
+  startOverviewCardDragAction,
+} from "./features/dashboard/actions/overviewCardActions";
+import {
   applyCorridorCompletionFromSettingsAction,
   applyCorridorSettingsAction,
   assignExtraAodeCharacterAction,
@@ -975,51 +981,49 @@ export function App(): JSX.Element {
   }
 
   function onOverviewCardDragStart(characterId: string): void {
-    if (overviewSortKey !== "manual" || busy) return;
-    setDraggingCharacterId(characterId);
-    setDragOverCharacterId(characterId);
+    startOverviewCardDragAction({
+      overviewSortKey,
+      busy,
+      characterId,
+      onDraggingCharacterChange: setDraggingCharacterId,
+      onDragOverCharacterChange: setDragOverCharacterId,
+    });
   }
 
   function onOverviewCardDragOver(event: DragEvent<HTMLElement>, characterId: string): void {
-    if (overviewSortKey !== "manual" || !draggingCharacterId || draggingCharacterId === characterId) {
-      return;
-    }
-    event.preventDefault();
-    if (dragOverCharacterId !== characterId) {
-      setDragOverCharacterId(characterId);
-    }
+    overviewCardDragOverAction({
+      event,
+      overviewSortKey,
+      draggingCharacterId,
+      characterId,
+      dragOverCharacterId,
+      onDragOverCharacterChange: setDragOverCharacterId,
+    });
   }
 
   function onOverviewCardDrop(event: DragEvent<HTMLElement>, targetCharacterId: string): void {
-    event.preventDefault();
-    if (overviewSortKey !== "manual" || !state || !draggingCharacterId) {
-      setDraggingCharacterId(null);
-      setDragOverCharacterId(null);
-      return;
-    }
-    if (draggingCharacterId === targetCharacterId) {
-      setDraggingCharacterId(null);
-      setDragOverCharacterId(null);
-      return;
-    }
-    const ids = state.characters.map((item) => item.id);
-    const fromIndex = ids.indexOf(draggingCharacterId);
-    const toIndex = ids.indexOf(targetCharacterId);
-    if (fromIndex < 0 || toIndex < 0) {
-      setDraggingCharacterId(null);
-      setDragOverCharacterId(null);
-      return;
-    }
-    const [moved] = ids.splice(fromIndex, 1);
-    ids.splice(toIndex, 0, moved);
-    setDraggingCharacterId(null);
-    setDragOverCharacterId(null);
-    void sync(appActions.reorderCharacters(ids), "角色卡片排序已更新");
+    overviewCardDropAction({
+      event,
+      overviewSortKey,
+      state,
+      draggingCharacterId,
+      targetCharacterId,
+      appActions,
+      sync,
+      onDragStateReset: () => {
+        setDraggingCharacterId(null);
+        setDragOverCharacterId(null);
+      },
+    });
   }
 
   function onOverviewCardDragEnd(): void {
-    setDraggingCharacterId(null);
-    setDragOverCharacterId(null);
+    endOverviewCardDragAction({
+      onDragStateReset: () => {
+        setDraggingCharacterId(null);
+        setDragOverCharacterId(null);
+      },
+    });
   }
 
   function onSwitchToOverview(): void {
