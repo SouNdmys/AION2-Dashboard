@@ -27,15 +27,19 @@ import {
 import {
   addAccountAction,
   addCharacterAction,
+  applyCorridorCompletionFromSettingsAction,
+  applyCorridorSettingsAction,
+  assignExtraAodeCharacterAction,
   deleteAccountAction,
   deleteCharacterAction,
   renameAccountAction,
   renameCharacterAction,
+  saveShopPlanAction,
+  saveTransformPlanAction,
   saveCharacterProfileAction,
   selectAccountAction,
   selectCharacterAction,
-} from "./features/dashboard/actions/accountCharacterActions";
-import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
+} from "./features/dashboard/actions/dashboardAccountResourceActions";
 import {
   applyQuickEntryAction,
   endOverviewCardDragAction,
@@ -44,13 +48,7 @@ import {
   startOverviewCardDragAction,
 } from "./features/dashboard/actions/overviewInteractionActions";
 import {
-  applyCorridorCompletionFromSettingsAction,
-  applyCorridorSettingsAction,
-  assignExtraAodeCharacterAction,
-  saveShopPlanAction,
-  saveTransformPlanAction,
-} from "./features/dashboard/actions/resourceAndCorridorActions";
-import {
+  confirmDashboardDialog,
   openCompleteTaskDialogAction,
   openCorridorCompleteDialogAction,
   openCorridorSyncDialogAction,
@@ -59,7 +57,7 @@ import {
   openSetCompletedTaskDialogAction,
   openTaskEditDialogAction,
   openUseTicketTaskDialogAction,
-} from "./features/dashboard/actions/dialogOpenActions";
+} from "./features/dashboard/actions/dashboardDialogActions";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -1553,4 +1551,5 @@ export function App(): JSX.Element {
     </main>
   );
 }
+
 
