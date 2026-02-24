@@ -122,6 +122,7 @@
 - `97da452` `refactor(workshop): extract catalog classification and filter models into hook` (1.2 第二阶段进展)
 - `69a8d6c` `refactor(workshop): extract commit runner into dedicated hook` (1.2 第二阶段进展)
 - `9fff9f3` `refactor(workshop): extract market analysis panel into dedicated view` (1.2 视图层拆分进展)
+- `ea02385` `refactor(workshop): extract simulation panel into dedicated view` (1.2 视图层拆分进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
