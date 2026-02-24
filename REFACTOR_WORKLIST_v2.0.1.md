@@ -100,6 +100,7 @@
 - `65de77d` `refactor(dashboard): extract dialog confirm entry handler from App` (1.1 第二阶段进展)
 - `5233046` `refactor(dashboard): extract dialog handler wiring into factory module` (1.1 第二阶段进展)
 - `6567dd8` `refactor(dashboard): extract overview and maintenance handler factories` (1.1 第二阶段进展)
+- `5a86065` `refactor(dashboard): extract account and resource handler factory` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
