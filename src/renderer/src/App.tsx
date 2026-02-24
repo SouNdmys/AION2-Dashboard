@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AODE_ENERGY_SCHEDULE_HOURS,
   AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
@@ -16,16 +16,8 @@ import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } f
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { useDashboardSync } from "./features/dashboard/actions/useDashboardSync";
 import { createDashboardDialogHandlers } from "./features/dashboard/actions/createDashboardDialogHandlers";
-import {
-  clearHistoryAction,
-  exportDashboardDataAction,
-  importDashboardDataAction,
-  resetWeeklyStatsAction,
-  saveDashboardSettingsAction,
-  saveWeeklyCompletionsAction,
-  undoMultiStepAction,
-  undoSingleStepAction,
-} from "./features/dashboard/actions/dashboardMaintenanceActions";
+import { createDashboardOverviewHandlers } from "./features/dashboard/actions/createDashboardOverviewHandlers";
+import { createDashboardMaintenanceHandlers } from "./features/dashboard/actions/createDashboardMaintenanceHandlers";
 import {
   addAccountAction,
   addCharacterAction,
@@ -42,13 +34,6 @@ import {
   selectAccountAction,
   selectCharacterAction,
 } from "./features/dashboard/actions/dashboardAccountResourceActions";
-import {
-  applyQuickEntryAction,
-  endOverviewCardDragAction,
-  overviewCardDragOverAction,
-  overviewCardDropAction,
-  startOverviewCardDragAction,
-} from "./features/dashboard/actions/overviewInteractionActions";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -887,6 +872,58 @@ export function App(): JSX.Element {
     setDialogError,
     setCorridorDraft,
   });
+  const {
+    onOverviewCardDragStart,
+    onOverviewCardDragOver,
+    onOverviewCardDrop,
+    onOverviewCardDragEnd,
+    onSwitchToOverview,
+    onApplyQuickAction,
+  } = createDashboardOverviewHandlers({
+    overviewSortKey,
+    busy,
+    state,
+    draggingCharacterId,
+    dragOverCharacterId,
+    selectedCharacterId: selected?.id ?? null,
+    quickCharacterId,
+    quickTaskId,
+    quickAction,
+    quickAmountInput: quickAmount,
+    quickCorridorTask,
+    characterNameById,
+    taskById,
+    appActions,
+    sync,
+    setDashboardMode,
+    setDraggingCharacterId,
+    setDragOverCharacterId,
+    setError: (message) => setError(message),
+  });
+  const {
+    onResetWeeklyStats,
+    onSaveWeeklyCompletions,
+    onUndoSingleStep,
+    onUndoMultiStep,
+    onClearHistory,
+    onSaveSettings,
+    onExportData,
+    onImportData,
+  } = createDashboardMaintenanceHandlers({
+    state,
+    selectedCharacterId: selected?.id ?? null,
+    weeklyExpeditionCompletedInput,
+    weeklyTranscendenceCompletedInput,
+    undoStepsInput: undoSteps,
+    settingsDraft,
+    appActions,
+    sync,
+    setBusy,
+    setError,
+    setInfoMessage,
+    setState,
+    confirm: window.confirm,
+  });
 
   function onAddAccount(): void {
     addAccountAction({
@@ -978,73 +1015,6 @@ export function App(): JSX.Element {
     });
   }
 
-  function onOverviewCardDragStart(characterId: string): void {
-    startOverviewCardDragAction({
-      overviewSortKey,
-      busy,
-      characterId,
-      onDraggingCharacterChange: setDraggingCharacterId,
-      onDragOverCharacterChange: setDragOverCharacterId,
-    });
-  }
-
-  function onOverviewCardDragOver(event: DragEvent<HTMLElement>, characterId: string): void {
-    overviewCardDragOverAction({
-      event,
-      overviewSortKey,
-      draggingCharacterId,
-      characterId,
-      dragOverCharacterId,
-      onDragOverCharacterChange: setDragOverCharacterId,
-    });
-  }
-
-  function onOverviewCardDrop(event: DragEvent<HTMLElement>, targetCharacterId: string): void {
-    overviewCardDropAction({
-      event,
-      overviewSortKey,
-      state,
-      draggingCharacterId,
-      targetCharacterId,
-      appActions,
-      sync,
-      onDragStateReset: () => {
-        setDraggingCharacterId(null);
-        setDragOverCharacterId(null);
-      },
-    });
-  }
-
-  function onOverviewCardDragEnd(): void {
-    endOverviewCardDragAction({
-      onDragStateReset: () => {
-        setDraggingCharacterId(null);
-        setDragOverCharacterId(null);
-      },
-    });
-  }
-
-  function onSwitchToOverview(): void {
-    setDashboardMode("overview");
-  }
-
-  function onApplyQuickAction(): void {
-    applyQuickEntryAction({
-      state,
-      selectedCharacterId: selected?.id ?? null,
-      quickCharacterId,
-      quickTaskId,
-      quickAction,
-      quickAmountInput: quickAmount,
-      quickCorridorTask,
-      characterNameById,
-      taskById,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
   function onApplyCorridorSettings(): void {
     void applyCorridorSettingsAction({
       selectedAccountId: selectedAccount?.id ?? null,
@@ -1059,25 +1029,6 @@ export function App(): JSX.Element {
     void applyCorridorCompletionFromSettingsAction({
       selectedCharacterId: selected?.id ?? null,
       corridorDraft,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onResetWeeklyStats(): void {
-    void resetWeeklyStatsAction({
-      appActions,
-      sync,
-      confirm: window.confirm,
-    });
-  }
-
-  function onSaveWeeklyCompletions(): void {
-    void saveWeeklyCompletionsAction({
-      selectedCharacterId: selected?.id ?? null,
-      weeklyExpeditionCompletedInput,
-      weeklyTranscendenceCompletedInput,
       appActions,
       sync,
       onError: setError,
@@ -1113,61 +1064,6 @@ export function App(): JSX.Element {
       assignExtra,
       appActions,
       sync,
-    });
-  }
-
-  function onUndoSingleStep(): void {
-    void undoSingleStepAction({
-      state,
-      appActions,
-      sync,
-    });
-  }
-
-  function onUndoMultiStep(): void {
-    void undoMultiStepAction({
-      state,
-      undoStepsInput: undoSteps,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  function onClearHistory(): void {
-    void clearHistoryAction({
-      state,
-      appActions,
-      sync,
-      confirm: window.confirm,
-    });
-  }
-
-  function onSaveSettings(): void {
-    void saveDashboardSettingsAction({
-      settingsDraft,
-      appActions,
-      sync,
-      onError: setError,
-    });
-  }
-
-  async function onExportData(): Promise<void> {
-    await exportDashboardDataAction({
-      appActions,
-      onBusyChange: setBusy,
-      onError: setError,
-      onInfoMessage: setInfoMessage,
-    });
-  }
-
-  async function onImportData(): Promise<void> {
-    await importDashboardDataAction({
-      appActions,
-      onBusyChange: setBusy,
-      onError: setError,
-      onInfoMessage: setInfoMessage,
-      onStateImported: setState,
     });
   }
 
