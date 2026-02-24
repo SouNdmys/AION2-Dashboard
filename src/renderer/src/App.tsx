@@ -14,6 +14,7 @@ import {
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
+import { useDashboardSync } from "./features/dashboard/actions/useDashboardSync";
 import {
   clearHistoryAction,
   exportDashboardDataAction,
@@ -867,29 +868,13 @@ export function App(): JSX.Element {
   const selectedTransformAodeRemaining = selected
     ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.transformAodeUsed)
     : 0;
-
-  async function sync(action: Promise<AppState>, successMessage?: string): Promise<boolean> {
-    setBusy(true);
-    setError(null);
-    if (successMessage) {
-      setInfoMessage(null);
-    }
-    try {
-      const next = await action;
-      setState(next);
-      if (successMessage) {
-        setInfoMessage(successMessage);
-      }
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "操作失败";
-      setError(message);
-      setDialogError(message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
+  const sync = useDashboardSync({
+    setBusy,
+    setError,
+    setDialogError,
+    setInfoMessage,
+    setState,
+  });
 
   function onAddAccount(): void {
     addAccountAction({
