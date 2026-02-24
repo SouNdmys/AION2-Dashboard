@@ -112,6 +112,7 @@
 - `fc902b9` `refactor(workshop): extract bootstrap and OCR subscription lifecycle hook` (1.2 第二阶段进展)
 - `5aa1c55` `refactor(workshop): extract history loading and sync lifecycle hook` (1.2 第二阶段进展)
 - `622913b` `refactor(workshop): extract view sync effects into dedicated hook` (1.2 第二阶段进展)
+- `8257a5a` `fix(workshop): stabilize lifecycle loaders to avoid stale simulation refresh` (1.2 第二阶段修复)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
