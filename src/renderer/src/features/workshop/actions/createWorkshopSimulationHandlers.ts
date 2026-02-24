@@ -155,6 +155,7 @@ export function createWorkshopSimulationHandlers(params: CreateWorkshopSimulatio
               itemId: row.itemId,
               unitPrice,
               source: "manual",
+              market: row.latestPriceMarket,
               note: "simulate-inline-edit",
             });
           }
