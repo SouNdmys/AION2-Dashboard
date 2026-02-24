@@ -46,6 +46,7 @@ import { WorkshopMarketAnalysisPanel } from "./features/workshop/views/WorkshopM
 import { WorkshopSimulationPanel } from "./features/workshop/views/WorkshopSimulationPanel";
 import { WorkshopInventoryPanel } from "./features/workshop/views/WorkshopInventoryPanel";
 import { WorkshopOcrPanel } from "./features/workshop/views/WorkshopOcrPanel";
+import { buildWorkshopPanelProps } from "./features/workshop/views/buildWorkshopPanelProps";
 import { usePersistedState } from "./hooks/usePersistedState";
 import type {
   WorkshopCraftOption,
@@ -501,186 +502,172 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setMessage,
   });
 
-  const historyMarketPanels = [
-    {
-      market: "server" as const,
-      title: "伺服器交易所",
-      result: historyServerResult,
-      insight: historyServerInsight,
-      colorClass: "text-cyan-200",
-      borderClass: "border-cyan-300/20 bg-cyan-500/5",
-    },
-    {
-      market: "world" as const,
-      title: "世界交易所",
-      result: historyWorldResult,
-      insight: historyWorldInsight,
-      colorClass: "text-emerald-200",
-      borderClass: "border-emerald-300/20 bg-emerald-500/5",
-    },
-  ];
-
   if (!state) {
     return <WorkshopLoadingCard />;
   }
+
+  const { ocrPanelProps, marketAnalysisPanelProps, simulationPanelProps, inventoryPanelProps } = buildWorkshopPanelProps({
+    busy,
+    ocrPanelProps: {
+      ocrCaptureDelayMs,
+      setOcrCaptureDelayMs,
+      ocrHideAppBeforeCapture,
+      setOcrHideAppBeforeCapture,
+      ocrSafeMode,
+      setOcrSafeMode,
+      ocrHotkeyShortcut,
+      setOcrHotkeyShortcut,
+      onApplyOcrHotkeyConfig,
+      onTriggerOcrHotkeyNow,
+      ocrAutoRunIntervalSeconds,
+      setOcrAutoRunIntervalSeconds,
+      ocrAutoRunFailLimit,
+      setOcrAutoRunFailLimit,
+      ocrAutoRunOverlayEnabled,
+      setOcrAutoRunOverlayEnabled,
+      onConfigureOcrAutoRun,
+      ocrAutoRunState,
+      ocrAutoRunCountdownSeconds,
+      ocrHotkeyState,
+      ocrHotkeyLastResult,
+      ocrTradePresetKey,
+      setOcrTradePresetKey,
+      ocrCalibrationTarget,
+      setOcrCalibrationTarget,
+      ocrTradeRowCount,
+      setOcrTradeRowCount,
+      onCaptureOcrScreenPreview,
+      ocrScreenPreview,
+      onPreviewMouseDown,
+      onPreviewMouseMove,
+      onPreviewMouseUp,
+      ocrTradeNamesRect,
+      ocrTradePricesRect,
+      ocrDragRect,
+    },
+    marketAnalysisPanelProps: {
+      historyMainCategory,
+      setHistoryMainCategory,
+      historyMainCategoryOptions,
+      historySubCategory,
+      setHistorySubCategory,
+      historySubCategoryOptions,
+      historyKeyword,
+      setHistoryKeyword,
+      historyItemId,
+      setHistoryItemId,
+      filteredHistoryItems,
+      historyDaysInput,
+      setHistoryDaysInput,
+      onJumpHistoryManagerForCurrentItem,
+      onToggleStarItem,
+      isStarredItem,
+      focusStarOnly,
+      setFocusStarOnly,
+      starredHistoryItems,
+      onViewHistoryCurveForItem,
+      historyIncludeSuspect,
+      setHistoryIncludeSuspect,
+      activeHistoryQuickDays,
+      recentOcrImportedEntries,
+      historyChartAnchorRef,
+      historyLoading,
+      historyHasLoaded,
+      historyServerResult,
+      historyWorldResult,
+      dualHistoryChartModel,
+      onJumpHistoryManagerForSnapshot,
+      historyServerInsight,
+      historyWorldInsight,
+      signalRuleEnabled,
+      setSignalRuleEnabled,
+      signalLookbackDaysInput,
+      setSignalLookbackDaysInput,
+      signalThresholdPercentInput,
+      setSignalThresholdPercentInput,
+      onSaveSignalRule,
+      onRefreshSignals,
+      signalResult,
+      triggeredSignalRows,
+      buyZoneRows,
+      sellZoneRows,
+    },
+    simulationPanelProps: {
+      simulation,
+      onApplySimulationMaterialEdits,
+      simulateMainCategory,
+      setSimulateMainCategory,
+      simulationMainCategoryOptions,
+      simulateSubCategory,
+      setSimulateSubCategory,
+      simulationSubCategoryOptions,
+      simulateRecipeId,
+      setSimulateRecipeId,
+      filteredSimulationRecipes,
+      simulateRuns,
+      setSimulateRuns,
+      simulationOutputPriceDraft,
+      setSimulationOutputPriceDraft,
+      taxMode,
+      setTaxMode,
+      onSimulate,
+      resolveItemName: (itemId) => itemById.get(itemId)?.name ?? itemId,
+      simulationMaterialDraft,
+      setSimulationMaterialDraft,
+    },
+    inventoryPanelProps: {
+      loadCraftOptions,
+      itemKeyword,
+      setItemKeyword,
+      itemMainCategory,
+      setItemMainCategory,
+      itemMainCategoryOptions,
+      itemSubCategory,
+      setItemSubCategory,
+      itemSubCategoryOptions,
+      selectedItemId,
+      setSelectedItemId,
+      filteredItems,
+      selectedItemPriceMarket,
+      setSelectedItemPriceMarket,
+      selectedItemPrice,
+      setSelectedItemPrice,
+      selectedItemInventory,
+      setSelectedItemInventory,
+      onSaveSelectedPrice,
+      onSaveSelectedInventory,
+      latestPriceMetaByItemId,
+      inventoryByItemId,
+      onPickItemForCorrection,
+      reverseMaterialKeyword,
+      setReverseMaterialKeyword,
+      reverseFocusMaterialId,
+      setReverseFocusMaterialId,
+      reverseMaterialOptions,
+      reverseCraftBudgetInput,
+      setReverseCraftBudgetInput,
+      reverseScoreMode,
+      setReverseScoreMode,
+      reverseFocusMaterialName,
+      reverseCraftBudget,
+      reverseScoreModeLabel,
+      craftOptions,
+      reverseCraftSuggestions,
+      isStarredItem,
+      onToggleStarItem,
+      onViewHistoryCurveForItem,
+      onJumpSimulationRecipe,
+    },
+  });
 
   return (
     <div className="flex flex-col gap-4">
       <WorkshopOverviewHeader state={state} starCount={starItemIds.length} message={message} error={error} />
 
-      <WorkshopOcrPanel
-        busy={busy}
-        ocrCaptureDelayMs={ocrCaptureDelayMs}
-        setOcrCaptureDelayMs={setOcrCaptureDelayMs}
-        ocrHideAppBeforeCapture={ocrHideAppBeforeCapture}
-        setOcrHideAppBeforeCapture={setOcrHideAppBeforeCapture}
-        ocrSafeMode={ocrSafeMode}
-        setOcrSafeMode={setOcrSafeMode}
-        ocrHotkeyShortcut={ocrHotkeyShortcut}
-        setOcrHotkeyShortcut={setOcrHotkeyShortcut}
-        onApplyOcrHotkeyConfig={onApplyOcrHotkeyConfig}
-        onTriggerOcrHotkeyNow={onTriggerOcrHotkeyNow}
-        ocrAutoRunIntervalSeconds={ocrAutoRunIntervalSeconds}
-        setOcrAutoRunIntervalSeconds={setOcrAutoRunIntervalSeconds}
-        ocrAutoRunFailLimit={ocrAutoRunFailLimit}
-        setOcrAutoRunFailLimit={setOcrAutoRunFailLimit}
-        ocrAutoRunOverlayEnabled={ocrAutoRunOverlayEnabled}
-        setOcrAutoRunOverlayEnabled={setOcrAutoRunOverlayEnabled}
-        onConfigureOcrAutoRun={onConfigureOcrAutoRun}
-        ocrAutoRunState={ocrAutoRunState}
-        ocrAutoRunCountdownSeconds={ocrAutoRunCountdownSeconds}
-        ocrHotkeyState={ocrHotkeyState}
-        ocrHotkeyLastResult={ocrHotkeyLastResult}
-        ocrTradePresetKey={ocrTradePresetKey}
-        setOcrTradePresetKey={setOcrTradePresetKey}
-        ocrCalibrationTarget={ocrCalibrationTarget}
-        setOcrCalibrationTarget={setOcrCalibrationTarget}
-        ocrTradeRowCount={ocrTradeRowCount}
-        setOcrTradeRowCount={setOcrTradeRowCount}
-        onCaptureOcrScreenPreview={onCaptureOcrScreenPreview}
-        ocrScreenPreview={ocrScreenPreview}
-        onPreviewMouseDown={onPreviewMouseDown}
-        onPreviewMouseMove={onPreviewMouseMove}
-        onPreviewMouseUp={onPreviewMouseUp}
-        ocrTradeNamesRect={ocrTradeNamesRect}
-        ocrTradePricesRect={ocrTradePricesRect}
-        ocrDragRect={ocrDragRect}
-      />
-      <WorkshopMarketAnalysisPanel
-        busy={busy}
-        historyMainCategory={historyMainCategory}
-        setHistoryMainCategory={setHistoryMainCategory}
-        historyMainCategoryOptions={historyMainCategoryOptions}
-        historySubCategory={historySubCategory}
-        setHistorySubCategory={setHistorySubCategory}
-        historySubCategoryOptions={historySubCategoryOptions}
-        historyKeyword={historyKeyword}
-        setHistoryKeyword={setHistoryKeyword}
-        historyItemId={historyItemId}
-        setHistoryItemId={setHistoryItemId}
-        filteredHistoryItems={filteredHistoryItems}
-        historyDaysInput={historyDaysInput}
-        setHistoryDaysInput={setHistoryDaysInput}
-        onJumpHistoryManagerForCurrentItem={onJumpHistoryManagerForCurrentItem}
-        onToggleStarItem={onToggleStarItem}
-        isStarredItem={isStarredItem}
-        focusStarOnly={focusStarOnly}
-        setFocusStarOnly={setFocusStarOnly}
-        starredHistoryItems={starredHistoryItems}
-        onViewHistoryCurveForItem={onViewHistoryCurveForItem}
-        historyIncludeSuspect={historyIncludeSuspect}
-        setHistoryIncludeSuspect={setHistoryIncludeSuspect}
-        activeHistoryQuickDays={activeHistoryQuickDays}
-        recentOcrImportedEntries={recentOcrImportedEntries}
-        historyChartAnchorRef={historyChartAnchorRef}
-        historyLoading={historyLoading}
-        historyHasLoaded={historyHasLoaded}
-        historyServerResult={historyServerResult}
-        historyWorldResult={historyWorldResult}
-        historyMarketPanels={historyMarketPanels}
-        dualHistoryChartModel={dualHistoryChartModel}
-        onJumpHistoryManagerForSnapshot={onJumpHistoryManagerForSnapshot}
-        signalRuleEnabled={signalRuleEnabled}
-        setSignalRuleEnabled={setSignalRuleEnabled}
-        signalLookbackDaysInput={signalLookbackDaysInput}
-        setSignalLookbackDaysInput={setSignalLookbackDaysInput}
-        signalThresholdPercentInput={signalThresholdPercentInput}
-        setSignalThresholdPercentInput={setSignalThresholdPercentInput}
-        onSaveSignalRule={onSaveSignalRule}
-        onRefreshSignals={onRefreshSignals}
-        signalResult={signalResult}
-        triggeredSignalRows={triggeredSignalRows}
-        buyZoneRows={buyZoneRows}
-        sellZoneRows={sellZoneRows}
-      />
-      <WorkshopSimulationPanel
-        busy={busy}
-        simulation={simulation}
-        onApplySimulationMaterialEdits={onApplySimulationMaterialEdits}
-        simulateMainCategory={simulateMainCategory}
-        setSimulateMainCategory={setSimulateMainCategory}
-        simulationMainCategoryOptions={simulationMainCategoryOptions}
-        simulateSubCategory={simulateSubCategory}
-        setSimulateSubCategory={setSimulateSubCategory}
-        simulationSubCategoryOptions={simulationSubCategoryOptions}
-        simulateRecipeId={simulateRecipeId}
-        setSimulateRecipeId={setSimulateRecipeId}
-        filteredSimulationRecipes={filteredSimulationRecipes}
-        simulateRuns={simulateRuns}
-        setSimulateRuns={setSimulateRuns}
-        simulationOutputPriceDraft={simulationOutputPriceDraft}
-        setSimulationOutputPriceDraft={setSimulationOutputPriceDraft}
-        taxMode={taxMode}
-        setTaxMode={setTaxMode}
-        onSimulate={onSimulate}
-        resolveItemName={(itemId) => itemById.get(itemId)?.name ?? itemId}
-        simulationMaterialDraft={simulationMaterialDraft}
-        setSimulationMaterialDraft={setSimulationMaterialDraft}
-      />
-      <WorkshopInventoryPanel
-        busy={busy}
-        loadCraftOptions={loadCraftOptions}
-        itemKeyword={itemKeyword}
-        setItemKeyword={setItemKeyword}
-        itemMainCategory={itemMainCategory}
-        setItemMainCategory={setItemMainCategory}
-        itemMainCategoryOptions={itemMainCategoryOptions}
-        itemSubCategory={itemSubCategory}
-        setItemSubCategory={setItemSubCategory}
-        itemSubCategoryOptions={itemSubCategoryOptions}
-        selectedItemId={selectedItemId}
-        setSelectedItemId={setSelectedItemId}
-        filteredItems={filteredItems}
-        selectedItemPriceMarket={selectedItemPriceMarket}
-        setSelectedItemPriceMarket={setSelectedItemPriceMarket}
-        selectedItemPrice={selectedItemPrice}
-        setSelectedItemPrice={setSelectedItemPrice}
-        selectedItemInventory={selectedItemInventory}
-        setSelectedItemInventory={setSelectedItemInventory}
-        onSaveSelectedPrice={onSaveSelectedPrice}
-        onSaveSelectedInventory={onSaveSelectedInventory}
-        latestPriceMetaByItemId={latestPriceMetaByItemId}
-        inventoryByItemId={inventoryByItemId}
-        onPickItemForCorrection={onPickItemForCorrection}
-        reverseMaterialKeyword={reverseMaterialKeyword}
-        setReverseMaterialKeyword={setReverseMaterialKeyword}
-        reverseFocusMaterialId={reverseFocusMaterialId}
-        setReverseFocusMaterialId={setReverseFocusMaterialId}
-        reverseMaterialOptions={reverseMaterialOptions}
-        reverseCraftBudgetInput={reverseCraftBudgetInput}
-        setReverseCraftBudgetInput={setReverseCraftBudgetInput}
-        reverseScoreMode={reverseScoreMode}
-        setReverseScoreMode={setReverseScoreMode}
-        reverseFocusMaterialName={reverseFocusMaterialName}
-        reverseCraftBudget={reverseCraftBudget}
-        reverseScoreModeLabel={reverseScoreModeLabel}
-        craftOptions={craftOptions}
-        reverseCraftSuggestions={reverseCraftSuggestions}
-        isStarredItem={isStarredItem}
-        onToggleStarItem={onToggleStarItem}
-        onViewHistoryCurveForItem={onViewHistoryCurveForItem}
-        onJumpSimulationRecipe={onJumpSimulationRecipe}
-      />
+      <WorkshopOcrPanel {...ocrPanelProps} />
+      <WorkshopMarketAnalysisPanel {...marketAnalysisPanelProps} />
+      <WorkshopSimulationPanel {...simulationPanelProps} />
+      <WorkshopInventoryPanel {...inventoryPanelProps} />
     </div>
   );
 }
