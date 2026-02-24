@@ -51,12 +51,11 @@ import {
   toNumber,
 } from "./features/dashboard/dashboard-utils";
 import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
-import { DashboardCharacterTasksPanel } from "./features/dashboard/views/DashboardCharacterTasksPanel";
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
+import { DashboardCharacterModePanels } from "./features/dashboard/views/DashboardCharacterModePanels";
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
 import { DashboardHistoryPanel, DashboardCountdownPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./features/dashboard/views/DashboardSidebarPanels";
 import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
-import { WeeklyStatsPanel } from "./features/dashboard/views/WeeklyStatsPanel";
 import { WorkshopView } from "./WorkshopView";
 import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
@@ -1983,8 +1982,9 @@ export function App(): JSX.Element {
             onSaveTransformPlan={onSaveTransformPlan}
           />
 
-          <WeeklyStatsPanel
-            visible={viewMode === "dashboard"}
+          <DashboardCharacterModePanels
+            weeklyVisible={viewMode === "dashboard"}
+            characterVisible={viewMode === "dashboard" && dashboardMode === "character"}
             busy={busy}
             weeklyEarnedText={toGoldText(weeklyEarned)}
             weeklyExpeditionRuns={weeklyExpeditionRuns}
@@ -1999,11 +1999,6 @@ export function App(): JSX.Element {
             onSaveWeeklyCompletions={onSaveWeeklyCompletions}
             expeditionOverRewardThreshold={expeditionOverRewardThreshold}
             transcendenceOverThreshold={transcendenceOverThreshold}
-          />
-
-          <DashboardCharacterTasksPanel
-            visible={viewMode === "dashboard" && dashboardMode === "character"}
-            busy={busy}
             state={state}
             selected={selected}
             groupedTasks={groupedTasks}
