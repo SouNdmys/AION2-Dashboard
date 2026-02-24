@@ -15,6 +15,7 @@ import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh,
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
+import { clearHistoryAction, undoMultiStepAction, undoSingleStepAction } from "./features/dashboard/actions/historyActions";
 import {
   applyCorridorCompletionFromSettingsAction,
   applyCorridorSettingsAction,
@@ -1193,25 +1194,30 @@ export function App(): JSX.Element {
   }
 
   function onUndoSingleStep(): void {
-    if (!state || state.history.length === 0) return;
-    void sync(appActions.undoOperations(1), "已撤销一步");
+    void undoSingleStepAction({
+      state,
+      appActions,
+      sync,
+    });
   }
 
   function onUndoMultiStep(): void {
-    if (!state || state.history.length === 0) return;
-    const steps = toInt(undoSteps);
-    if (steps === null || steps <= 0) {
-      setError("请输入有效的撤销步数");
-      return;
-    }
-    void sync(appActions.undoOperations(steps), `已撤销 ${steps} 步`);
+    void undoMultiStepAction({
+      state,
+      undoStepsInput: undoSteps,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onClearHistory(): void {
-    if (!state || state.history.length === 0) return;
-    const ok = window.confirm("确认清空所有操作历史日志？该操作不可撤销。");
-    if (!ok) return;
-    void sync(appActions.clearHistory(), "已清空操作历史");
+    void clearHistoryAction({
+      state,
+      appActions,
+      sync,
+      confirm: window.confirm,
+    });
   }
 
   function onSaveSettings(): void {
