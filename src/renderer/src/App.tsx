@@ -16,6 +16,16 @@ import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } f
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
 import {
+  buildCompleteDialog,
+  buildCorridorCompleteDialog,
+  buildCorridorSyncDialog,
+  buildEnergyDialog,
+  buildSanctumEditDialog,
+  buildSetCompletedDialog,
+  buildTaskEditDialog,
+  buildUseTicketDialog,
+} from "./features/dashboard/actions/dialogStateBuilders";
+import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
   NO_REGION_FILTER,
@@ -1052,28 +1062,25 @@ export function App(): JSX.Element {
 
   function openCompleteDialog(taskId: TaskId, title: string): void {
     setDialogError(null);
-    setDialog({ kind: "complete", taskId, title, amount: "1" });
+    setDialog(buildCompleteDialog(taskId, title));
   }
 
   function openUseTicketDialog(taskId: TaskId, title: string): void {
     setDialogError(null);
-    setDialog({ kind: "use_ticket", taskId, title, amount: "1" });
+    setDialog(buildUseTicketDialog(taskId, title));
   }
 
   function openSetCompletedDialog(task: TaskDefinition): void {
-    if (!task.setCompletedTotal) return;
+    const nextDialog = buildSetCompletedDialog(task);
+    if (!nextDialog) return;
     setDialogError(null);
-    setDialog({ kind: "set_completed", task, amount: "0" });
+    setDialog(nextDialog);
   }
 
   function openEnergyDialog(): void {
     if (!selected) return;
     setDialogError(null);
-    setDialog({
-      kind: "energy",
-      baseCurrent: String(selected.energy.baseCurrent),
-      bonusCurrent: String(selected.energy.bonusCurrent),
-    });
+    setDialog(buildEnergyDialog(selected));
   }
 
   function openTaskEditDialog(
@@ -1081,115 +1088,23 @@ export function App(): JSX.Element {
   ): void {
     if (!selected) return;
     setDialogError(null);
-    if (taskId === "expedition") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "远征副本",
-        remainingLabel: "基础次数",
-        bonusLabel: "券次数",
-        remaining: String(selected.activities.expeditionRemaining),
-        bonus: String(selected.activities.expeditionTicketBonus),
-        boss: String(selected.activities.expeditionBossRemaining),
-        bossLabel: "首领次数",
-      });
-      return;
-    }
-    if (taskId === "transcendence") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "超越副本",
-        remainingLabel: "基础次数",
-        bonusLabel: "券次数",
-        remaining: String(selected.activities.transcendenceRemaining),
-        bonus: String(selected.activities.transcendenceTicketBonus),
-        boss: String(selected.activities.transcendenceBossRemaining),
-        bossLabel: "首领次数",
-      });
-      return;
-    }
-    if (taskId === "nightmare") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "恶梦",
-        remainingLabel: "基础次数",
-        bonusLabel: "券次数",
-        remaining: String(selected.activities.nightmareRemaining),
-        bonus: String(selected.activities.nightmareTicketBonus),
-      });
-      return;
-    }
-    if (taskId === "awakening") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "觉醒战",
-        remainingLabel: "基础次数",
-        bonusLabel: "券次数",
-        remaining: String(selected.activities.awakeningRemaining),
-        bonus: String(selected.activities.awakeningTicketBonus),
-      });
-      return;
-    }
-    if (taskId === "daily_dungeon") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "每日副本",
-        remainingLabel: "基础次数",
-        bonusLabel: "券库存",
-        remaining: String(selected.activities.dailyDungeonRemaining),
-        bonus: String(selected.activities.dailyDungeonTicketStored),
-      });
-      return;
-    }
-    if (taskId === "mini_game") {
-      setDialog({
-        kind: "task_edit",
-        taskId,
-        title: "小游戏",
-        remainingLabel: "基础次数",
-        bonusLabel: "券次数",
-        remaining: String(selected.activities.miniGameRemaining),
-        bonus: String(selected.activities.miniGameTicketBonus),
-      });
-      return;
-    }
-    setDialog({
-      kind: "task_edit",
-      taskId,
-      title: "讨伐战",
-      remainingLabel: "基础次数",
-      bonusLabel: "券次数",
-      remaining: String(selected.activities.suppressionRemaining),
-      bonus: String(selected.activities.suppressionTicketBonus),
-    });
+    setDialog(buildTaskEditDialog(selected, taskId));
   }
 
   function openSanctumEditDialog(): void {
     if (!selected) return;
     setDialogError(null);
-    setDialog({
-      kind: "sanctum_edit",
-      raidRemaining: String(selected.activities.sanctumRaidRemaining),
-      boxRemaining: String(selected.activities.sanctumBoxRemaining),
-    });
+    setDialog(buildSanctumEditDialog(selected));
   }
 
   function onSyncCorridorStatus(): void {
     setDialogError(null);
-    setDialog({
-      kind: "corridor_sync",
-      lowerAvailable: corridorDraft.lowerAvailable,
-      middleAvailable: corridorDraft.middleAvailable,
-    });
+    setDialog(buildCorridorSyncDialog(corridorDraft));
   }
 
   function onApplyCorridorCompletion(): void {
     setDialogError(null);
-    setDialog({ kind: "corridor_complete", lane: corridorDraft.completeLane, amount: corridorDraft.completeAmount });
+    setDialog(buildCorridorCompleteDialog(corridorDraft));
   }
 
   function onApplyCorridorSettings(): void {
