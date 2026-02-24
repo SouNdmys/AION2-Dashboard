@@ -47,10 +47,7 @@ import {
   buildSettingsDraft,
   formatBuildTime,
   formatCounter,
-  formatDateTime,
-  formatDuration,
   getCharacterAodeLimits,
-  getPriorityToneClass,
   getPriorityWeightFactor,
   getPriorityWeightLevel,
   getQuickActionsForTask,
@@ -60,6 +57,10 @@ import {
   toInt,
   toNumber,
 } from "./features/dashboard/dashboard-utils";
+import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
+import { DashboardHistoryPanel, DashboardCountdownPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./features/dashboard/views/DashboardSidebarPanels";
+import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
+import { WeeklyStatsPanel } from "./features/dashboard/views/WeeklyStatsPanel";
 import { WorkshopView } from "./WorkshopView";
 import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
@@ -1876,68 +1877,31 @@ export function App(): JSX.Element {
         </aside>
 
         <section className="min-w-0 w-full space-y-5">
-          <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-3 backdrop-blur-2xl backdrop-saturate-150">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "overview" ? "bg-white/20" : ""}`}
-                onClick={() => {
-                  setViewMode("dashboard");
-                  setDashboardMode("overview");
-                }}
-                disabled={busy}
-              >
-                角色总览
-              </button>
-              <button
-                className={`pill-btn ${viewMode === "dashboard" && dashboardMode === "character" ? "bg-white/20" : ""}`}
-                onClick={() => {
-                  setViewMode("dashboard");
-                  setDashboardMode("character");
-                }}
-                disabled={busy}
-              >
-                角色操作
-              </button>
-              <button
-                className={`pill-btn ${viewMode === "settings" ? "bg-white/20" : ""}`}
-                onClick={() => setViewMode("settings")}
-                disabled={busy}
-              >
-                设置页
-              </button>
-              <button
-                className={`pill-btn ${viewMode === "workshop" ? "bg-white/20" : ""}`}
-                onClick={() => setViewMode("workshop")}
-                disabled={busy}
-              >
-                工坊
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-300">中栏为核心操作流，右栏承载日志与辅助信息。</p>
-            {infoMessage ? <p className="mt-2 text-xs text-emerald-300">{infoMessage}</p> : null}
-            {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
-          </article>
+          <DashboardToolbar
+            busy={busy}
+            viewMode={viewMode}
+            dashboardMode={dashboardMode}
+            infoMessage={infoMessage}
+            error={error}
+            onSwitchOverview={() => {
+              setViewMode("dashboard");
+              setDashboardMode("overview");
+            }}
+            onSwitchCharacter={() => {
+              setViewMode("dashboard");
+              setDashboardMode("character");
+            }}
+            onSwitchSettings={() => setViewMode("settings")}
+            onSwitchWorkshop={() => setViewMode("workshop")}
+          />
 
-          {viewMode === "dashboard" ? (
-            <header className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
-              <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-                <p className="tile-k">可远征角色</p>
-                <p className="tile-v">{readyCharacters}</p>
-            </article>
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <p className="tile-k">清空奥德预估</p>
-              <p className="tile-v">{toGoldText(weeklyGold)}</p>
-            </article>
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <p className="tile-k">每日使命未清</p>
-              <p className="tile-v">{pendingDaily} 角色</p>
-            </article>
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <p className="tile-k">每周指令未清</p>
-                <p className="tile-v">{pendingWeekly} 角色</p>
-              </article>
-            </header>
-          ) : null}
+          <DashboardOverviewSummaryCards
+            visible={viewMode === "dashboard"}
+            readyCharacters={readyCharacters}
+            weeklyGoldText={toGoldText(weeklyGold)}
+            pendingDaily={pendingDaily}
+            pendingWeekly={pendingWeekly}
+          />
 
           {viewMode === "dashboard" && dashboardMode === "overview" ? (
             <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
@@ -2423,61 +2387,23 @@ export function App(): JSX.Element {
             </article>
           ) : null}
 
-          {viewMode === "dashboard" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-            <h3 className="text-sm font-semibold tracking-wide">本周金币统计</h3>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm 2xl:grid-cols-4">
-              <div className="data-pill">全角色本周收益: {toGoldText(weeklyEarned)}</div>
-              <div className="data-pill">全角色远征次数: {weeklyExpeditionRuns} (阈值 {expeditionWarnThreshold})</div>
-              <div className="data-pill">全角色超越次数: {weeklyTransRuns} (阈值 {transcendenceWarnThreshold})</div>
-              <div className="data-pill">本轮统计起点: {new Date(selected.stats.cycleStartedAt).toLocaleString()}</div>
-            </div>
-            <p className="mt-2 text-xs text-slate-300">周收益统计会在每周三 05:00 自动重置，也可手动重置。</p>
-            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-              <p className="text-xs font-semibold tracking-wide text-slate-200">当前角色周次数校准（远征/超越）</p>
-              <p className="mt-1 text-xs text-slate-300">用于误清空后回填游戏内真实已完成次数。</p>
-              <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
-                <select
-                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={weeklyExpeditionCompletedInput}
-                  onChange={(event) => setWeeklyExpeditionCompletedInput(event.target.value)}
-                  disabled={busy}
-                >
-                  {buildCountOptions(0, COUNT_SELECT_MAX, weeklyExpeditionCompletedInput).map((value) => (
-                    <option key={`weekly-expedition-${value}`} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={weeklyTranscendenceCompletedInput}
-                  onChange={(event) => setWeeklyTranscendenceCompletedInput(event.target.value)}
-                  disabled={busy}
-                >
-                  {buildCountOptions(0, COUNT_SELECT_MAX, weeklyTranscendenceCompletedInput).map((value) => (
-                    <option key={`weekly-transcendence-${value}`} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-                <button className="task-btn px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
-                  保存校准
-                </button>
-              </div>
-            </div>
-            {expeditionOverRewardThreshold ? (
-              <p className="mt-3 text-xs text-amber-300">
-                警示: 远征已超过阈值 {expeditionWarnThreshold}，后续副本奖励将进入折扣区间（金币收益会下降）。
-              </p>
-            ) : null}
-            {transcendenceOverThreshold ? (
-              <p className="mt-2 text-xs text-amber-300">
-                提醒: 超越次数已超过阈值 {transcendenceWarnThreshold}，请按你的策略确认是否继续投入。
-              </p>
-            ) : null}
-            </article>
-          ) : null}
+          <WeeklyStatsPanel
+            visible={viewMode === "dashboard"}
+            busy={busy}
+            weeklyEarnedText={toGoldText(weeklyEarned)}
+            weeklyExpeditionRuns={weeklyExpeditionRuns}
+            expeditionWarnThreshold={expeditionWarnThreshold}
+            weeklyTransRuns={weeklyTransRuns}
+            transcendenceWarnThreshold={transcendenceWarnThreshold}
+            cycleStartedAt={selected.stats.cycleStartedAt}
+            weeklyExpeditionCompletedInput={weeklyExpeditionCompletedInput}
+            weeklyTranscendenceCompletedInput={weeklyTranscendenceCompletedInput}
+            onWeeklyExpeditionCompletedInputChange={setWeeklyExpeditionCompletedInput}
+            onWeeklyTranscendenceCompletedInputChange={setWeeklyTranscendenceCompletedInput}
+            onSaveWeeklyCompletions={onSaveWeeklyCompletions}
+            expeditionOverRewardThreshold={expeditionOverRewardThreshold}
+            transcendenceOverThreshold={transcendenceOverThreshold}
+          />
 
           {viewMode === "dashboard" && dashboardMode === "character"
             ? (Object.keys(groupedTasks) as TaskDefinition["category"][]).map((category) => (
@@ -2855,95 +2781,17 @@ export function App(): JSX.Element {
             />
           ) : null}
 
-          {viewMode === "dashboard" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                {countdownItems.map((item) => {
-                  const remain = item.target ? Math.max(0, item.target.getTime() - nowMs) : null;
-                  return (
-                    <div key={item.key} className="data-pill">
-                      <p className="text-xs text-slate-300">{item.title}</p>
-                      <p className="mt-1 text-sm font-semibold text-cyan-200">{remain === null ? "--:--:--" : formatDuration(remain)}</p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {item.target ? formatDateTime(item.target) : "未设置"}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </article>
-          ) : null}
+          <DashboardCountdownPanel visible={viewMode === "dashboard"} countdownItems={countdownItems} nowMs={nowMs} />
 
-          {viewMode === "dashboard" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <h3 className="text-sm font-semibold tracking-wide">优先级待办</h3>
-              <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新提醒综合排序（Top 8），可在设置页调整偏好权重。</p>
-              {priorityTodoItems.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-400">当前没有待处理高优先任务。</p>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {priorityTodoItems.map((item) => (
-                    <div key={item.id} className="data-pill">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold">{item.title}</p>
-                          <p className="mt-1 text-xs text-slate-300">{item.subtitle}</p>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${getPriorityToneClass(item.tone)}`}>
-                          {item.tone === "high" ? "高" : item.tone === "medium" ? "中" : "低"}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-slate-300">{item.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-          ) : null}
+          <DashboardPriorityTodoPanel visible={viewMode === "dashboard"} priorityTodoItems={priorityTodoItems} />
 
-          {viewMode === "dashboard" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <h3 className="text-sm font-semibold tracking-wide">操作历史日志</h3>
-              <p className="mt-2 text-xs text-slate-300">显示最近 20 条（最新在前）。</p>
-              {historyRows.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-400">暂无操作记录。</p>
-              ) : (
-                <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
-                  {historyRows.map((entry) => {
-                    const charName =
-                      entry.characterId === null
-                        ? "全局"
-                        : characterNameById.get(entry.characterId) ?? `角色(${entry.characterId.slice(0, 6)})`;
-                    return (
-                      <div key={entry.id} className="data-pill">
-                        <p className="text-xs text-slate-400">{new Date(entry.at).toLocaleString()}</p>
-                        <p className="mt-1 text-sm">
-                          [{charName}] {entry.action}
-                        </p>
-                        {entry.description ? <p className="mt-1 text-xs text-slate-300">{entry.description}</p> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </article>
-          ) : null}
+          <DashboardHistoryPanel visible={viewMode === "dashboard"} historyRows={historyRows} characterNameById={characterNameById} />
 
-          {viewMode === "dashboard" && dashboardMode === "character" ? (
-            <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-              <h3 className="text-sm font-semibold tracking-wide">待办提醒</h3>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {summary
-                  .find((item) => item.characterId === selected.id)
-                  ?.pendingLabels.map((label) => (
-                    <span key={label} className="rounded-full border border-orange-200/25 bg-orange-100/10 px-3 py-1 text-xs">
-                      {label}
-                    </span>
-                  ))}
-              </div>
-            </article>
-          ) : null}
+          <DashboardPendingPanel
+            viewMode={viewMode}
+            dashboardMode={dashboardMode}
+            pendingLabels={summary.find((item) => item.characterId === selected.id)?.pendingLabels ?? []}
+          />
         </aside>
       </div>
 
