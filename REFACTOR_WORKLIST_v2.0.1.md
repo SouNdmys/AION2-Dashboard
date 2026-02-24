@@ -86,6 +86,7 @@
 - `54c1684` `refactor(dashboard): extract dialog confirm dispatcher into action module` (1.1 第二阶段进展)
 - `684053f` `refactor(dashboard): extract dialog state builders into action helpers` (1.1 第二阶段进展)
 - `622d234` `refactor(dashboard): extract corridor and aode page actions into action module` (1.1 第二阶段进展)
+- `160149e` `refactor(dashboard): extract settings and import-export page actions` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
