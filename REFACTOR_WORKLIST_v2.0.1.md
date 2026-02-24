@@ -128,6 +128,7 @@
 - `62071a0` `refactor(workshop): centralize panel prop assembly for view composition` (1.2 视图层拆分收尾)
 - `9858b65` `refactor(workshop): extract view state declarations into dedicated hook` (1.2 视图层拆分收尾)
 - `dce133e` `refactor(workshop): aggregate wiring into useWorkshopViewModel` (1.2 视图层拆分收尾)
+- `9b5bd16` `refactor(workshop): move panel prop builder into hooks layer` (1.2 视图层拆分收尾)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
