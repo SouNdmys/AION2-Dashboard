@@ -28,6 +28,7 @@ import {
   importDashboardDataAction,
   saveDashboardSettingsAction,
 } from "./features/dashboard/actions/settingsDataActions";
+import { resetWeeklyStatsAction, saveWeeklyCompletionsAction } from "./features/dashboard/actions/weeklyStatsActions";
 import {
   buildCompleteDialog,
   buildCorridorCompleteDialog,
@@ -1139,26 +1140,22 @@ export function App(): JSX.Element {
   }
 
   function onResetWeeklyStats(): void {
-    const ok = window.confirm("确认重置本周收益统计？仅重置统计，不影响任务进度。");
-    if (!ok) return;
-    void sync(appActions.resetWeeklyStats());
+    void resetWeeklyStatsAction({
+      appActions,
+      sync,
+      confirm: window.confirm,
+    });
   }
 
   function onSaveWeeklyCompletions(): void {
-    if (!selected) return;
-    const expeditionCompleted = toInt(weeklyExpeditionCompletedInput);
-    const transcendenceCompleted = toInt(weeklyTranscendenceCompletedInput);
-    if (expeditionCompleted === null || transcendenceCompleted === null || expeditionCompleted < 0 || transcendenceCompleted < 0) {
-      setError("周统计次数必须是大于等于 0 的整数");
-      return;
-    }
-    void sync(
-      appActions.updateWeeklyCompletions(selected.id, {
-        expeditionCompleted,
-        transcendenceCompleted,
-      }),
-      "已校准当前角色周统计次数",
-    );
+    void saveWeeklyCompletionsAction({
+      selectedCharacterId: selected?.id ?? null,
+      weeklyExpeditionCompletedInput,
+      weeklyTranscendenceCompletedInput,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onSaveShopPlan(): void {
