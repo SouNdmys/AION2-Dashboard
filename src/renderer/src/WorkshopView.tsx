@@ -11,6 +11,7 @@ import { useWorkshopViewSyncEffects } from "./features/workshop/hooks/useWorksho
 import { useWorkshopSimulationModels } from "./features/workshop/hooks/useWorkshopSimulationModels";
 import { useWorkshopEconomyModels } from "./features/workshop/hooks/useWorkshopEconomyModels";
 import { useWorkshopInsightModels } from "./features/workshop/hooks/useWorkshopInsightModels";
+import { useWorkshopOcrDisplayModels } from "./features/workshop/hooks/useWorkshopOcrDisplayModels";
 import {
   type ClassifiedItemOption,
   type ReverseScoreMode,
@@ -349,29 +350,11 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     focusStarOnly,
     starItemIdSet,
   });
-
-  const recentOcrImportedEntries = useMemo(() => {
-    return (ocrHotkeyLastResult?.importedEntries ?? [])
-      .sort((left, right) => {
-        const tsDiff = new Date(right.capturedAt).getTime() - new Date(left.capturedAt).getTime();
-        if (tsDiff !== 0) {
-          return tsDiff;
-        }
-        return left.lineNumber - right.lineNumber;
-      })
-      .slice(0, 20);
-  }, [ocrHotkeyLastResult]);
-
-  const ocrAutoRunCountdownSeconds = useMemo(() => {
-    if (!ocrAutoRunState?.enabled || !ocrAutoRunState.nextRunAt) {
-      return null;
-    }
-    const diff = new Date(ocrAutoRunState.nextRunAt).getTime() - ocrAutoRunNowMs;
-    if (!Number.isFinite(diff)) {
-      return null;
-    }
-    return Math.max(0, Math.ceil(diff / 1000));
-  }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt, ocrAutoRunNowMs]);
+  const { recentOcrImportedEntries, ocrAutoRunCountdownSeconds } = useWorkshopOcrDisplayModels({
+    ocrHotkeyLastResult,
+    ocrAutoRunState,
+    ocrAutoRunNowMs,
+  });
 
   const ocrTradeNamesRect = useMemo(() => {
     const x = toInt(ocrTradeNamesX);
