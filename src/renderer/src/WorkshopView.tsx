@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { usePersistedState } from "./hooks/usePersistedState";
 import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationResult,
@@ -323,6 +324,9 @@ const OCR_AUTO_INTERVAL_STORAGE_KEY = "workshop.ocr.autoRunIntervalSeconds";
 const OCR_AUTO_OVERLAY_STORAGE_KEY = "workshop.ocr.autoRunOverlay";
 const OCR_AUTO_FAIL_LIMIT_STORAGE_KEY = "workshop.ocr.autoRunFailLimit";
 const WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY = "workshop.starItemIds";
+const serializeRawString = (value: string): string => value;
+const serializeBooleanFlag = (value: boolean): string => (value ? "1" : "0");
+const serializeStringArray = (value: string[]): string => JSON.stringify(value);
 
 const DEFAULT_TRADE_BOARD_PRESET = {
   rowCount: "0",
@@ -683,7 +687,11 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   const [historyWorldResult, setHistoryWorldResult] = useState<WorkshopPriceHistoryResult | null>(null);
   const [historyHasLoaded, setHistoryHasLoaded] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [starItemIds, setStarItemIds] = useState<string[]>(() => readStoredWorkshopStarItemIds());
+  const [starItemIds, setStarItemIds] = usePersistedState<string[]>(
+    WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY,
+    () => readStoredWorkshopStarItemIds(),
+    serializeStringArray,
+  );
   const [focusStarOnly, setFocusStarOnly] = useState(false);
   const [signalRuleEnabled, setSignalRuleEnabled] = useState(true);
   const [signalLookbackDaysInput, setSignalLookbackDaysInput] = useState("30");
@@ -695,15 +703,43 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   const [ocrHotkeyState, setOcrHotkeyState] = useState<WorkshopOcrHotkeyState | null>(null);
   const [ocrHotkeyLastResult, setOcrHotkeyLastResult] = useState<WorkshopOcrHotkeyRunResult | null>(null);
   const [ocrAutoRunState, setOcrAutoRunState] = useState<WorkshopOcrAutoRunState | null>(null);
-  const [ocrAutoRunIntervalSeconds, setOcrAutoRunIntervalSeconds] = useState(() => readStoredAutoRunIntervalSeconds());
-  const [ocrAutoRunOverlayEnabled, setOcrAutoRunOverlayEnabled] = useState(() => readStoredAutoRunOverlayEnabled());
-  const [ocrAutoRunFailLimit, setOcrAutoRunFailLimit] = useState(() => readStoredAutoRunFailLimit());
+  const [ocrAutoRunIntervalSeconds, setOcrAutoRunIntervalSeconds] = usePersistedState(
+    OCR_AUTO_INTERVAL_STORAGE_KEY,
+    () => readStoredAutoRunIntervalSeconds(),
+    serializeRawString,
+  );
+  const [ocrAutoRunOverlayEnabled, setOcrAutoRunOverlayEnabled] = usePersistedState(
+    OCR_AUTO_OVERLAY_STORAGE_KEY,
+    () => readStoredAutoRunOverlayEnabled(),
+    serializeBooleanFlag,
+  );
+  const [ocrAutoRunFailLimit, setOcrAutoRunFailLimit] = usePersistedState(
+    OCR_AUTO_FAIL_LIMIT_STORAGE_KEY,
+    () => readStoredAutoRunFailLimit(),
+    serializeRawString,
+  );
   const [ocrAutoRunNowMs, setOcrAutoRunNowMs] = useState(Date.now());
   const [ocrScreenPreview, setOcrScreenPreview] = useState<WorkshopScreenPreviewResult | null>(null);
-  const [ocrCaptureDelayMs, setOcrCaptureDelayMs] = useState(() => readStoredCaptureDelayMs());
-  const [ocrHideAppBeforeCapture, setOcrHideAppBeforeCapture] = useState(() => readStoredHideAppBeforeCapture());
-  const [ocrSafeMode, setOcrSafeMode] = useState(() => readStoredOcrSafeMode());
-  const [ocrTradePresetKey, setOcrTradePresetKey] = useState<OcrTradePresetKey>(() => readStoredTradePreset());
+  const [ocrCaptureDelayMs, setOcrCaptureDelayMs] = usePersistedState(
+    OCR_CAPTURE_DELAY_STORAGE_KEY,
+    () => readStoredCaptureDelayMs(),
+    serializeRawString,
+  );
+  const [ocrHideAppBeforeCapture, setOcrHideAppBeforeCapture] = usePersistedState(
+    OCR_HIDE_APP_STORAGE_KEY,
+    () => readStoredHideAppBeforeCapture(),
+    serializeBooleanFlag,
+  );
+  const [ocrSafeMode, setOcrSafeMode] = usePersistedState(
+    OCR_SAFE_MODE_STORAGE_KEY,
+    () => readStoredOcrSafeMode(),
+    serializeBooleanFlag,
+  );
+  const [ocrTradePresetKey, setOcrTradePresetKey] = usePersistedState<OcrTradePresetKey>(
+    OCR_TRADE_PRESET_STORAGE_KEY,
+    () => readStoredTradePreset(),
+    serializeRawString,
+  );
   const [ocrTradeRowCount, setOcrTradeRowCount] = useState(DEFAULT_TRADE_BOARD_PRESET.rowCount);
   const [ocrTradeNamesX, setOcrTradeNamesX] = useState(DEFAULT_TRADE_BOARD_PRESET.namesX);
   const [ocrTradeNamesY, setOcrTradeNamesY] = useState(DEFAULT_TRADE_BOARD_PRESET.namesY);
@@ -1759,70 +1795,6 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setOcrTradeLeftPriceRole(tradePreset.leftPriceRole);
     setOcrTradeRightPriceRole(tradePreset.rightPriceRole);
   }, [ocrTradePresetKey]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_TRADE_PRESET_STORAGE_KEY, ocrTradePresetKey);
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrTradePresetKey]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_CAPTURE_DELAY_STORAGE_KEY, ocrCaptureDelayMs);
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrCaptureDelayMs]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_HIDE_APP_STORAGE_KEY, ocrHideAppBeforeCapture ? "1" : "0");
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrHideAppBeforeCapture]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_SAFE_MODE_STORAGE_KEY, ocrSafeMode ? "1" : "0");
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrSafeMode]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_AUTO_INTERVAL_STORAGE_KEY, ocrAutoRunIntervalSeconds);
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrAutoRunIntervalSeconds]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_AUTO_OVERLAY_STORAGE_KEY, ocrAutoRunOverlayEnabled ? "1" : "0");
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrAutoRunOverlayEnabled]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_AUTO_FAIL_LIMIT_STORAGE_KEY, ocrAutoRunFailLimit);
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [ocrAutoRunFailLimit]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY, JSON.stringify(starItemIds));
-    } catch {
-      // ignore local storage write failures
-    }
-  }, [starItemIds]);
 
   useEffect(() => {
     if (!state) {
