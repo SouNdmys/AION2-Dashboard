@@ -75,6 +75,7 @@
 - `7b26ae4` `docs(refactor): log phase-2 dashboard/workshop view split commits`
 - `648ef56` `refactor(dashboard): extract character task board into dedicated view component` (1.1 第二阶段进展)
 - `95db1ec` `refactor(dashboard): extract overview board into dedicated view component` (1.1 第二阶段进展)
+- `351791a` `refactor(dashboard): extract character header controls into dedicated view component` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
