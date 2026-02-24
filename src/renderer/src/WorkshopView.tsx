@@ -14,6 +14,7 @@ import { useWorkshopInsightModels } from "./features/workshop/hooks/useWorkshopI
 import { useWorkshopOcrDisplayModels } from "./features/workshop/hooks/useWorkshopOcrDisplayModels";
 import { useWorkshopOcrPreviewModels } from "./features/workshop/hooks/useWorkshopOcrPreviewModels";
 import { useWorkshopCatalogModels } from "./features/workshop/hooks/useWorkshopCatalogModels";
+import { useWorkshopCommitRunner } from "./features/workshop/hooks/useWorkshopCommitRunner";
 import {
   type ReverseScoreMode,
   HISTORY_QUICK_DAY_OPTIONS,
@@ -299,22 +300,14 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setOcrAutoRunOverlayEnabled,
     setOcrAutoRunFailLimit,
   });
-
-  async function commit(action: () => Promise<WorkshopState>, successText: string): Promise<void> {
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await action();
-      setState(next);
-      setMessage(successText);
-      await Promise.all([loadCraftOptions(), loadSignals()]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "工坊操作失败");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { commit } = useWorkshopCommitRunner({
+    setBusy,
+    setError,
+    setMessage,
+    setState,
+    loadCraftOptions,
+    loadSignals,
+  });
 
   useWorkshopViewSyncEffects({
     itemMainCategory,
