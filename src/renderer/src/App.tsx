@@ -52,11 +52,10 @@ import { DashboardOverviewSummaryCards } from "./features/dashboard/views/Dashbo
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
 import { DashboardCharacterModePanels } from "./features/dashboard/views/DashboardCharacterModePanels";
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
+import { DashboardRightSidebar } from "./features/dashboard/views/DashboardRightSidebar";
 import { DashboardSettingsPanel } from "./features/dashboard/views/DashboardSettingsPanel";
-import { DashboardHistoryPanel, DashboardCountdownPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./features/dashboard/views/DashboardSidebarPanels";
 import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
 import { WorkshopView } from "./WorkshopView";
-import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
 export function App(): JSX.Element {
   const appActions = useAppActions();
@@ -803,6 +802,7 @@ export function App(): JSX.Element {
 
   const selectedEstimatedGold =
     (selected ? summary.find((item) => item.characterId === selected.id)?.estimatedGoldIfClearEnergy : undefined) ?? 0;
+  const selectedPendingLabels = selected ? (summary.find((item) => item.characterId === selected.id)?.pendingLabels ?? []) : [];
   const readyCharacters = summary.filter((item) => item.canRunExpedition).length;
   const weeklyGold = summary.reduce((acc, item) => acc + item.estimatedGoldIfClearEnergy, 0);
   const pendingDaily = summary.filter((item) => item.hasDailyMissionLeft).length;
@@ -2039,50 +2039,27 @@ export function App(): JSX.Element {
 
         </section>
 
-        <aside className="space-y-5 xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-auto xl:pr-1">
-          <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-            <h3 className="text-sm font-semibold tracking-wide">操作中心</h3>
-            <p className="mt-2 text-xs text-slate-300">历史记录 {state.history.length} 条，支持撤销一步/多步。</p>
-            <div className="mt-3 flex items-center gap-2">
-              <button className="pill-btn" onClick={onUndoSingleStep} disabled={busy || state.history.length === 0}>
-                撤销一步
-              </button>
-              <input
-                className="w-16 rounded-xl border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
-                value={undoSteps}
-                onChange={(event) => setUndoSteps(event.target.value)}
-                disabled={busy || state.history.length === 0}
-              />
-              <button className="pill-btn" onClick={onUndoMultiStep} disabled={busy || state.history.length === 0}>
-                撤销多步
-              </button>
-              <button className="pill-btn" onClick={onClearHistory} disabled={busy || state.history.length === 0}>
-                清空历史
-              </button>
-            </div>
-          </article>
-
-          {viewMode === "workshop" ? (
-            <WorkshopSidebarHistoryCard
-              focusItemId={workshopHistoryJumpItemId}
-              focusSnapshotId={workshopHistoryJumpSnapshotId}
-              focusNonce={workshopHistoryJumpNonce}
-              onPriceDataChanged={() => setWorkshopPriceChangeNonce((prev) => prev + 1)}
-            />
-          ) : null}
-
-          <DashboardCountdownPanel visible={viewMode === "dashboard"} countdownItems={countdownItems} nowMs={nowMs} />
-
-          <DashboardPriorityTodoPanel visible={viewMode === "dashboard"} priorityTodoItems={priorityTodoItems} />
-
-          <DashboardHistoryPanel visible={viewMode === "dashboard"} historyRows={historyRows} characterNameById={characterNameById} />
-
-          <DashboardPendingPanel
-            viewMode={viewMode}
-            dashboardMode={dashboardMode}
-            pendingLabels={summary.find((item) => item.characterId === selected.id)?.pendingLabels ?? []}
-          />
-        </aside>
+        <DashboardRightSidebar
+          busy={busy}
+          historyCount={state.history.length}
+          undoSteps={undoSteps}
+          onUndoStepsChange={setUndoSteps}
+          onUndoSingleStep={onUndoSingleStep}
+          onUndoMultiStep={onUndoMultiStep}
+          onClearHistory={onClearHistory}
+          viewMode={viewMode}
+          dashboardMode={dashboardMode}
+          workshopHistoryJumpItemId={workshopHistoryJumpItemId}
+          workshopHistoryJumpSnapshotId={workshopHistoryJumpSnapshotId}
+          workshopHistoryJumpNonce={workshopHistoryJumpNonce}
+          onWorkshopPriceDataChanged={() => setWorkshopPriceChangeNonce((prev) => prev + 1)}
+          countdownItems={countdownItems}
+          nowMs={nowMs}
+          priorityTodoItems={priorityTodoItems}
+          historyRows={historyRows}
+          characterNameById={characterNameById}
+          pendingLabels={selectedPendingLabels}
+        />
       </div>
 
       {dialog ? (
