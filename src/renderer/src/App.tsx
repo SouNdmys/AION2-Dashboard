@@ -13,7 +13,6 @@ import {
 } from "../../shared/constants";
 import {
   buildCharacterSummary,
-  estimateCharacterGold,
   getTaskRemaining,
   getTotalEnergy,
 } from "../../shared/engine";
@@ -56,6 +55,7 @@ import {
 } from "./features/dashboard/dashboard-utils";
 import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
 import { DashboardCharacterTasksPanel } from "./features/dashboard/views/DashboardCharacterTasksPanel";
+import { DashboardCharacterHeaderPanel } from "./features/dashboard/views/DashboardCharacterHeaderPanel";
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
 import { DashboardHistoryPanel, DashboardCountdownPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./features/dashboard/views/DashboardSidebarPanels";
 import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
@@ -63,7 +63,6 @@ import { WeeklyStatsPanel } from "./features/dashboard/views/WeeklyStatsPanel";
 import { WorkshopView } from "./WorkshopView";
 import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 
-const numberFormatter = new Intl.NumberFormat("zh-CN");
 export function App(): JSX.Element {
   const appActions = useAppActions();
   const [state, setState] = useState<AppState | null>(null);
@@ -807,6 +806,8 @@ export function App(): JSX.Element {
     return weeklyRemainMs <= 48 * 60 * 60 * 1000;
   }, [nowMs]);
 
+  const selectedEstimatedGold =
+    (selected ? summary.find((item) => item.characterId === selected.id)?.estimatedGoldIfClearEnergy : undefined) ?? 0;
   const readyCharacters = summary.filter((item) => item.canRunExpedition).length;
   const weeklyGold = summary.reduce((acc, item) => acc + item.estimatedGoldIfClearEnergy, 0);
   const pendingDaily = summary.filter((item) => item.hasDailyMissionLeft).length;
@@ -1943,77 +1944,34 @@ export function App(): JSX.Element {
 
           {viewMode === "dashboard" && dashboardMode === "character" ? (
             <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
-            <div className="flex items-start justify-between gap-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Current Character</p>
-                <h2 className="mt-1 text-2xl font-semibold">{selected.name}</h2>
-                <p className="mt-1 text-xs text-slate-300">
-                  所属账号: {selectedAccount?.name ?? "--"}
-                  {selectedAccount?.regionTag ? ` (${selectedAccount.regionTag})` : ""}
-                </p>
-                <p className="mt-2 text-sm text-slate-300">
-                  当前清空奥德预估: {toGoldText(estimateCharacterGold(selected, state.settings))}
-                </p>
-                <p className="mt-1 text-sm text-slate-300">
-                  职业: {selected.classTag?.trim() || "未填写"} | 装分:{" "}
-                  {selected.gearScore === undefined ? "未填写" : numberFormatter.format(selected.gearScore)}
-                </p>
-                <p className="mt-1 text-sm text-slate-300">本周已记录收益: {toGoldText(selected.stats.goldEarned)}</p>
-                <p className="mt-1 text-sm text-slate-300">
-                  下层回廊剩余: {selected.activities.corridorLowerAvailable} 次 | 中层回廊剩余: {selected.activities.corridorMiddleAvailable} 次
-                </p>
-              </div>
-              <div className="w-56 space-y-2">
-                <button className="pill-btn w-full" onClick={onSwitchToOverview} disabled={busy}>
-                  返回角色总览
-                </button>
-                <input
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={renameName}
-                  onChange={(event) => setRenameName(event.target.value)}
-                  disabled={busy}
-                />
-                <input
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={profileClassTagInput}
-                  onChange={(event) => setProfileClassTagInput(event.target.value)}
-                  disabled={busy}
-                  placeholder="职业(示例: 剑星)"
-                />
-                <input
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                  value={profileGearScoreInput}
-                  onChange={(event) => setProfileGearScoreInput(event.target.value)}
-                  disabled={busy}
-                  placeholder="装分(整数)"
-                />
-                <button className="pill-btn w-full" onClick={onSaveCharacterProfile} disabled={busy}>
-                  保存职业/装分
-                </button>
-                <button className="pill-btn w-full" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
-                  重命名当前角色
-                </button>
-                <button
-                  className="pill-btn w-full"
-                  onClick={onDeleteCharacter}
-                  disabled={busy || selectedAccountCharacterCount <= 1}
-                >
-                  删除当前角色
-                </button>
-                <button className="pill-btn w-full" onClick={openEnergyDialog} disabled={busy}>
-                  手动改能量
-                </button>
-                <button className="pill-btn w-full" onClick={onSyncCorridorStatus} disabled={busy}>
-                  同步回廊(当前账号)
-                </button>
-                <button className="pill-btn w-full" onClick={onApplyCorridorCompletion} disabled={busy}>
-                  回廊录入完成
-                </button>
-                <button className="pill-btn w-full" onClick={onResetWeeklyStats} disabled={busy}>
-                  重置周收益
-                </button>
-              </div>
-            </div>
+              <DashboardCharacterHeaderPanel
+                visible={viewMode === "dashboard" && dashboardMode === "character"}
+                busy={busy}
+                characterName={selected.name}
+                accountName={selectedAccount?.name ?? "--"}
+                accountRegionTag={selectedAccount?.regionTag ?? null}
+                estimatedGoldText={toGoldText(selectedEstimatedGold)}
+                classTag={selected.classTag?.trim() || "未填写"}
+                gearScore={selected.gearScore}
+                weeklyGoldEarnedText={toGoldText(selected.stats.goldEarned)}
+                corridorLowerAvailable={selected.activities.corridorLowerAvailable}
+                corridorMiddleAvailable={selected.activities.corridorMiddleAvailable}
+                renameName={renameName}
+                profileClassTagInput={profileClassTagInput}
+                profileGearScoreInput={profileGearScoreInput}
+                canDeleteCharacter={selectedAccountCharacterCount > 1}
+                onSwitchToOverview={onSwitchToOverview}
+                onRenameNameChange={setRenameName}
+                onProfileClassTagInputChange={setProfileClassTagInput}
+                onProfileGearScoreInputChange={setProfileGearScoreInput}
+                onSaveCharacterProfile={onSaveCharacterProfile}
+                onRenameCharacter={onRenameCharacter}
+                onDeleteCharacter={onDeleteCharacter}
+                onOpenEnergyDialog={openEnergyDialog}
+                onSyncCorridorStatus={onSyncCorridorStatus}
+                onApplyCorridorCompletion={onApplyCorridorCompletion}
+                onResetWeeklyStats={onResetWeeklyStats}
+              />
 
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
