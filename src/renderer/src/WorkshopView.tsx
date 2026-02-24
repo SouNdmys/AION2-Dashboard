@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useWorkshopActions } from "./features/workshop/actions/useWorkshopActions";
 import { createWorkshopHistoryHandlers } from "./features/workshop/actions/createWorkshopHistoryHandlers";
 import { createWorkshopSimulationHandlers } from "./features/workshop/actions/createWorkshopSimulationHandlers";
@@ -7,6 +7,7 @@ import { createWorkshopOcrConfigHandlers } from "./features/workshop/actions/cre
 import { createWorkshopSignalHandlers } from "./features/workshop/actions/createWorkshopSignalHandlers";
 import { useWorkshopLifecycle } from "./features/workshop/hooks/useWorkshopLifecycle";
 import { useWorkshopHistoryLoader } from "./features/workshop/hooks/useWorkshopHistoryLoader";
+import { useWorkshopViewSyncEffects } from "./features/workshop/hooks/useWorkshopViewSyncEffects";
 import {
   type ClassifiedItemOption,
   type LatestPriceMetaByMarket,
@@ -41,7 +42,6 @@ import {
   OCR_CAPTURE_DELAY_STORAGE_KEY,
   OCR_HIDE_APP_STORAGE_KEY,
   OCR_SAFE_MODE_STORAGE_KEY,
-  OCR_TRADE_BOARD_PRESETS,
   OCR_TRADE_PRESET_STORAGE_KEY,
   WORKSHOP_STAR_ITEM_IDS_STORAGE_KEY,
   type OcrTradePresetKey,
@@ -722,150 +722,72 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     setOcrDragStart,
     setOcrDragRect,
   });
-
-  useEffect(() => {
-    if (!itemMainCategoryOptions.includes(itemMainCategory)) {
-      setItemMainCategory(itemMainCategoryOptions[0] ?? "鐵匠");
-      return;
-    }
-    if (itemSubCategory !== "all" && !itemSubCategoryOptions.includes(itemSubCategory)) {
-      setItemSubCategory("all");
-      return;
-    }
-    const exists = selectedItemId && filteredItems.some((item) => item.id === selectedItemId);
-    if (!exists) {
-      const fallback = filteredItems[0]?.id ?? "";
-      setSelectedItemId(fallback);
-    }
-  }, [itemMainCategory, itemMainCategoryOptions, itemSubCategory, itemSubCategoryOptions, selectedItemId, filteredItems]);
-
-  useEffect(() => {
-    if (!historyMainCategoryOptions.includes(historyMainCategory)) {
-      setHistoryMainCategory(historyMainCategoryOptions[0] ?? "鐵匠");
-      return;
-    }
-    if (historySubCategory !== "all" && !historySubCategoryOptions.includes(historySubCategory)) {
-      setHistorySubCategory("all");
-      return;
-    }
-    const exists = historyItemId && filteredHistoryItems.some((item) => item.id === historyItemId);
-    if (!exists) {
-      const fallback = filteredHistoryItems[0]?.id ?? "";
-      setHistoryItemId(fallback);
-      setHistoryServerResult(null);
-      setHistoryWorldResult(null);
-      setHistoryHasLoaded(false);
-    }
-  }, [
+  useWorkshopViewSyncEffects({
+    itemMainCategory,
+    itemMainCategoryOptions,
+    itemSubCategory,
+    itemSubCategoryOptions,
+    selectedItemId,
+    filteredItems,
+    setItemMainCategory,
+    setItemSubCategory,
+    setSelectedItemId,
     historyMainCategory,
     historyMainCategoryOptions,
     historySubCategory,
     historySubCategoryOptions,
     historyItemId,
     filteredHistoryItems,
-  ]);
-
-  useEffect(() => {
-    if (!simulationMainCategoryOptions.includes(simulateMainCategory)) {
-      setSimulateMainCategory(simulationMainCategoryOptions[0] ?? "鐵匠");
-      return;
-    }
-    if (simulateSubCategory !== "all" && !simulationSubCategoryOptions.includes(simulateSubCategory)) {
-      setSimulateSubCategory("all");
-      return;
-    }
-    const exists = simulateRecipeId && filteredSimulationRecipes.some((recipe) => recipe.id === simulateRecipeId);
-    if (!exists) {
-      const fallback = filteredSimulationRecipes[0]?.id ?? "";
-      setSimulateRecipeId(fallback);
-      setSimulation(null);
-      setSimulationOutputPriceDraft("");
-    }
-  }, [
+    setHistoryMainCategory,
+    setHistorySubCategory,
+    setHistoryItemId,
+    setHistoryServerResult,
+    setHistoryWorldResult,
+    setHistoryHasLoaded,
     simulateMainCategory,
     simulationMainCategoryOptions,
     simulateSubCategory,
     simulationSubCategoryOptions,
     simulateRecipeId,
     filteredSimulationRecipes,
-  ]);
-
-  useEffect(() => {
-    if (!reverseFocusMaterialId) {
-      return;
-    }
-    const exists = classifiedItemOptions.some((item) => item.id === reverseFocusMaterialId);
-    if (!exists) {
-      setReverseFocusMaterialId("");
-    }
-  }, [reverseFocusMaterialId, classifiedItemOptions]);
-
-  useEffect(() => {
-    if (!state) {
-      return;
-    }
-    setSignalRuleEnabled(state.signalRule.enabled);
-    setSignalLookbackDaysInput(String(state.signalRule.lookbackDays));
-    setSignalThresholdPercentInput(String(Math.round(state.signalRule.dropBelowWeekdayAverageRatio * 10000) / 100));
-  }, [state?.signalRule.enabled, state?.signalRule.lookbackDays, state?.signalRule.dropBelowWeekdayAverageRatio]);
-
-  useEffect(() => {
-    if (!selectedItemId) return;
-    const latestMeta = latestPriceMetaByItemId.get(selectedItemId);
-    const priceByMarket = selectedItemPriceMarket === "server" ? latestMeta?.server : latestMeta?.world;
-    const price = priceByMarket?.price ?? latestMeta?.single?.price ?? 0;
-    const inventory = inventoryByItemId.get(selectedItemId) ?? 0;
-    setSelectedItemPrice(String(price));
-    setSelectedItemInventory(String(inventory));
-  }, [selectedItemId, selectedItemPriceMarket, latestPriceMetaByItemId, inventoryByItemId]);
-
-  useEffect(() => {
-    if (!state) return;
-    void loadCraftOptions();
-  }, [taxMode]);
-
-  useEffect(() => {
-    const tradePreset = OCR_TRADE_BOARD_PRESETS[ocrTradePresetKey];
-    if (!tradePreset) {
-      return;
-    }
-    setOcrTradeRowCount(tradePreset.rowCount);
-    setOcrTradeNamesX(tradePreset.namesX);
-    setOcrTradeNamesY(tradePreset.namesY);
-    setOcrTradeNamesWidth(tradePreset.namesWidth);
-    setOcrTradeNamesHeight(tradePreset.namesHeight);
-    setOcrTradePricesX(tradePreset.pricesX);
-    setOcrTradePricesY(tradePreset.pricesY);
-    setOcrTradePricesWidth(tradePreset.pricesWidth);
-    setOcrTradePricesHeight(tradePreset.pricesHeight);
-    setOcrTradePriceMode(tradePreset.priceMode);
-    setOcrTradePriceColumn(tradePreset.priceColumn);
-    setOcrTradeLeftPriceRole(tradePreset.leftPriceRole);
-    setOcrTradeRightPriceRole(tradePreset.rightPriceRole);
-  }, [ocrTradePresetKey]);
-
-  useEffect(() => {
-    if (!state) {
-      return;
-    }
-    const validItemIdSet = new Set(classifiedItemOptions.map((entry) => entry.id));
-    const sanitized = starItemIds.filter((itemId) => validItemIdSet.has(itemId));
-    if (sanitized.length !== starItemIds.length) {
-      setStarItemIds(sanitized);
-    }
-  }, [state, classifiedItemOptions, starItemIds]);
-
-  useEffect(() => {
-    if (!ocrAutoRunState?.enabled || !ocrAutoRunState.nextRunAt) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setOcrAutoRunNowMs(Date.now());
-    }, 300);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [ocrAutoRunState?.enabled, ocrAutoRunState?.nextRunAt]);
+    setSimulateMainCategory,
+    setSimulateSubCategory,
+    setSimulateRecipeId,
+    setSimulation,
+    setSimulationOutputPriceDraft,
+    reverseFocusMaterialId,
+    classifiedItemOptions,
+    setReverseFocusMaterialId,
+    state,
+    setSignalRuleEnabled,
+    setSignalLookbackDaysInput,
+    setSignalThresholdPercentInput,
+    selectedItemPriceMarket,
+    latestPriceMetaByItemId,
+    inventoryByItemId,
+    setSelectedItemPrice,
+    setSelectedItemInventory,
+    taxMode,
+    loadCraftOptions,
+    ocrTradePresetKey,
+    setOcrTradeRowCount,
+    setOcrTradeNamesX,
+    setOcrTradeNamesY,
+    setOcrTradeNamesWidth,
+    setOcrTradeNamesHeight,
+    setOcrTradePricesX,
+    setOcrTradePricesY,
+    setOcrTradePricesWidth,
+    setOcrTradePricesHeight,
+    setOcrTradePriceMode,
+    setOcrTradePriceColumn,
+    setOcrTradeLeftPriceRole,
+    setOcrTradeRightPriceRole,
+    starItemIds,
+    setStarItemIds,
+    ocrAutoRunState,
+    setOcrAutoRunNowMs,
+  });
 
   const { onLoadPriceHistory } = useWorkshopHistoryLoader({
     workshopActions,
