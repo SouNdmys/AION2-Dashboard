@@ -97,6 +97,7 @@
 - `6a00772` `refactor(dashboard): extract dialog open handlers into action module` (1.1 第二阶段进展)
 - `6e513ca` `refactor(dashboard): consolidate over-split action modules by domain` (1.1 第二阶段进展, 回顾整合)
 - `1036442` `refactor(dashboard): extract app sync runner into reusable hook` (1.1 第二阶段进展)
+- `65de77d` `refactor(dashboard): extract dialog confirm entry handler from App` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
