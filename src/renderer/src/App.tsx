@@ -16,6 +16,13 @@ import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } f
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
 import {
+  applyCorridorCompletionFromSettingsAction,
+  applyCorridorSettingsAction,
+  assignExtraAodeCharacterAction,
+  saveShopPlanAction,
+  saveTransformPlanAction,
+} from "./features/dashboard/actions/resourceAndCorridorActions";
+import {
   buildCompleteDialog,
   buildCorridorCompleteDialog,
   buildCorridorSyncDialog,
@@ -1108,31 +1115,23 @@ export function App(): JSX.Element {
   }
 
   function onApplyCorridorSettings(): void {
-    if (!selectedAccount) return;
-    const lowerCount = toInt(corridorDraft.lowerAvailable);
-    const middleCount = toInt(corridorDraft.middleAvailable);
-    if (lowerCount === null || lowerCount < 0 || lowerCount > 3 || middleCount === null || middleCount < 0 || middleCount > 3) {
-      setError("回廊数量必须是 0-3");
-      return;
-    }
-    const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
-    void sync(
-      appActions.updateArtifactStatus(selectedAccount.id, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
-      "已同步深渊回廊到当前账号角色",
-    );
+    void applyCorridorSettingsAction({
+      selectedAccountId: selectedAccount?.id ?? null,
+      corridorDraft,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onApplyCorridorCompletionFromSettings(): void {
-    if (!selected) return;
-    const completed = toInt(corridorDraft.completeAmount);
-    if (completed === null || completed <= 0) {
-      setError("完成次数必须大于 0");
-      return;
-    }
-    void sync(
-      appActions.applyCorridorCompletion(selected.id, corridorDraft.completeLane, completed),
-      "已录入深渊回廊完成次数",
-    );
+    void applyCorridorCompletionFromSettingsAction({
+      selectedCharacterId: selected?.id ?? null,
+      corridorDraft,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onResetWeeklyStats(): void {
@@ -1159,61 +1158,35 @@ export function App(): JSX.Element {
   }
 
   function onSaveShopPlan(): void {
-    if (!selected || !state) return;
-    const shopAodePurchaseUsed = toInt(shopAodePurchaseUsedInput);
-    const shopDailyDungeonTicketPurchaseUsed = toInt(shopDailyDungeonTicketPurchaseUsedInput);
-    if (
-      shopAodePurchaseUsed === null ||
-      shopDailyDungeonTicketPurchaseUsed === null ||
-      shopAodePurchaseUsed < 0 ||
-      shopDailyDungeonTicketPurchaseUsed < 0
-    ) {
-      setError("微风商店次数必须是大于等于 0 的整数");
-      return;
-    }
-    if (
-      shopAodePurchaseUsed > selectedAodeLimits.purchaseLimit ||
-      shopDailyDungeonTicketPurchaseUsed > selectedAodeLimits.purchaseLimit
-    ) {
-      setError(`超出本角色上限：微风商店每项最多 ${selectedAodeLimits.purchaseLimit}`);
-      return;
-    }
-    void sync(
-      appActions.updateAodePlan(selected.id, {
-        shopAodePurchaseUsed,
-        shopDailyDungeonTicketPurchaseUsed,
-      }),
-      "已保存微风商店记录",
-    );
+    void saveShopPlanAction({
+      selectedCharacterId: selected?.id ?? null,
+      shopAodePurchaseUsedInput,
+      shopDailyDungeonTicketPurchaseUsedInput,
+      purchaseLimit: selectedAodeLimits.purchaseLimit,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onSaveTransformPlan(): void {
-    if (!selected || !state) return;
-    const transformAodeUsed = toInt(transformAodeUsedInput);
-    if (transformAodeUsed === null || transformAodeUsed < 0) {
-      setError("变换次数必须是大于等于 0 的整数");
-      return;
-    }
-    if (transformAodeUsed > selectedAodeLimits.convertLimit) {
-      setError(`超出本角色上限：变换最多 ${selectedAodeLimits.convertLimit}`);
-      return;
-    }
-    void sync(
-      appActions.updateAodePlan(selected.id, {
-        transformAodeUsed,
-      }),
-      "已保存变换记录",
-    );
+    void saveTransformPlanAction({
+      selectedCharacterId: selected?.id ?? null,
+      transformAodeUsedInput,
+      convertLimit: selectedAodeLimits.convertLimit,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onAssignExtraAodeCharacter(assignExtra: boolean): void {
-    if (!selected) return;
-    void sync(
-      appActions.updateAodePlan(selected.id, {
-        assignExtra,
-      }),
-      assignExtra ? "已设为本账号微风商店额外角色" : "已取消本角色额外资格",
-    );
+    void assignExtraAodeCharacterAction({
+      selectedCharacterId: selected?.id ?? null,
+      assignExtra,
+      appActions,
+      sync,
+    });
   }
 
   function onUndoSingleStep(): void {
