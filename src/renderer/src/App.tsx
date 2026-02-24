@@ -33,6 +33,7 @@ import {
   overviewCardDropAction,
   startOverviewCardDragAction,
 } from "./features/dashboard/actions/overviewCardActions";
+import { applyQuickEntryAction } from "./features/dashboard/actions/quickEntryActions";
 import {
   applyCorridorCompletionFromSettingsAction,
   applyCorridorSettingsAction,
@@ -84,7 +85,6 @@ import {
   getPriorityWeightLevel,
   getQuickActionsForTask,
   toGoldText,
-  toInt,
 } from "./features/dashboard/dashboard-utils";
 import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
@@ -1031,70 +1031,20 @@ export function App(): JSX.Element {
   }
 
   function onApplyQuickAction(): void {
-    if (!state) return;
-    const characterId = quickCharacterId || selected?.id;
-    if (!characterId) {
-      setError("请选择角色");
-      return;
-    }
-    const rawAmount = toInt(quickAmount);
-    if (rawAmount === null) {
-      setError("请输入有效次数");
-      return;
-    }
-    const characterName = characterNameById.get(characterId) ?? "角色";
-
-    if (quickCorridorTask) {
-      if (quickAction !== "set_completed") {
-        setError("回廊快速录入仅支持输入已完成次数");
-        return;
-      }
-      if (rawAmount < 0) {
-        setError("已完成次数不能小于 0");
-        return;
-      }
-      const completed = Math.min(rawAmount, 3);
-      void sync(
-        appActions.setCorridorCompleted(characterId, quickCorridorTask.lane, completed),
-        `${characterName} ${quickCorridorTask.title} 已录入`,
-      );
-      return;
-    }
-
-    const task = taskById.get(quickTaskId as TaskId);
-    if (!task) {
-      setError("请选择有效内容");
-      return;
-    }
-    const allowedActions = getQuickActionsForTask(task);
-    if (!allowedActions.includes(quickAction)) {
-      setError("该内容不支持当前动作");
-      return;
-    }
-
-    let amount = rawAmount;
-    if (quickAction === "set_completed") {
-      if (amount < 0) {
-        setError("已完成次数不能小于 0");
-        return;
-      }
-      if (task.setCompletedTotal) {
-        amount = Math.min(amount, task.setCompletedTotal);
-      }
-    } else if (amount <= 0) {
-      setError("次数必须大于 0");
-      return;
-    }
-
-    void sync(
-      appActions.applyTaskAction({
-        characterId,
-        taskId: task.id,
-        action: quickAction,
-        amount,
-      }),
-      `${characterName} ${task.title} 已录入`,
-    );
+    applyQuickEntryAction({
+      state,
+      selectedCharacterId: selected?.id ?? null,
+      quickCharacterId,
+      quickTaskId,
+      quickAction,
+      quickAmountInput: quickAmount,
+      quickCorridorTask,
+      characterNameById,
+      taskById,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function openCompleteDialog(taskId: TaskId, title: string): void {
