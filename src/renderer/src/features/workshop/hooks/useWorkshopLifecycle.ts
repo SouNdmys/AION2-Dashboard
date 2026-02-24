@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import type {
   WorkshopCraftOption,
   WorkshopOcrAutoRunState,
@@ -53,17 +53,17 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
     setOcrAutoRunFailLimit,
   } = params;
 
-  async function loadState(): Promise<void> {
+  const loadState = useCallback(async (): Promise<void> => {
     const next = await workshopActions.getWorkshopState();
     setState(next);
-  }
+  }, [workshopActions, setState]);
 
-  async function loadCraftOptions(): Promise<void> {
+  const loadCraftOptions = useCallback(async (): Promise<void> => {
     const next = await workshopActions.getWorkshopCraftOptions({ taxRate });
     setCraftOptions(next);
-  }
+  }, [workshopActions, taxRate, setCraftOptions]);
 
-  async function loadSignals(): Promise<void> {
+  const loadSignals = useCallback(async (): Promise<void> => {
     const [serverResult, worldResult] = await Promise.all([
       workshopActions.getWorkshopPriceSignals({ market: "server" }),
       workshopActions.getWorkshopPriceSignals({ market: "world" }),
@@ -85,24 +85,30 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
       rows,
     };
     setSignalResult(next);
-  }
+  }, [workshopActions, setSignalResult]);
 
-  async function loadOcrHotkeyState(): Promise<void> {
+  const loadOcrHotkeyState = useCallback(async (): Promise<void> => {
     const next = await workshopActions.getWorkshopOcrHotkeyState();
     setOcrHotkeyState(next);
     setOcrHotkeyShortcut(next.shortcut);
     setOcrHotkeyLastResult(next.lastResult);
-  }
+  }, [workshopActions, setOcrHotkeyState, setOcrHotkeyShortcut, setOcrHotkeyLastResult]);
 
-  async function loadOcrAutoRunState(): Promise<void> {
+  const loadOcrAutoRunState = useCallback(async (): Promise<void> => {
     const next = await workshopActions.getWorkshopOcrAutoRunState();
     setOcrAutoRunState(next);
     setOcrAutoRunIntervalSeconds(String(next.intervalSeconds));
     setOcrAutoRunOverlayEnabled(next.showOverlay);
     setOcrAutoRunFailLimit(String(next.maxConsecutiveFailures));
-  }
+  }, [
+    workshopActions,
+    setOcrAutoRunState,
+    setOcrAutoRunIntervalSeconds,
+    setOcrAutoRunOverlayEnabled,
+    setOcrAutoRunFailLimit,
+  ]);
 
-  async function bootstrap(): Promise<void> {
+  const bootstrap = useCallback(async (): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
@@ -112,11 +118,11 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
     } finally {
       setBusy(false);
     }
-  }
+  }, [setBusy, setError, loadState, loadCraftOptions, loadSignals, loadOcrHotkeyState, loadOcrAutoRunState]);
 
   useEffect(() => {
     void bootstrap();
-  }, []);
+  }, [bootstrap]);
 
   useEffect(() => {
     const off = workshopActions.onWorkshopOcrHotkeyResult((result) => {
@@ -130,7 +136,7 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
     return () => {
       off();
     };
-  }, []);
+  }, [workshopActions, setOcrHotkeyLastResult, setMessage, setError, loadState, loadCraftOptions, loadSignals]);
 
   useEffect(() => {
     const off = workshopActions.onWorkshopOcrAutoRunState((next) => {
@@ -142,7 +148,7 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
     return () => {
       off();
     };
-  }, []);
+  }, [workshopActions, setOcrAutoRunState, setOcrAutoRunIntervalSeconds, setOcrAutoRunOverlayEnabled, setOcrAutoRunFailLimit]);
 
   return {
     loadState,

@@ -151,6 +151,7 @@ export function useWorkshopViewSyncEffects(params: UseWorkshopViewSyncEffectsPar
     ocrAutoRunState,
     setOcrAutoRunNowMs,
   } = params;
+  const hasState = state !== null;
 
   useEffect(() => {
     if (!itemMainCategoryOptions.includes(itemMainCategory)) {
@@ -249,9 +250,9 @@ export function useWorkshopViewSyncEffects(params: UseWorkshopViewSyncEffectsPar
   }, [selectedItemId, selectedItemPriceMarket, latestPriceMetaByItemId, inventoryByItemId]);
 
   useEffect(() => {
-    if (!state) return;
+    if (!hasState) return;
     void loadCraftOptions();
-  }, [taxMode]);
+  }, [taxMode, hasState, loadCraftOptions]);
 
   useEffect(() => {
     const tradePreset = OCR_TRADE_BOARD_PRESETS[ocrTradePresetKey];
