@@ -15,6 +15,7 @@ import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh,
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
 import { useDashboardSync } from "./features/dashboard/actions/useDashboardSync";
+import { createDashboardDialogHandlers } from "./features/dashboard/actions/createDashboardDialogHandlers";
 import {
   clearHistoryAction,
   exportDashboardDataAction,
@@ -48,17 +49,6 @@ import {
   overviewCardDropAction,
   startOverviewCardDragAction,
 } from "./features/dashboard/actions/overviewInteractionActions";
-import {
-  confirmDashboardDialogAction,
-  openCompleteTaskDialogAction,
-  openCorridorCompleteDialogAction,
-  openCorridorSyncDialogAction,
-  openEnergyDialogAction,
-  openSanctumEditDialogAction,
-  openSetCompletedTaskDialogAction,
-  openTaskEditDialogAction,
-  openUseTicketTaskDialogAction,
-} from "./features/dashboard/actions/dashboardDialogActions";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -875,6 +865,28 @@ export function App(): JSX.Element {
     setInfoMessage,
     setState,
   });
+  const {
+    openCompleteDialog,
+    openUseTicketDialog,
+    openSetCompletedDialog,
+    openEnergyDialog,
+    openTaskEditDialog,
+    openSanctumEditDialog,
+    onSyncCorridorStatus,
+    onApplyCorridorCompletion,
+    onConfirmDialog,
+  } = createDashboardDialogHandlers({
+    dialog,
+    selectedCharacter: selected,
+    selectedAccountId: selectedAccount?.id ?? null,
+    corridorDraft,
+    taskById,
+    appActions,
+    sync,
+    setDialog,
+    setDialogError,
+    setCorridorDraft,
+  });
 
   function onAddAccount(): void {
     addAccountAction({
@@ -1033,75 +1045,6 @@ export function App(): JSX.Element {
     });
   }
 
-  function openCompleteDialog(taskId: TaskId, title: string): void {
-    openCompleteTaskDialogAction({
-      taskId,
-      title,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function openUseTicketDialog(taskId: TaskId, title: string): void {
-    openUseTicketTaskDialogAction({
-      taskId,
-      title,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function openSetCompletedDialog(task: TaskDefinition): void {
-    openSetCompletedTaskDialogAction({
-      task,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function openEnergyDialog(): void {
-    openEnergyDialogAction({
-      selectedCharacter: selected,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function openTaskEditDialog(
-    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game",
-  ): void {
-    openTaskEditDialogAction({
-      selectedCharacter: selected,
-      taskId,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function openSanctumEditDialog(): void {
-    openSanctumEditDialogAction({
-      selectedCharacter: selected,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function onSyncCorridorStatus(): void {
-    openCorridorSyncDialogAction({
-      corridorDraft,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
-  function onApplyCorridorCompletion(): void {
-    openCorridorCompleteDialogAction({
-      corridorDraft,
-      onDialogOpen: setDialog,
-      onDialogErrorReset: () => setDialogError(null),
-    });
-  }
-
   function onApplyCorridorSettings(): void {
     void applyCorridorSettingsAction({
       selectedAccountId: selectedAccount?.id ?? null,
@@ -1225,32 +1168,6 @@ export function App(): JSX.Element {
       onError: setError,
       onInfoMessage: setInfoMessage,
       onStateImported: setState,
-    });
-  }
-
-  function onConfirmDialog(): void {
-    void confirmDashboardDialogAction({
-      dialog,
-      selected,
-      selectedAccountId: selectedAccount?.id ?? null,
-      appActions,
-      taskById,
-      sync,
-      onDialogError: setDialogError,
-      onDialogClose: () => {
-        setDialog(null);
-        setDialogError(null);
-      },
-      onCorridorDraftSyncCounts: (lower, middle) => {
-        setCorridorDraft((prev) => ({
-          ...prev,
-          lowerAvailable: String(lower),
-          middleAvailable: String(middle),
-        }));
-      },
-      onCorridorDraftSyncCompletion: (completed, lane) => {
-        setCorridorDraft((prev) => ({ ...prev, completeAmount: String(completed), completeLane: lane }));
-      },
     });
   }
 
