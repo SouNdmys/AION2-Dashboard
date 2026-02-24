@@ -90,6 +90,7 @@
 - `ff58354` `refactor(dashboard): extract history page actions into action module` (1.1 第二阶段进展)
 - `a58489d` `refactor(dashboard): extract weekly stats page actions into module` (1.1 第二阶段进展)
 - `a53186d` `refactor(dashboard): extract account and character page actions` (1.1 第二阶段进展)
+- `0018eb5` `refactor(dashboard): extract overview card drag-drop actions` (1.1 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
