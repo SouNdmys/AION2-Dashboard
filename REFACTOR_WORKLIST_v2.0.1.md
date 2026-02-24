@@ -119,6 +119,7 @@
 - `636e4f0` `refactor(workshop): extract signal and history insight models into hook` (1.2 第二阶段进展)
 - `8c4136d` `refactor(workshop): extract OCR display derived models into hook` (1.2 第二阶段进展)
 - `b2b0fda` `refactor(workshop): extract OCR preview calibration models into hook` (1.2 第二阶段进展)
+- `97da452` `refactor(workshop): extract catalog classification and filter models into hook` (1.2 第二阶段进展)
 
 验收:
 - App/Workshop 主要组件状态数量显著下降（目标: `useState` 数量减少 30%+）。
