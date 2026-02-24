@@ -14,6 +14,17 @@ import {
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../shared/time";
 import type { AppBuildInfo, AppState, TaskActionKind, TaskDefinition, TaskId } from "../../shared/types";
 import { useAppActions } from "./features/dashboard/actions/useAppActions";
+import {
+  addAccountAction,
+  addCharacterAction,
+  deleteAccountAction,
+  deleteCharacterAction,
+  renameAccountAction,
+  renameCharacterAction,
+  saveCharacterProfileAction,
+  selectAccountAction,
+  selectCharacterAction,
+} from "./features/dashboard/actions/accountCharacterActions";
 import { confirmDashboardDialog } from "./features/dashboard/actions/confirmDashboardDialog";
 import { clearHistoryAction, undoMultiStepAction, undoSingleStepAction } from "./features/dashboard/actions/historyActions";
 import {
@@ -874,83 +885,93 @@ export function App(): JSX.Element {
   }
 
   function onAddAccount(): void {
-    const name = newAccountName.trim();
-    if (!name) return;
-    const regionTag = newAccountRegion.trim();
-    void sync(appActions.addAccount(name, regionTag || undefined));
-    setNewAccountName("");
-    setNewAccountRegion("");
+    addAccountAction({
+      newAccountName,
+      newAccountRegion,
+      appActions,
+      sync,
+      onInputCleared: () => {
+        setNewAccountName("");
+        setNewAccountRegion("");
+      },
+    });
   }
 
   function onSelectAccount(accountId: string): void {
-    void sync(appActions.selectAccount(accountId));
+    selectAccountAction({
+      accountId,
+      appActions,
+      sync,
+    });
   }
 
   function onRenameAccount(): void {
-    if (!selectedAccount) return;
-    const name = accountEditor.name.trim();
-    if (!name) return;
-    const regionTag = accountEditor.regionTag.trim();
-    void sync(
-      appActions.renameAccount(selectedAccount.id, name, regionTag || undefined),
-      "账号信息已更新",
-    );
+    renameAccountAction({
+      selectedAccount,
+      accountNameInput: accountEditor.name,
+      accountRegionInput: accountEditor.regionTag,
+      appActions,
+      sync,
+    });
   }
 
   function onDeleteAccount(): void {
-    if (!selectedAccount) return;
-    const ok = window.confirm(`确认删除账号「${selectedAccount.name}」及其所有角色？`);
-    if (!ok) return;
-    void sync(appActions.deleteAccount(selectedAccount.id));
+    deleteAccountAction({
+      selectedAccount,
+      appActions,
+      sync,
+      confirm: window.confirm,
+    });
   }
 
   function onAddCharacter(): void {
-    if (!selectedAccount) return;
-    if (!canAddCharacterInSelectedAccount) {
-      setError(`当前账号最多 ${MAX_CHARACTERS_PER_ACCOUNT} 个角色`);
-      return;
-    }
-    const name = newCharacterName.trim();
-    if (!name) return;
-    void sync(appActions.addCharacter(name, selectedAccount.id));
-    setNewCharacterName("");
+    addCharacterAction({
+      selectedAccount,
+      canAddCharacterInSelectedAccount,
+      newCharacterName,
+      appActions,
+      sync,
+      onError: setError,
+      onInputCleared: () => setNewCharacterName(""),
+    });
   }
 
   function onRenameCharacter(): void {
-    if (!selected) return;
-    const next = renameName.trim();
-    if (!next) return;
-    void sync(appActions.renameCharacter(selected.id, next));
+    renameCharacterAction({
+      selectedCharacter: selected,
+      renameInput: renameName,
+      appActions,
+      sync,
+    });
   }
 
   function onSaveCharacterProfile(): void {
-    if (!selected) return;
-    const classTag = profileClassTagInput.trim();
-    const gearScoreText = profileGearScoreInput.trim();
-    const gearScoreRaw = gearScoreText ? toInt(gearScoreText) : null;
-    if (gearScoreText && (gearScoreRaw === null || gearScoreRaw < 0)) {
-      setError("装分必须为大于等于 0 的整数");
-      return;
-    }
-    void sync(
-      appActions.updateCharacterProfile(selected.id, {
-        classTag: classTag || null,
-        gearScore: gearScoreRaw === null ? null : gearScoreRaw,
-      }),
-      "已更新角色职业与装分",
-    );
+    saveCharacterProfileAction({
+      selectedCharacter: selected,
+      profileClassTagInput,
+      profileGearScoreInput,
+      appActions,
+      sync,
+      onError: setError,
+    });
   }
 
   function onDeleteCharacter(): void {
-    if (!selected) return;
-    const ok = window.confirm(`确认删除角色「${selected.name}」？`);
-    if (!ok) return;
-    void sync(appActions.deleteCharacter(selected.id));
+    deleteCharacterAction({
+      selectedCharacter: selected,
+      appActions,
+      sync,
+      confirm: window.confirm,
+    });
   }
 
   function onSelectCharacter(characterId: string): void {
-    setDashboardMode("character");
-    void sync(appActions.selectCharacter(characterId));
+    selectCharacterAction({
+      characterId,
+      appActions,
+      sync,
+      onBeforeSelect: () => setDashboardMode("character"),
+    });
   }
 
   function onOverviewCardDragStart(characterId: string): void {
