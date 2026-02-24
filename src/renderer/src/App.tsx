@@ -51,15 +51,15 @@ import {
   saveTransformPlanAction,
 } from "./features/dashboard/actions/resourceAndCorridorActions";
 import {
-  buildCompleteDialog,
-  buildCorridorCompleteDialog,
-  buildCorridorSyncDialog,
-  buildEnergyDialog,
-  buildSanctumEditDialog,
-  buildSetCompletedDialog,
-  buildTaskEditDialog,
-  buildUseTicketDialog,
-} from "./features/dashboard/actions/dialogStateBuilders";
+  openCompleteTaskDialogAction,
+  openCorridorCompleteDialogAction,
+  openCorridorSyncDialogAction,
+  openEnergyDialogAction,
+  openSanctumEditDialogAction,
+  openSetCompletedTaskDialogAction,
+  openTaskEditDialogAction,
+  openUseTicketTaskDialogAction,
+} from "./features/dashboard/actions/dialogOpenActions";
 import {
   COUNT_SELECT_MAX,
   MAX_CHARACTERS_PER_ACCOUNT,
@@ -1051,50 +1051,72 @@ export function App(): JSX.Element {
   }
 
   function openCompleteDialog(taskId: TaskId, title: string): void {
-    setDialogError(null);
-    setDialog(buildCompleteDialog(taskId, title));
+    openCompleteTaskDialogAction({
+      taskId,
+      title,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function openUseTicketDialog(taskId: TaskId, title: string): void {
-    setDialogError(null);
-    setDialog(buildUseTicketDialog(taskId, title));
+    openUseTicketTaskDialogAction({
+      taskId,
+      title,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function openSetCompletedDialog(task: TaskDefinition): void {
-    const nextDialog = buildSetCompletedDialog(task);
-    if (!nextDialog) return;
-    setDialogError(null);
-    setDialog(nextDialog);
+    openSetCompletedTaskDialogAction({
+      task,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function openEnergyDialog(): void {
-    if (!selected) return;
-    setDialogError(null);
-    setDialog(buildEnergyDialog(selected));
+    openEnergyDialogAction({
+      selectedCharacter: selected,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function openTaskEditDialog(
     taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game",
   ): void {
-    if (!selected) return;
-    setDialogError(null);
-    setDialog(buildTaskEditDialog(selected, taskId));
+    openTaskEditDialogAction({
+      selectedCharacter: selected,
+      taskId,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function openSanctumEditDialog(): void {
-    if (!selected) return;
-    setDialogError(null);
-    setDialog(buildSanctumEditDialog(selected));
+    openSanctumEditDialogAction({
+      selectedCharacter: selected,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function onSyncCorridorStatus(): void {
-    setDialogError(null);
-    setDialog(buildCorridorSyncDialog(corridorDraft));
+    openCorridorSyncDialogAction({
+      corridorDraft,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function onApplyCorridorCompletion(): void {
-    setDialogError(null);
-    setDialog(buildCorridorCompleteDialog(corridorDraft));
+    openCorridorCompleteDialogAction({
+      corridorDraft,
+      onDialogOpen: setDialog,
+      onDialogErrorReset: () => setDialogError(null),
+    });
   }
 
   function onApplyCorridorSettings(): void {
