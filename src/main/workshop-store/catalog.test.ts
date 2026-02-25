@@ -3,7 +3,7 @@ import type { WorkshopState } from "../../shared/types";
 
 const {
   mockReadFileSync,
-  mockResolveCatalogImportFilePath,
+  mockResolveImportFilePath,
   mockParseCatalogCsvText,
   mockReadWorkshopState,
   mockWriteWorkshopState,
@@ -16,7 +16,7 @@ const {
   mockStoreGet,
 } = vi.hoisted(() => ({
   mockReadFileSync: vi.fn(),
-  mockResolveCatalogImportFilePath: vi.fn(),
+  mockResolveImportFilePath: vi.fn(),
   mockParseCatalogCsvText: vi.fn(),
   mockReadWorkshopState: vi.fn(),
   mockWriteWorkshopState: vi.fn(),
@@ -34,9 +34,12 @@ vi.mock("node:fs", () => ({
 }));
 
 vi.mock("./catalog-import-shared", () => ({
-  resolveCatalogImportFilePath: mockResolveCatalogImportFilePath,
   parseCatalogCsvText: mockParseCatalogCsvText,
   normalizeCatalogLookupName: (name: string) => String(name).trim().toLocaleLowerCase().replace(/\s+/g, ""),
+}));
+
+vi.mock("./import-file-path", () => ({
+  resolveImportFilePath: mockResolveImportFilePath,
 }));
 
 vi.mock("./catalog-import-apply", () => ({
@@ -94,7 +97,7 @@ describe("workshop/catalog", () => {
     mockNormalizeIconCache.mockReturnValue(new Map());
     mockResolveItemIconWithCache.mockReturnValue("icon-default");
     mockStoreGet.mockReturnValue({});
-    mockResolveCatalogImportFilePath.mockReturnValue("C:/tmp/catalog.csv");
+    mockResolveImportFilePath.mockReturnValue("C:/tmp/catalog.csv");
     mockReadFileSync.mockReturnValue("csv");
     mockParseCatalogCsvText.mockReturnValue({ items: [], recipes: [], warnings: [] });
   });
@@ -144,7 +147,7 @@ describe("workshop/catalog", () => {
 
     const result = importWorkshopCatalogFromFile({ filePath: "./catalog.csv" });
 
-    expect(mockResolveCatalogImportFilePath).toHaveBeenCalledWith("./catalog.csv");
+    expect(mockResolveImportFilePath).toHaveBeenCalledWith("./catalog.csv");
     expect(mockParseCatalogCsvText).toHaveBeenCalledWith("csv");
     expect(mockApplyCatalogData).toHaveBeenCalledWith(
       state,

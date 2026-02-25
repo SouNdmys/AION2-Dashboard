@@ -23,7 +23,8 @@ import {
   writeWorkshopState,
 } from "../workshop-store-core";
 import { applyCatalogData } from "./catalog-import-apply";
-import { normalizeCatalogLookupName, parseCatalogCsvText, resolveCatalogImportFilePath } from "./catalog-import-shared";
+import { normalizeCatalogLookupName, parseCatalogCsvText } from "./catalog-import-shared";
+import { resolveImportFilePath } from "./import-file-path";
 
 export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopState {
   const state = readWorkshopState();
@@ -161,7 +162,7 @@ export function deleteWorkshopRecipe(recipeId: string): WorkshopState {
 
 export function importWorkshopCatalogFromFile(payload: WorkshopCatalogImportFromFileInput): WorkshopCatalogImportResult {
   const state = readWorkshopState();
-  const fullPath = resolveCatalogImportFilePath(payload.filePath);
+  const fullPath = resolveImportFilePath(payload.filePath);
   const text = fs.readFileSync(fullPath, "utf8");
   const parsed = parseCatalogCsvText(text);
   const result = applyCatalogData(state, parsed, path.basename(fullPath), {

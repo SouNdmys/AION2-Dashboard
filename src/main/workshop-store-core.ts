@@ -7,9 +7,7 @@ import { nativeImage } from "electron";
 import Store from "electron-store";
 import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
 import { tify } from "chinese-conv";
-import {
-  resolveCatalogImportFilePath,
-} from "./workshop-store/catalog-import-shared";
+import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
 import type {
   AddWorkshopPriceSnapshotInput,
@@ -1771,7 +1769,7 @@ function captureOcrLineIcons(
 
   let imagePath: string;
   try {
-    imagePath = resolveCatalogImportFilePath(config.screenshotPath);
+    imagePath = resolveImportFilePath(config.screenshotPath);
   } catch (err) {
     addWarning(err instanceof Error ? `图标抓取失败：${err.message}` : "图标抓取失败：无法定位截图路径。");
     return {
@@ -3338,7 +3336,7 @@ export async function extractWorkshopOcrTextCore(
   if (!imageRawPath) {
     throw new Error("OCR 识别失败：请先填写截图路径。");
   }
-  const imagePath = resolveCatalogImportFilePath(imageRawPath);
+  const imagePath = resolveImportFilePath(imageRawPath);
   const language = sanitizeOcrLanguage(payload.language);
   const psm = sanitizeOcrPsm(payload.psm);
   const safeMode = sanitizeOcrSafeMode(payload.safeMode);
