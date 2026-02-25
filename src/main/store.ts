@@ -588,7 +588,6 @@ function commitMutation(
   mutator: (draft: AppState) => AppState | void,
 ): AppState {
   const current = getAppState();
-  const before = createSnapshot(current);
   const beforeSignature = buildMutationSignature(current);
   const draft = createMutationDraft(current);
   const maybeNext = mutator(draft);
@@ -596,6 +595,7 @@ function commitMutation(
   const changed = beforeSignature !== buildMutationSignature(normalized);
 
   if (meta.trackHistory !== false && changed) {
+    const before = createSnapshot(current);
     const entry: OperationLogEntry = {
       id: randomUUID(),
       at: new Date().toISOString(),
