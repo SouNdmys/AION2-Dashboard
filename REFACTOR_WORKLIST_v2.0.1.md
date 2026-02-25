@@ -61,7 +61,7 @@
 - [x] 4.1 提取 `usePersistedState`，替代 Workshop 中重复 localStorage effect。
 - [x] 4.2 提取 `useAppActions` / `useWorkshopActions`，收敛 `window.aionApi` 调用入口。
 - [x] 4.3 将高耦合计算逻辑移入 selector 层（memoized selectors）。
-- [ ] 4.4 为关键交互流补 UI 回归脚本（最小可行 smoke）。
+- [x] 4.4 为关键交互流补 UI 回归脚本（最小可行 smoke）。
 
 ## 已完成变更（当前分支）
 
@@ -75,6 +75,7 @@
 - `cf019dd` `refactor(preload): generate invoke api from shared ipc contract` (3.3 阶段进展)
 - `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes` (3.4 阶段进展)
 - `627d25e` `refactor(workshop): move derived models into memoized selector layer` (4.3 阶段进展)
+- `aa5e5f6` `test(smoke): add electron ui regression script for key workflows` (4.4 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -227,6 +228,16 @@
   - `useWorkshopCatalogModels` / `useWorkshopEconomyModels` / `useWorkshopInsightModels` 改为 selector 调度。
   - 关键提交:
     - `627d25e` `refactor(workshop): move derived models into memoized selector layer`
+- `4.4` 已收尾完成:
+  - 新增 `scripts/ui-smoke.mjs`（Electron + Playwright）覆盖关键交互流 smoke：
+    - 应用启动与主面板渲染
+    - 视图切换（设置页 / 工坊 / 角色总览）
+    - IPC 标准错误格式回归（`[channel][code] message`）
+  - 新增脚本:
+    - `npm run smoke:ui`
+    - `npm run test:smoke`
+  - 关键提交:
+    - `aa5e5f6` `test(smoke): add electron ui regression script for key workflows`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
