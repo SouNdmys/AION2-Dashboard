@@ -46,7 +46,7 @@
 - [x] 3.1 统一定义 IPC 路由表与 payload/return 类型映射。
 - [x] 3.2 主进程 handler 增加 payload 运行时校验。
 - [x] 3.3 preload API 从手写 invoke 映射改为基于契约的薄封装生成。
-- [ ] 3.4 错误返回格式标准化（可定位 channel + 业务错误码）。
+- [x] 3.4 错误返回格式标准化（可定位 channel + 业务错误码）。
 
 验收:
 - 非法 payload 能稳定返回可读错误，不导致进程崩溃。
@@ -73,6 +73,7 @@
 - `e5fc02c` `refactor(store): lazily build history snapshot only when changed` (2.2 阶段进展)
 - `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback` (2.3 阶段进展)
 - `cf019dd` `refactor(preload): generate invoke api from shared ipc contract` (3.3 阶段进展)
+- `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes` (3.4 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -213,6 +214,12 @@
   - OCR 事件订阅改为使用同一契约文件中的 event channel 定义。
   - 关键提交:
     - `cf019dd` `refactor(preload): generate invoke api from shared ipc contract`
+- `3.4` 已收尾完成:
+  - 新增 `src/shared/ipc-error.ts`，统一 IPC 错误编解码（`AION_IPC_ERROR::...`）与标准展示格式。
+  - 新增 `src/main/ipc/register-handler.ts`，主进程 invoke handler 统一错误包装（含 channel + code）。
+  - preload invoke 统一解析标准错误并抛出格式化消息：`[channel][code] message`。
+  - 关键提交:
+    - `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
