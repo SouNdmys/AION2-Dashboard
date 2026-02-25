@@ -308,8 +308,8 @@ function ensureOverlayWindow(): BrowserWindow {
     alwaysOnTop: true,
     hasShadow: false,
     webPreferences: {
-      sandbox: false,
-      contextIsolation: false,
+      sandbox: true,
+      contextIsolation: true,
       nodeIntegration: false,
     },
   });

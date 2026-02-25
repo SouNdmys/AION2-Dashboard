@@ -28,6 +28,14 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     define: defineBuildMeta,
+    build: {
+      rollupOptions: {
+        output: {
+          format: "cjs",
+          entryFileNames: "index.js",
+        },
+      },
+    },
   },
   renderer: {
     plugins: [react()],
