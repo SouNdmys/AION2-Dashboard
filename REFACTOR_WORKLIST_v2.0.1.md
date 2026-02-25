@@ -77,6 +77,7 @@
 - `627d25e` `refactor(workshop): move derived models into memoized selector layer` (4.3 阶段进展)
 - `aa5e5f6` `test(smoke): add electron ui regression script for key workflows` (4.4 阶段进展)
 - `4b29680` `refactor(workshop): make ocr import and signal compute interruptible` (5.1 阶段进展)
+- `993489a` `security(window): enable sandboxed renderer and isolate overlay` (5.2 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -151,7 +152,7 @@
 
 任务:
 - [x] 5.1 将工坊重计算（价格信号/部分 OCR 后处理）迁移到 worker 或可中断计算路径。
-- [ ] 5.2 收紧 BrowserWindow 安全配置（逐步移除 `contextIsolation: false` / `sandbox: false` 依赖）。
+- [x] 5.2 收紧 BrowserWindow 安全配置（逐步移除 `contextIsolation: false` / `sandbox: false` 依赖）。
 - [ ] 5.3 补最小测试体系（`shared/engine`、`shared/time`、关键 store 逻辑）。
 - [ ] 5.4 文档同步（规则、发布流程、回滚流程）。
 
@@ -245,6 +246,14 @@
   - 热键自动抓价流程接线改为 `await importWorkshopOcrPrices(...)`，与异步计算路径一致。
   - 关键提交:
     - `4b29680` `refactor(workshop): make ocr import and signal compute interruptible`
+- `5.2` 已收尾完成:
+  - 主窗口 `BrowserWindow` 收紧为 `contextIsolation: true` + `sandbox: true`（保留 `nodeIntegration: false`）。
+  - OCR 自动抓价覆盖层窗口收紧为 `contextIsolation: true` + `sandbox: true`。
+  - preload 构建目标调整为 `cjs` 输出（`out/preload/index.js`），兼容沙箱 preload 加载路径。
+  - IPC 错误 token 编解码改为无 Node 模块依赖实现，确保沙箱 preload 仍可解析为标准格式 `[channel][code] message`。
+  - 关键提交:
+    - `993489a` `security(window): enable sandboxed renderer and isolate overlay`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
+  - `npm run smoke:ui`
