@@ -400,4 +400,17 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.17：OCR 第六刀：抽离 Paddle payload 解析与词条归一化到 `src/main/workshop-store/ocr-paddle-payload.ts`。
+  - 变更点：
+    - `normalizePaddleWord / parsePaddlePayload / parsePaddlePayloadObject` 从 core 下沉；
+    - `core` 的 worker stdout 处理与命令行 fallback 解析改为调用新模块，并显式传入 `OCR_PADDLE_CONFIDENCE_SCALE`。
+  - 提交：`043daed` `refactor(ocr): extract paddle payload parsing and word normalization`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
+- [x] A1-6.18：为 OCR Paddle payload 新模块补单测覆盖。
+  - 新增：
+    - `src/main/workshop-store/ocr-paddle-payload.test.ts`
+  - 提交：`4e8efde` `test(ocr): add coverage for paddle payload parser helper`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
