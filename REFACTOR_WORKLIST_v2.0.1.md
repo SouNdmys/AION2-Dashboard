@@ -565,4 +565,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.37：OCR 第二十二刀：抽离 OCR 导入逐行应用流程到 `src/main/workshop-store/ocr-import-apply.ts`。
+  - 变更点：
+    - `importWorkshopOcrPricesCore` 的逐行导入循环整体下沉（名称纠错、匹配、自动建物品、异常过滤、去重写入）；
+    - core 改为保留解析/图标抓取编排与最终状态写回。
+  - 新增：
+    - `src/main/workshop-store/ocr-import-apply.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

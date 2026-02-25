@@ -8,16 +8,9 @@ import OcrNode from "@gutenye/ocr-node";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
 import {
-  isAmbiguousExactOcrNameMatch,
-  isExactOcrNameMatch,
-  isQualifiedNameCollapsedToBaseName,
   normalizeLookupName,
-  normalizeOcrDomainName,
   resolveItemByOcrName,
-  resolveUniqueItemByIcon,
   sanitizeOcrLineItemName,
-  shouldIgnoreOcrItemName,
-  tryCorrectOcrNameByKnownItems,
 } from "./workshop-store/ocr-name-matching";
 import {
   buildPaddleLanguageCandidates,
@@ -39,7 +32,8 @@ import { cleanupTempFile, stringifyOcrWords } from "./workshop-store/ocr-extract
 import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
 import { extractWorkshopOcrTextEntry } from "./workshop-store/ocr-extract-entry";
 import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
-import { isDuplicatePriceSnapshotByWindow, yieldToEventLoop } from "./workshop-store/ocr-import-runtime";
+import { yieldToEventLoop } from "./workshop-store/ocr-import-runtime";
+import { applyParsedOcrImportLines } from "./workshop-store/ocr-import-apply";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -1059,195 +1053,27 @@ export async function importWorkshopOcrPricesCore(
         warnings: [] as string[],
       };
   const iconCaptureWarnings = [...sanitized.iconCaptureWarnings, ...iconCaptureOutcome.warnings];
-
-  const unknownItemNameSet = new Set<string>();
-  const importedEntries: WorkshopOcrPriceImportResult["importedEntries"] = [];
-  const nameCorrectionWarnings: string[] = [];
-  const priceQualityWarnings: string[] = [];
-  let importedCount = 0;
-  let duplicateSkippedCount = 0;
-  let createdItemCount = 0;
-
-  for (let index = 0; index < parsedLines.length; index += 1) {
-    const line = parsedLines[index];
-    if (shouldIgnoreOcrItemName(line.itemName)) {
-      const ignoredName = normalizeOcrDomainName(line.itemName) || line.itemName;
-      if (priceQualityWarnings.length < 40) {
-        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${ignoredName}」已忽略：閃耀前綴道具不納入導入。`);
-      }
-      continue;
-    }
-    const correctedLineName = tryCorrectOcrNameByKnownItems(line.itemName, items);
-    const normalizedLineName = correctedLineName || line.itemName;
-    if (normalizedLineName !== line.itemName && nameCorrectionWarnings.length < 20) {
-      nameCorrectionWarnings.push(`名称纠错：${line.itemName} -> ${normalizedLineName}`);
-    }
-    if (!Number.isFinite(line.unitPrice) || line.unitPrice <= 0) {
-      if (priceQualityWarnings.length < 40) {
-        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：价格无效（${line.unitPrice}）。`);
-      }
-      continue;
-    }
-    const key = normalizeLookupName(normalizedLineName);
-    const capturedIcon = iconCaptureOutcome.iconByLineNumber.get(line.lineNumber);
-    const exactMatchedItem = itemByLookupName.get(key);
-    let item = exactMatchedItem;
-    let matchedByExactName = Boolean(exactMatchedItem);
-    if (!item && !sanitized.strictIconMatch) {
-      item = resolveItemByOcrName(itemByLookupName, normalizedLineName);
-      if (item) {
-        itemByLookupName.set(key, item);
-      }
-    }
-    const iconMatchedItem = resolveUniqueItemByIcon(items, capturedIcon);
-    if (item && !matchedByExactName && !iconMatchedItem && isQualifiedNameCollapsedToBaseName(normalizedLineName, item.name)) {
-      unknownItemNameSet.add(`${normalizedLineName}（限定词前缀疑似被折叠，已跳过）`);
-      continue;
-    }
-
-    if (sanitized.strictIconMatch) {
-      if (!capturedIcon) {
-        const canFallbackByExactName =
-          item !== undefined && !isCapturedImageIcon(item.icon) && isExactOcrNameMatch(item, normalizedLineName);
-        if (!canFallbackByExactName) {
-          unknownItemNameSet.add(`${normalizedLineName}（严格模式需开启图标抓取）`);
-          continue;
-        }
-      }
-      if (!item && iconMatchedItem) {
-        item = iconMatchedItem;
-        itemByLookupName.set(key, item);
-      }
-      if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
-        unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
-        continue;
-      }
-      if (item && capturedIcon && isCapturedImageIcon(item.icon) && item.icon !== capturedIcon) {
-        unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
-        continue;
-      }
-      if (item && !isCapturedImageIcon(item.icon) && !isExactOcrNameMatch(item, normalizedLineName)) {
-        unknownItemNameSet.add(`${normalizedLineName}（严格模式缺少图标基线）`);
-        continue;
-      }
-      if (item && !isExactOcrNameMatch(item, normalizedLineName) && !iconMatchedItem) {
-        unknownItemNameSet.add(`${normalizedLineName}（严格模式下名称不精确）`);
-        continue;
-      }
-    } else {
-      if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
-        unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
-        continue;
-      }
-      if (!item && iconMatchedItem) {
-        item = iconMatchedItem;
-        itemByLookupName.set(key, item);
-      }
-      // Only block fuzzy/heuristic matches; exact key matches should be trusted.
-      if (item && !matchedByExactName && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, normalizedLineName, items)) {
-        unknownItemNameSet.add(`${normalizedLineName}（名称歧义，已跳过）`);
-        continue;
-      }
-    }
-
-    let createdItem = false;
-    if (!item) {
-      if (!sanitized.autoCreateMissingItems) {
-        unknownItemNameSet.add(normalizedLineName);
-        continue;
-      }
-      const nowIso = new Date().toISOString();
-      item = {
-        id: randomUUID(),
-        name: normalizedLineName,
-        category: sanitized.defaultCategory,
-        icon: resolveItemIconWithCache(iconCache, normalizedLineName, sanitized.defaultCategory, capturedIcon),
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      };
-      items.push(item);
-      itemByLookupName.set(key, item);
-      createdItemCount += 1;
-      createdItem = true;
-    } else if (capturedIcon && item) {
-      const currentItem = item;
-      if (sanitized.strictIconMatch && isCapturedImageIcon(currentItem.icon) && currentItem.icon !== capturedIcon) {
-        unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
-        continue;
-      }
-      const canRefreshIcon =
-        !sanitized.strictIconMatch && (matchedByExactName || (iconMatchedItem !== undefined && iconMatchedItem.id === currentItem.id));
-      if (canRefreshIcon) {
-        const resolvedIcon = resolveItemIconWithCache(iconCache, currentItem.name, currentItem.category, capturedIcon);
-        if (resolvedIcon !== currentItem.icon) {
-          const nextItem: WorkshopItem = {
-            ...currentItem,
-            icon: resolvedIcon,
-            updatedAt: new Date().toISOString(),
-          };
-          const index = items.findIndex((entry) => entry.id === currentItem.id);
-          if (index >= 0) {
-            items[index] = nextItem;
-          }
-          itemByLookupName.set(key, nextItem);
-          item = nextItem;
-        }
-      }
-    }
-
-    const anomalyBaseline = collectBaselinePricesForItem(prices, item.id, line.market, sanitized.capturedAt);
-    const anomaly = assessPriceAnomalyWithCategory(line.unitPrice, anomalyBaseline, item.category);
-    if (anomaly.kind === "hard") {
-      unknownItemNameSet.add(`${normalizedLineName}（价格异常偏离，已自动过滤）`);
-      if (priceQualityWarnings.length < 40) {
-        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：${formatAnomalyReason(anomaly)}`);
-      }
-      continue;
-    }
-
-    const duplicated = isDuplicatePriceSnapshotByWindow(
+  const applyResult = await applyParsedOcrImportLines(
+    {
+      parsedLines,
+      sanitized,
+      items,
       prices,
-      item.id,
-      line.market,
-      line.unitPrice,
-      sanitized.capturedAt,
-      sanitized.dedupeWithinSeconds,
-    );
-    if (duplicated) {
-      duplicateSkippedCount += 1;
-      continue;
-    }
-    let note = `ocr-import#${line.market}#line-${line.lineNumber}`;
-    if (anomaly.kind === "suspect") {
-      note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
-      if (priceQualityWarnings.length < 40) {
-        priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」标记可疑：${formatAnomalyReason(anomaly)}`);
-      }
-    }
-    prices.push({
-      id: randomUUID(),
-      itemId: item.id,
-      unitPrice: line.unitPrice,
-      capturedAt: sanitized.capturedAt,
-      source: sanitized.source,
-      market: line.market,
-      note,
-    });
-    importedEntries.push({
-      lineNumber: line.lineNumber,
-      itemId: item.id,
-      itemName: item.name,
-      unitPrice: line.unitPrice,
-      market: line.market,
-      capturedAt: sanitized.capturedAt,
-      source: sanitized.source,
-      createdItem,
-    });
-    importedCount += 1;
-    if ((index + 1) % WORKSHOP_OCR_IMPORT_YIELD_EVERY === 0) {
-      await yieldToEventLoop();
-    }
-  }
+      iconCache,
+      iconByLineNumber: iconCaptureOutcome.iconByLineNumber,
+      itemByLookupName,
+    },
+    {
+      resolveItemIconWithCache,
+      isCapturedImageIcon,
+      collectBaselinePricesForItem,
+      assessPriceAnomalyWithCategory,
+      formatAnomalyReason,
+      appendNoteTag,
+      suspectNoteTag: WORKSHOP_PRICE_NOTE_TAG_SUSPECT,
+      yieldEvery: WORKSHOP_OCR_IMPORT_YIELD_EVERY,
+    },
+  );
 
   const nextState = writeWorkshopState({
     ...state,
@@ -1258,15 +1084,15 @@ export async function importWorkshopOcrPricesCore(
 
   return {
     state: nextState,
-    importedCount,
-    duplicateSkippedCount,
-    createdItemCount,
+    importedCount: applyResult.importedCount,
+    duplicateSkippedCount: applyResult.duplicateSkippedCount,
+    createdItemCount: applyResult.createdItemCount,
     parsedLineCount: parsedLines.length,
-    unknownItemNames: Array.from(unknownItemNameSet).sort((left, right) => left.localeCompare(right, "zh-CN")),
+    unknownItemNames: applyResult.unknownItemNames,
     invalidLines,
     iconCapturedCount: iconCaptureOutcome.iconCapturedCount,
     iconSkippedCount: iconCaptureOutcome.iconSkippedCount,
-    iconCaptureWarnings: [...iconCaptureWarnings, ...nameCorrectionWarnings, ...priceQualityWarnings],
-    importedEntries,
+    iconCaptureWarnings: [...iconCaptureWarnings, ...applyResult.nameCorrectionWarnings, ...applyResult.priceQualityWarnings],
+    importedEntries: applyResult.importedEntries,
   };
 }
