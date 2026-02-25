@@ -583,4 +583,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.39：OCR 第二十三刀：抽离 OCR 导入上下文准备层到 `src/main/workshop-store/ocr-import-context.ts`。
+  - 变更点：
+    - 解析行、克隆状态、构建 lookup map、图标抓取结果拼装从 core 下沉；
+    - `importWorkshopOcrPricesCore` 改为调用 `prepareOcrImportContext` + `applyParsedOcrImportLines` 两段式编排。
+  - 新增：
+    - `src/main/workshop-store/ocr-import-context.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

@@ -7,23 +7,15 @@ import Store from "electron-store";
 import OcrNode from "@gutenye/ocr-node";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
-import {
-  normalizeLookupName,
-  resolveItemByOcrName,
-  sanitizeOcrLineItemName,
-} from "./workshop-store/ocr-name-matching";
+import { sanitizeOcrLineItemName } from "./workshop-store/ocr-name-matching";
 import {
   buildPaddleLanguageCandidates,
   sanitizeOcrLanguage,
   sanitizeOcrPsm,
   sanitizeOcrSafeMode,
 } from "./workshop-store/ocr-extract-config";
-import { buildExpectedIconByLineNumber, captureOcrLineIcons } from "./workshop-store/ocr-icon-capture";
 import { sanitizeTradeBoardPreset } from "./workshop-store/ocr-tradeboard-preset";
-import {
-  detectTradePriceRoleByHeaderText,
-  normalizeNumericToken,
-} from "./workshop-store/ocr-tradeboard-rows";
+import { detectTradePriceRoleByHeaderText } from "./workshop-store/ocr-tradeboard-rows";
 import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
@@ -33,6 +25,7 @@ import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runne
 import { extractWorkshopOcrTextEntry } from "./workshop-store/ocr-extract-entry";
 import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
 import { yieldToEventLoop } from "./workshop-store/ocr-import-runtime";
+import { prepareOcrImportContext } from "./workshop-store/ocr-import-context";
 import { applyParsedOcrImportLines } from "./workshop-store/ocr-import-apply";
 import {
   cacheIconByName,
@@ -43,11 +36,7 @@ import {
   sanitizeIconToken,
   serializeIconCache,
 } from "./workshop-store/icon-cache";
-import {
-  parseOcrPriceLines,
-  parseOcrTradeRows,
-  sanitizeOcrImportPayload,
-} from "./workshop-store/ocr-import-parser";
+import { sanitizeOcrImportPayload } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
 import { createOnnxOcrRuntime, type OnnxOcrEngine } from "./workshop-store/ocr-onnx-runtime";
 import { createPaddleOcrRuntime, PADDLE_OCR_PYTHON_SCRIPT } from "./workshop-store/ocr-paddle-runtime";
@@ -927,40 +916,22 @@ export async function importWorkshopOcrPricesCore(
     throw new Error("OCR 导入内容为空，请先粘贴文本。");
   }
 
-  const tradeRowsParsed = parseOcrTradeRows(sanitized.tradeRows, {
-    sanitizeOcrLineItemName,
-    normalizeNumericToken,
+  const context = prepareOcrImportContext({
+    sanitized,
+    stateItems: state.items,
+    statePrices: state.prices,
+    iconCacheRaw: workshopStore.get(WORKSHOP_ICON_CACHE_KEY),
   });
-  const parsedFromTradeRows = hasStructuredTradeRows;
-  const { parsedLines, invalidLines } = parsedFromTradeRows
-    ? tradeRowsParsed
-    : parseOcrPriceLines(sanitized.text, {
-        sanitizeOcrLineItemName,
-        normalizeNumericToken,
-      });
-  const items = [...state.items];
-  const prices = [...state.prices];
-  const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
-  const itemByLookupName = new Map<string, WorkshopItem>();
-  items.forEach((item) => {
-    itemByLookupName.set(normalizeLookupName(item.name), item);
-  });
-  const expectedIconByLineNumber = sanitized.iconCapture
-    ? buildExpectedIconByLineNumber(parsedLines, itemByLookupName, {
-        normalizeLookupName,
-        resolveItemByOcrName,
-        isCapturedImageIcon,
-      })
-    : undefined;
-  const iconCaptureOutcome = sanitized.iconCapture
-    ? captureOcrLineIcons(parsedLines, sanitized.iconCapture, expectedIconByLineNumber)
-    : {
-        iconByLineNumber: new Map<number, string>(),
-        iconCapturedCount: 0,
-        iconSkippedCount: 0,
-        warnings: [] as string[],
-      };
-  const iconCaptureWarnings = [...sanitized.iconCaptureWarnings, ...iconCaptureOutcome.warnings];
+  const {
+    parsedLines,
+    invalidLines,
+    items,
+    prices,
+    iconCache,
+    itemByLookupName,
+    iconCaptureOutcome,
+    iconCaptureWarnings,
+  } = context;
   const applyResult = await applyParsedOcrImportLines(
     {
       parsedLines,
