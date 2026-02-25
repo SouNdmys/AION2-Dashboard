@@ -45,7 +45,7 @@
 任务:
 - [x] 3.1 统一定义 IPC 路由表与 payload/return 类型映射。
 - [x] 3.2 主进程 handler 增加 payload 运行时校验。
-- [ ] 3.3 preload API 从手写 invoke 映射改为基于契约的薄封装生成。
+- [x] 3.3 preload API 从手写 invoke 映射改为基于契约的薄封装生成。
 - [ ] 3.4 错误返回格式标准化（可定位 channel + 业务错误码）。
 
 验收:
@@ -72,6 +72,7 @@
 - `368b1b4` `refactor(store): avoid snapshot cloning in commitMutation hot path` (2.2 阶段进展)
 - `e5fc02c` `refactor(store): lazily build history snapshot only when changed` (2.2 阶段进展)
 - `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback` (2.3 阶段进展)
+- `cf019dd` `refactor(preload): generate invoke api from shared ipc contract` (3.3 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -206,6 +207,12 @@
   - `commitMutation` 在记录历史时自动在 delta 与 full snapshot 之间择优（按序列化体积比）。
   - 关键提交:
     - `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback`
+- `3.3` 已收尾完成:
+  - 新增 `src/shared/ipc-contract.ts` 作为 preload invoke 契约源（channel + payload builder + return type）。
+  - preload 通过 `createIpcInvokeBridge(...)` 生成 invoke API，移除手写 `ipcRenderer.invoke(...)` 映射。
+  - OCR 事件订阅改为使用同一契约文件中的 event channel 定义。
+  - 关键提交:
+    - `cf019dd` `refactor(preload): generate invoke api from shared ipc contract`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
