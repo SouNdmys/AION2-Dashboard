@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { nativeImage } from "electron";
 import Store from "electron-store";
-import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
+import OcrNode from "@gutenye/ocr-node";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
 import {
@@ -45,6 +45,7 @@ import {
   sanitizeOcrImportPayload,
 } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
+import { createOnnxOcrRuntime, type OnnxOcrEngine } from "./workshop-store/ocr-onnx-runtime";
 import { createPaddleOcrRuntime, PADDLE_OCR_PYTHON_SCRIPT } from "./workshop-store/ocr-paddle-runtime";
 import { parsePaddlePayload } from "./workshop-store/ocr-paddle-payload";
 import type { PaddleOcrOutcome } from "./workshop-store/ocr-paddle-payload";
@@ -846,56 +847,24 @@ function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
   };
 }
 
-interface OnnxOcrEngine {
-  detect: (imagePath: string, options?: unknown) => Promise<OnnxOcrLine[]>;
-  destroy?: () => void | Promise<void>;
-}
-
-let onnxOcrEngine: OnnxOcrEngine | null = null;
-let onnxOcrEnginePromise: Promise<OnnxOcrEngine> | null = null;
-const paddleOcrRuntime = createPaddleOcrRuntime({
+const onnxOcrRuntime = createOnnxOcrRuntime({
   confidenceScale: OCR_PADDLE_CONFIDENCE_SCALE,
-});
-
-async function ensureOnnxOcrEngine(_safeMode = true): Promise<OnnxOcrEngine> {
-  if (onnxOcrEngine) {
-    return onnxOcrEngine;
-  }
-  if (onnxOcrEnginePromise) {
-    return onnxOcrEnginePromise;
-  }
-  onnxOcrEnginePromise = (async () => {
-    const created = (await OcrNode.create({
+  createEngine: async () =>
+    ((await OcrNode.create({
       onnxOptions: {
         executionMode: "sequential",
         graphOptimizationLevel: "all",
       },
-    })) as OnnxOcrEngine;
-    onnxOcrEngine = created;
-    return created;
-  })();
-  try {
-    return await onnxOcrEnginePromise;
-  } finally {
-    onnxOcrEnginePromise = null;
-  }
-}
+    })) as OnnxOcrEngine),
+  buildOnnxOcrOutcome: (lines, language, confidenceScale) =>
+    buildOnnxOcrOutcome(lines as Parameters<typeof buildOnnxOcrOutcome>[0], language, confidenceScale),
+});
+const paddleOcrRuntime = createPaddleOcrRuntime({
+  confidenceScale: OCR_PADDLE_CONFIDENCE_SCALE,
+});
 
 async function runOnnxExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
-  try {
-    const engine = await ensureOnnxOcrEngine(safeMode);
-    const lines = await engine.detect(imagePath);
-    return buildOnnxOcrOutcome(lines, language, OCR_PADDLE_CONFIDENCE_SCALE);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "ONNX 引擎异常";
-    return {
-      ok: false,
-      language,
-      rawText: "",
-      words: [],
-      errorMessage: `ONNX OCR 执行失败：${message}`,
-    };
-  }
+  return onnxOcrRuntime.runExtract(imagePath, language, safeMode);
 }
 
 async function runPaddleExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
@@ -920,20 +889,7 @@ async function runPaddleExtract(imagePath: string, language: string, safeMode = 
 }
 
 export function cleanupWorkshopOcrEngineCore(): void {
-  if (onnxOcrEngine && typeof onnxOcrEngine.destroy === "function") {
-    try {
-      const maybePromise = onnxOcrEngine.destroy();
-      if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
-        void (maybePromise as Promise<void>).catch(() => {
-          // ignore onnx cleanup error
-        });
-      }
-    } catch {
-      // ignore onnx cleanup error
-    }
-  }
-  onnxOcrEngine = null;
-  onnxOcrEnginePromise = null;
+  onnxOcrRuntime.cleanup();
   if (paddleOcrRuntime.hasActivity()) {
     paddleOcrRuntime.cleanup("应用退出");
   }

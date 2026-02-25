@@ -547,4 +547,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.35：OCR 第二十刀：抽离 ONNX runtime 生命周期到 `src/main/workshop-store/ocr-onnx-runtime.ts`。
+  - 变更点：
+    - `ensureOnnxOcrEngine / runOnnxExtract / onnx cleanup` 状态机从 core 下沉；
+    - core 改为通过 `onnxOcrRuntime` 执行识别与清理。
+  - 新增：
+    - `src/main/workshop-store/ocr-onnx-runtime.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
