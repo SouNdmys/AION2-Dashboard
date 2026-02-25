@@ -529,4 +529,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.33：OCR 第十八刀：抽离 extract 入口分流层到 `src/main/workshop-store/ocr-extract-entry.ts`。
+  - 变更点：
+    - `extractWorkshopOcrTextCore` 入口层（路径校验、模式分流、错误抛出）从 core 下沉；
+    - core 仅保留委托调用与依赖装配。
+  - 新增：
+    - `src/main/workshop-store/ocr-extract-entry.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

@@ -10,7 +10,7 @@ import type { OcrTsvWord, PaddleOcrOutcome } from "./ocr-paddle-payload";
 
 type TradePriceRole = "server" | "world";
 
-interface ExtractTradeBoardOcrTextInput {
+export interface ExtractTradeBoardOcrTextInput {
   imagePath: string;
   language: string;
   psm: number;
@@ -19,7 +19,7 @@ interface ExtractTradeBoardOcrTextInput {
   warnings: string[];
 }
 
-interface ExtractTradeBoardOcrTextDeps {
+export interface ExtractTradeBoardOcrTextDeps {
   buildPaddleLanguageCandidates: (language: string) => string[];
   cropImageToTempFile: (imagePath: string, rect: WorkshopTradeBoardPreset["namesRect"], scale?: number) => string;
   cleanupTempFile: (filePath: string | null) => void;

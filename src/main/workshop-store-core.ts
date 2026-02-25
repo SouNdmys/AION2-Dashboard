@@ -36,6 +36,7 @@ import {
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
 import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
+import { extractWorkshopOcrTextEntry } from "./workshop-store/ocr-extract-entry";
 import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
 import {
   parseOcrPriceLines,
@@ -995,55 +996,29 @@ function cleanupTempFile(filePath: string | null): void {
 export async function extractWorkshopOcrTextCore(
   payload: WorkshopOcrExtractTextInput,
 ): Promise<WorkshopOcrExtractTextResult> {
-  const imageRawPath = payload.imagePath?.trim();
-  if (!imageRawPath) {
-    throw new Error("OCR 识别失败：请先填写截图路径。");
-  }
-  const imagePath = resolveImportFilePath(imageRawPath);
-  const language = sanitizeOcrLanguage(payload.language);
-  const psm = sanitizeOcrPsm(payload.psm);
-  const safeMode = sanitizeOcrSafeMode(payload.safeMode);
-  const warnings: string[] = [];
-  const tradeBoardPreset = sanitizeTradeBoardPreset(payload.tradeBoardPreset);
-
-  if (tradeBoardPreset) {
-    return extractTradeBoardOcrText(
-      {
-        imagePath,
-        language,
-        psm,
-        safeMode,
-        tradeBoardPreset,
-        warnings,
-      },
-      {
-        buildPaddleLanguageCandidates,
-        cropImageToTempFile,
-        cleanupTempFile,
-        runPaddleExtract,
-        formatPaddleOcrError,
-        sanitizeOcrLineItemName,
-        clamp,
-        detectTradePriceRoleByHeaderText,
-        stringifyOcrWords,
-        nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
-        numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
-      },
-    );
-  }
-
-  const primary = await runPaddleExtract(imagePath, language, safeMode);
-  if (!primary.ok) {
-    throw new Error(
-      `ONNX OCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}`,
-    );
-  }
-  return buildPrimaryOcrTextResult({
-    rawText: primary.rawText,
-    detectedLanguage: primary.language,
-    fallbackLanguage: language,
-    psm,
-    warnings,
+  return extractWorkshopOcrTextEntry(payload, {
+    resolveImportFilePath,
+    sanitizeOcrLanguage,
+    sanitizeOcrPsm,
+    sanitizeOcrSafeMode,
+    sanitizeTradeBoardPreset,
+    runPaddleExtract,
+    formatPaddleOcrError,
+    buildPrimaryOcrTextResult,
+    extractTradeBoardOcrText,
+    tradeBoardDeps: {
+      buildPaddleLanguageCandidates,
+      cropImageToTempFile,
+      cleanupTempFile,
+      runPaddleExtract,
+      formatPaddleOcrError,
+      sanitizeOcrLineItemName,
+      clamp,
+      detectTradePriceRoleByHeaderText,
+      stringifyOcrWords,
+      nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
+      numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+    },
   });
 }
 
