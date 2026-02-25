@@ -440,4 +440,18 @@
   - 新增：
     - `src/main/workshop-store/ocr-tradeboard-rows.test.ts`
   - 提交：`ea4aece` `test(ocr): add coverage for trade-board row helper module`
+- [x] A1-6.23：OCR 第九刀：抽离交易板价格提取与回退流程到 `src/main/workshop-store/ocr-tradeboard-prices.ts`。
+  - 变更点：
+    - `extractPriceRowsForRect / extractDualPriceRowsForRect` 从 core 下沉；
+    - 新模块统一承接「词框优先 + 文本行回退」与「双列快速分割 + 双区块回退」策略；
+    - `extractWorkshopOcrTextCore` 通过依赖注入传入 `cropImageToTempFile / cleanupTempFile / runPaddleExtract / stringifyOcrWords`，core 进一步收敛为编排层。
+  - 提交：`4b1ed9e` `refactor(ocr): extract trade-board price extraction pipeline from core`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
+- [x] A1-6.24：为 OCR 交易板价格提取新模块补单测覆盖。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-prices.test.ts`
+  - 提交：`8642462` `test(ocr): add coverage for trade-board price extraction module`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
