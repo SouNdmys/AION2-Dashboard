@@ -426,4 +426,18 @@
   - 新增：
     - `src/main/workshop-store/ocr-onnx-output.test.ts`
   - 提交：`d3912ae` `test(ocr): add coverage for onnx output normalization helper`
+- [x] A1-6.21：OCR 第八刀：抽离交易板行解析 helper 到 `src/main/workshop-store/ocr-tradeboard-rows.ts`。
+  - 变更点：
+    - `normalizeNumericToken / parseNonEmptyLines / parsePriceFromLine` 从 core 下沉；
+    - `resolveTradeBoardRowCount / buildNameRowsFromWords / buildPriceRowsFromWords / detectTradePriceRoleByHeaderText` 迁移到新模块；
+    - `extractWorkshopOcrTextCore` 与 OCR 导入流程改为通过新模块调用，`core` 仅保留流程编排与依赖注入。
+  - 提交：`b1ba5e6` `refactor(ocr): extract trade-board row parsing helpers from core`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
+- [x] A1-6.22：为 OCR 交易板行解析新模块补单测覆盖。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-rows.test.ts`
+  - 提交：`ea4aece` `test(ocr): add coverage for trade-board row helper module`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
