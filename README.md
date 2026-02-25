@@ -7,14 +7,14 @@
 
 ## 下载与更新
 
-- 最新版本（v2.0.0）:  
-  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.0.0`
+- 最新版本（v2.0.1）:  
+  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.0.1`
 - 资产说明:
   - `Setup` 安装版（推荐）：支持后续自动更新
   - `Portable` 单文件：即开即用，不走自动安装更新
   - `win.7z` 压缩包：解压即用，不走自动安装更新
 - 升级提示:
-  - 建议 `v1.x` 用户手动安装一次 `v2.0.0 Setup`，后续继续使用自动更新链路。
+  - 建议 `v1.x` 用户手动安装一次 `v2.x Setup`，后续继续使用自动更新链路。
 
 ## v2.0.0 发布重点
 
@@ -97,7 +97,7 @@ npm run check:prepackage
 2. `npm run build`
 3. 校验构建产物是否存在:
    - `out/main/index.js`
-   - `out/preload/index.mjs`
+   - `out/preload/index.js`
    - `out/renderer/index.html`
 
 仅构建（不做检查）:
@@ -122,6 +122,9 @@ npm run dist:win:publish
 - 自动更新仅对 `NSIS` 安装版生效，`portable` 包不参与自动更新安装流程。
 - 客户端会在启动时检查 GitHub Releases，新版本下载完成后提示重启安装。
 
+完整发布与回滚流程（含命令顺序、核对清单、应急回退）见:
+- `RELEASE_RUNBOOK.md`
+
 ## 数据与备份
 
 - 应用状态由 `electron-store` 本地持久化
@@ -139,14 +142,17 @@ npm run dist:win:publish
 - `scripts/prepackage-check.mjs`: 打包前自检脚本
 - `OPERATION_LOG.md`: 迭代日志
 - `FRAMEWORK.md`: 架构基线说明
+- `RELEASE_RUNBOOK.md`: 发布与回滚流程基线
 
 ## 常用命令
 
 ```bash
 npm run dev
+npm run test:unit
 npm run typecheck
 npm run build
 npm run check:prepackage
+npm run test:smoke
 ```
 
 ## 开源与授权说明

@@ -22,7 +22,7 @@ function run(command, args) {
 }
 
 function checkOutputs() {
-  const requiredFiles = ["out/main/index.js", "out/preload/index.mjs", "out/renderer/index.html"];
+  const requiredFiles = ["out/main/index.js", "out/preload/index.js", "out/renderer/index.html"];
   const missing = requiredFiles.filter((path) => !existsSync(resolve(projectRoot, path)));
   if (missing.length > 0) {
     console.error("[check:prepackage] Missing build artifacts:");

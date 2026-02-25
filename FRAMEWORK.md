@@ -31,11 +31,15 @@
   - Energy consumption priority: base first, bonus second.
   - Daily reset at 05:00.
   - Weekly reset at Wednesday 05:00.
-  - Expedition charge ticks: 04:00 / 12:00 / 20:00.
-  - Transcendence charge ticks: 03:00 / 15:00.
+  - Expedition charge ticks: 05:00 / 13:00 / 21:00.
+  - Transcendence charge ticks: 05:00 / 17:00.
+  - Corridor unified refresh: Tuesday / Thursday / Saturday 21:00.
   - Gold estimate logic: prioritize high value runs under current energy budget.
   - Weekly stats auto reset together with weekly reset.
   - Expedition weekly all-character run cap: 84.
+
+Release / rollback process baseline:
+- `RELEASE_RUNBOOK.md`
 
 ## 5. Dashboard Baseline Cards
 - Global:
