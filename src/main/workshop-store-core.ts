@@ -8,13 +8,9 @@ import Store from "electron-store";
 import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
 import { tify } from "chinese-conv";
 import {
-  normalizeCatalogLookupName,
-  parseCatalogCsvText,
-  resolveBuiltinCatalogFilePath,
-  resolveBuiltinCatalogSignature,
   resolveCatalogImportFilePath,
 } from "./workshop-store/catalog-import-shared";
-import { applyCatalogData } from "./workshop-store/catalog-import-apply";
+import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopOcrExtractTextInput,
@@ -68,9 +64,6 @@ const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
   "高純度的奧里哈康磐石",
   "新鮮的金盒花",
 ]);
-const LEGACY_BUILTIN_ITEM_NAME_REDIRECTS: Record<string, string> = {
-  達人閃耀的法珠: "達人閃耀的真實法珠",
-};
 const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra";
 const WORKSHOP_OCR_DEFAULT_PSM = 6;
 const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
@@ -1643,7 +1636,7 @@ export function readWorkshopState(): WorkshopState {
   const cleaned = removeKnownInvalidItems(normalized);
   const currentState = cleaned === normalized ? normalized : writeWorkshopState(cleaned);
   const version = typeof rawVersion === "number" ? Math.floor(rawVersion) : 0;
-  const currentBuiltinCatalogSignature = resolveBuiltinCatalogSignature();
+  const currentBuiltinCatalogSignature = getBuiltinCatalogSignature();
   const shouldRebuildForCatalogChange =
     typeof storedBuiltinCatalogSignature !== "string" || storedBuiltinCatalogSignature !== currentBuiltinCatalogSignature;
   const shouldRebuildFromBuiltin =
@@ -1654,84 +1647,22 @@ export function readWorkshopState(): WorkshopState {
   if (!shouldRebuildFromBuiltin) {
     return currentState;
   }
-  const builtin = buildBuiltinCatalogState();
-  const rebuilt = remapRuntimeStateToBuiltin(currentState, builtin);
+  const rebuilt = rebuildStateWithBuiltinCatalog(currentState, {
+    stateVersion: WORKSHOP_STATE_VERSION,
+    priceHistoryLimit: WORKSHOP_PRICE_HISTORY_LIMIT,
+    defaultSignalRule: DEFAULT_WORKSHOP_SIGNAL_RULE,
+    normalizeState: normalizeWorkshopState,
+    applyDeps: {
+      stateVersion: WORKSHOP_STATE_VERSION,
+      loadIconCache: () => normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY)),
+      resolveItemIconWithCache,
+      cacheIconByName,
+      normalizeState: normalizeWorkshopState,
+    },
+  });
   const persisted = writeWorkshopState(rebuilt);
   workshopStore.set("builtinCatalogSignature", currentBuiltinCatalogSignature);
   return persisted;
-}
-
-function remapRuntimeStateToBuiltin(previous: WorkshopState, builtin: WorkshopState): WorkshopState {
-  const builtinByLookup = new Map<string, WorkshopItem>();
-  builtin.items.forEach((item) => {
-    builtinByLookup.set(normalizeCatalogLookupName(item.name), item);
-  });
-  const legacyRedirectByLookup = new Map<string, string>();
-  Object.entries(LEGACY_BUILTIN_ITEM_NAME_REDIRECTS).forEach(([legacyName, nextName]) => {
-    legacyRedirectByLookup.set(normalizeCatalogLookupName(legacyName), normalizeCatalogLookupName(nextName));
-  });
-
-  const mappedItemIdByLegacyId = new Map<string, string>();
-  previous.items.forEach((item) => {
-    const key = normalizeCatalogLookupName(item.name);
-    let hit = builtinByLookup.get(key);
-    if (!hit) {
-      const redirectedLookup = legacyRedirectByLookup.get(key);
-      if (redirectedLookup) {
-        hit = builtinByLookup.get(redirectedLookup);
-      }
-    }
-    if (!hit) {
-      return;
-    }
-    mappedItemIdByLegacyId.set(item.id, hit.id);
-  });
-
-  const mappedPrices = previous.prices
-    .map((row) => {
-      const mappedItemId = mappedItemIdByLegacyId.get(row.itemId);
-      if (!mappedItemId) {
-        return null;
-      }
-      return {
-        ...row,
-        itemId: mappedItemId,
-      };
-    })
-    .filter((row): row is WorkshopPriceSnapshot => row !== null)
-    .slice(-WORKSHOP_PRICE_HISTORY_LIMIT);
-
-  const mappedInventoryByItemId = new Map<string, WorkshopInventoryItem>();
-  previous.inventory.forEach((row) => {
-    const mappedItemId = mappedItemIdByLegacyId.get(row.itemId);
-    if (!mappedItemId) {
-      return;
-    }
-    const prev = mappedInventoryByItemId.get(mappedItemId);
-    if (!prev) {
-      mappedInventoryByItemId.set(mappedItemId, {
-        ...row,
-        itemId: mappedItemId,
-      });
-      return;
-    }
-    const prevTs = new Date(prev.updatedAt).getTime();
-    const nextTs = new Date(row.updatedAt).getTime();
-    if (nextTs >= prevTs) {
-      mappedInventoryByItemId.set(mappedItemId, {
-        ...row,
-        itemId: mappedItemId,
-      });
-    }
-  });
-
-  return normalizeWorkshopState({
-    ...builtin,
-    version: WORKSHOP_STATE_VERSION,
-    prices: mappedPrices,
-    inventory: Array.from(mappedInventoryByItemId.values()).sort((left, right) => left.itemId.localeCompare(right.itemId)),
-    signalRule: previous.signalRule,
-  });
 }
 
 export function ensureItemExists(state: WorkshopState, itemId: string): void {
@@ -3933,29 +3864,4 @@ export async function importWorkshopOcrPricesCore(
     iconCaptureWarnings: [...iconCaptureWarnings, ...nameCorrectionWarnings, ...priceQualityWarnings],
     importedEntries,
   };
-}
-
-function buildBuiltinCatalogState(): WorkshopState {
-  const filePath = resolveBuiltinCatalogFilePath();
-  const text = fs.readFileSync(filePath, "utf8");
-  const parsed = parseCatalogCsvText(text);
-  const baseState: WorkshopState = {
-    version: WORKSHOP_STATE_VERSION,
-    items: [],
-    recipes: [],
-    prices: [],
-    inventory: [],
-    signalRule: DEFAULT_WORKSHOP_SIGNAL_RULE,
-  };
-  const result = applyCatalogData(baseState, parsed, path.basename(filePath), {
-    stateVersion: WORKSHOP_STATE_VERSION,
-    loadIconCache: () => normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY)),
-    resolveItemIconWithCache,
-    cacheIconByName,
-    normalizeState: normalizeWorkshopState,
-  });
-  if (result.state.items.length === 0 || result.state.recipes.length === 0) {
-    throw new Error(`内置目录解析失败: ${filePath}`);
-  }
-  return result.state;
 }

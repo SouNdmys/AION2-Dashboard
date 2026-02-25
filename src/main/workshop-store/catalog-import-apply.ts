@@ -9,7 +9,7 @@ import {
   type CatalogRecipeRow,
 } from "./catalog-import-shared";
 
-interface CatalogApplyDependencies {
+export interface CatalogApplyDependencies {
   stateVersion: number;
   loadIconCache: () => Map<string, string>;
   resolveItemIconWithCache: (
