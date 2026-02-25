@@ -60,7 +60,7 @@
 任务:
 - [x] 4.1 提取 `usePersistedState`，替代 Workshop 中重复 localStorage effect。
 - [x] 4.2 提取 `useAppActions` / `useWorkshopActions`，收敛 `window.aionApi` 调用入口。
-- [ ] 4.3 将高耦合计算逻辑移入 selector 层（memoized selectors）。
+- [x] 4.3 将高耦合计算逻辑移入 selector 层（memoized selectors）。
 - [ ] 4.4 为关键交互流补 UI 回归脚本（最小可行 smoke）。
 
 ## 已完成变更（当前分支）
@@ -74,6 +74,7 @@
 - `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback` (2.3 阶段进展)
 - `cf019dd` `refactor(preload): generate invoke api from shared ipc contract` (3.3 阶段进展)
 - `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes` (3.4 阶段进展)
+- `627d25e` `refactor(workshop): move derived models into memoized selector layer` (4.3 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -220,6 +221,12 @@
   - preload invoke 统一解析标准错误并抛出格式化消息：`[channel][code] message`。
   - 关键提交:
     - `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes`
+- `4.3` 已收尾完成:
+  - 新增 `src/renderer/src/features/workshop/selectors/*`，下沉 catalog/economy/insight 派生计算为 selector 层。
+  - 引入 `memoizeSelector`（按输入引用缓存）以替代 hooks 内部大块 `useMemo` 计算逻辑。
+  - `useWorkshopCatalogModels` / `useWorkshopEconomyModels` / `useWorkshopInsightModels` 改为 selector 调度。
+  - 关键提交:
+    - `627d25e` `refactor(workshop): move derived models into memoized selector layer`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
