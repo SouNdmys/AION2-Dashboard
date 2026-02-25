@@ -28,11 +28,8 @@ import {
 import { buildExpectedIconByLineNumber, captureOcrLineIcons } from "./workshop-store/ocr-icon-capture";
 import { sanitizeTradeBoardPreset } from "./workshop-store/ocr-tradeboard-preset";
 import {
-  buildNameRowsFromWords,
   detectTradePriceRoleByHeaderText,
   normalizeNumericToken,
-  parseNonEmptyLines,
-  resolveTradeBoardRowCount,
 } from "./workshop-store/ocr-tradeboard-rows";
 import { extractDualPriceRowsForRect, extractPriceRowsForRect } from "./workshop-store/ocr-tradeboard-prices";
 import {
@@ -45,6 +42,7 @@ import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
+import { buildTradeBoardNameRows } from "./workshop-store/ocr-tradeboard-names";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -1080,33 +1078,21 @@ export async function extractWorkshopOcrTextCore(
       if (!namesExtract.ok) {
         throw new Error(`名称区 OCR 失败：${formatPaddleOcrError(namesExtract.errorMessage)}`);
       }
-      const effectiveRowCount = resolveTradeBoardRowCount(tradeBoardPreset.rowCount, namesExtract.words, namesExtract.rawText, warnings, {
-        sanitizeOcrLineItemName,
-        clamp,
-      });
-      const nameRowsFromTsv = buildNameRowsFromWords(
-        namesExtract.words,
-        effectiveRowCount,
-        Math.floor(tradeBoardPreset.namesRect.height * namesScale),
+      const { effectiveRowCount, nameRows } = buildTradeBoardNameRows(
+        {
+          namesWords: namesExtract.words,
+          namesRawText: namesExtract.rawText,
+          expectedRowCount: tradeBoardPreset.rowCount,
+          namesRectHeight: tradeBoardPreset.namesRect.height,
+          namesScale,
+          warnings,
+        },
         {
           sanitizeOcrLineItemName,
           clamp,
           nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
         },
       );
-      const nameRowsTsvSanitized = nameRowsFromTsv.map((row) => {
-        const cleaned = sanitizeOcrLineItemName(row ?? "");
-        return cleaned || null;
-      });
-      const nameLinesFallback = parseNonEmptyLines(namesExtract.rawText)
-        .map((line) => sanitizeOcrLineItemName(line))
-        .filter(Boolean)
-        .slice(0, effectiveRowCount);
-      const nameRowsFallback = Array.from({ length: effectiveRowCount }, (_, index) => nameLinesFallback[index] ?? null);
-      const nameRows =
-        nameRowsTsvSanitized.filter((entry) => entry !== null).length >= nameLinesFallback.length
-          ? nameRowsTsvSanitized
-          : nameRowsFallback;
 
       let leftValues: Array<number | null> = [];
       let rightValues: Array<number | null> = [];

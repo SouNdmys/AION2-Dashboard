@@ -493,4 +493,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.29：OCR 第十四刀：抽离 trade-board 名称行构建与回退策略到 `src/main/workshop-store/ocr-tradeboard-names.ts`。
+  - 变更点：
+    - `effectiveRowCount` 自动识别与 `nameRows`（TSV 优先 + 文本行回退）从 core 下沉；
+    - `extractWorkshopOcrTextCore` 改为通过 `buildTradeBoardNameRows(...)` 获取名称行结果。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-names.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
