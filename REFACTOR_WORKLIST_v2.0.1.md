@@ -79,6 +79,7 @@
 - `4b29680` `refactor(workshop): make ocr import and signal compute interruptible` (5.1 阶段进展)
 - `993489a` `security(window): enable sandboxed renderer and isolate overlay` (5.2 阶段进展)
 - `0a7274b` `test(unit): add vitest suite for shared time and engine` (5.3 阶段进展)
+- `fad4c91` `docs(release): sync rules and add publish rollback runbook` (5.4 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -155,7 +156,7 @@
 - [x] 5.1 将工坊重计算（价格信号/部分 OCR 后处理）迁移到 worker 或可中断计算路径。
 - [x] 5.2 收紧 BrowserWindow 安全配置（逐步移除 `contextIsolation: false` / `sandbox: false` 依赖）。
 - [x] 5.3 补最小测试体系（`shared/engine`、`shared/time`、关键 store 逻辑）。
-- [ ] 5.4 文档同步（规则、发布流程、回滚流程）。
+- [x] 5.4 文档同步（规则、发布流程、回滚流程）。
 
 验收:
 - 大数据量下工坊操作响应稳定。
@@ -261,8 +262,17 @@
   - `npm run test:smoke` 接入 `test:unit` 前置执行，形成“单测 + 构建 + UI smoke”最小闭环。
   - 关键提交:
     - `0a7274b` `test(unit): add vitest suite for shared time and engine`
+- `5.4` 已收尾完成:
+  - 新增 `RELEASE_RUNBOOK.md`，统一沉淀“规则基线 / 正式发布流程 / 回滚流程 / hotfix 最小流程”。
+  - `README.md` 同步发布链路文档入口，修正版本下载链接与发布前检查口径（`out/preload/index.js`）。
+  - `FRAMEWORK.md` 同步时间规则口径（远征/超越恢复时段、回廊刷新时段）并链接发布回滚基线文档。
+  - `scripts/prepackage-check.mjs` 产物检查路径同步为 `out/preload/index.js`，与当前构建产物一致。
+  - 关键提交:
+    - `fad4c91` `docs(release): sync rules and add publish rollback runbook`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
   - `npm run test:unit`
+  - `npm run check:prepackage`
   - `npm run smoke:ui`
+  - `npm run test:smoke`
