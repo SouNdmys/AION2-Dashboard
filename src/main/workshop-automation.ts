@@ -15,7 +15,7 @@ import type {
   WorkshopScreenPreviewResult,
   WorkshopTradeBoardPreset,
 } from "../shared/types";
-import { extractWorkshopOcrText, importWorkshopOcrPrices } from "./workshop-store";
+import { extractWorkshopOcrText, importWorkshopOcrPrices } from "./workshop-store/ocr";
 
 const DEFAULT_SHORTCUT = process.platform === "win32" ? "Shift+F1" : "CommandOrControl+Shift+F1";
 const DEFAULT_LANGUAGE = "chi_tra";

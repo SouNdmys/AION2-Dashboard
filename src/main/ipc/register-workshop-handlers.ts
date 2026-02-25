@@ -25,24 +25,22 @@ import {
   triggerWorkshopOcrHotkeyNow,
 } from "../workshop-automation";
 import {
-  addWorkshopPriceSnapshot,
-  deleteWorkshopPriceSnapshot,
   deleteWorkshopItem,
   deleteWorkshopRecipe,
-  extractWorkshopOcrText,
-  getWorkshopCraftOptions,
-  getWorkshopPriceHistory,
-  getWorkshopPriceSignals,
-  getWorkshopState,
   importWorkshopCatalogFromFile,
-  importWorkshopOcrPrices,
-  seedWorkshopSampleData,
-  simulateWorkshopCraft,
-  updateWorkshopSignalRule,
-  upsertWorkshopInventory,
   upsertWorkshopItem,
   upsertWorkshopRecipe,
-} from "../workshop-store";
+} from "../workshop-store/catalog";
+import { extractWorkshopOcrText, importWorkshopOcrPrices } from "../workshop-store/ocr";
+import {
+  addWorkshopPriceSnapshot,
+  deleteWorkshopPriceSnapshot,
+  getWorkshopPriceHistory,
+  getWorkshopPriceSignals,
+  updateWorkshopSignalRule,
+} from "../workshop-store/pricing";
+import { getWorkshopCraftOptions, simulateWorkshopCraft } from "../workshop-store/simulation";
+import { getWorkshopState, seedWorkshopSampleData, upsertWorkshopInventory } from "../workshop-store/store";
 import { readObjectPayload, readOptionalObjectPayload, readOptionalNumber, readString } from "./guards";
 
 export function registerWorkshopIpcHandlers(): void {

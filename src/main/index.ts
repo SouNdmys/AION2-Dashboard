@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
 import { cleanupWorkshopOcrHotkey, initializeWorkshopOcrAutomation } from "./workshop-automation";
-import { cleanupWorkshopOcrEngine } from "./workshop-store";
+import { cleanupWorkshopOcrEngine } from "./workshop-store/ocr";
 
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
