@@ -413,4 +413,17 @@
   - 新增：
     - `src/main/workshop-store/ocr-paddle-payload.test.ts`
   - 提交：`4e8efde` `test(ocr): add coverage for paddle payload parser helper`
+- [x] A1-6.19：OCR 第七刀：抽离 ONNX 行归一化与结果组装到 `src/main/workshop-store/ocr-onnx-output.ts`。
+  - 变更点：
+    - `normalizeOnnxLineWord` 从 core 下沉；
+    - `runOnnxExtract` 改为调用 `buildOnnxOcrOutcome(...)`，core 聚焦引擎调度与错误处理。
+  - 提交：`125f96d` `refactor(ocr): extract onnx line normalization and output assembly`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
+- [x] A1-6.20：为 OCR ONNX 输出新模块补单测覆盖。
+  - 新增：
+    - `src/main/workshop-store/ocr-onnx-output.test.ts`
+  - 提交：`d3912ae` `test(ocr): add coverage for onnx output normalization helper`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
