@@ -511,4 +511,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.31：OCR 第十六刀：抽离 ONNX→Paddle fallback 决策流到 `src/main/workshop-store/ocr-extract-runner.ts`。
+  - 变更点：
+    - `runPaddleExtract` 中 onnx / worker / command fallback 决策链从 core 下沉；
+    - core 保留参数接线与 runtime 依赖注入，行为保持一致。
+  - 新增：
+    - `src/main/workshop-store/ocr-extract-runner.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

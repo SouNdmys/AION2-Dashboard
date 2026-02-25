@@ -40,6 +40,7 @@ import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
+import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
 import { buildTradeBoardNameRows } from "./workshop-store/ocr-tradeboard-names";
 import { resolveTradeBoardPriceRows } from "./workshop-store/ocr-tradeboard-price-resolution";
 import {
@@ -903,78 +904,24 @@ async function runOnnxExtract(imagePath: string, language: string, safeMode = tr
 }
 
 async function runPaddleExtract(imagePath: string, language: string, safeMode = true): Promise<PaddleOcrOutcome> {
-  const onnxResult = await runOnnxExtract(imagePath, language, safeMode);
-  if (onnxResult.ok) {
-    return onnxResult;
-  }
-
-  if (!OCR_ENABLE_PYTHON_FALLBACK) {
-    return onnxResult;
-  }
-
-  const candidates = buildPaddleLanguageCandidates(language);
-  const langArg = candidates.join(",");
-  const attemptErrors: string[] = [onnxResult.errorMessage ?? "ONNX OCR 失败"];
-
-  const isInterpreterNotAvailable = (message: string): boolean => {
-    const normalized = message.toLocaleLowerCase();
-    return normalized.includes("no suitable python runtime found") || normalized.includes("not recognized");
-  };
-
-  const isImportFailure = (message: string): boolean => {
-    return message.toLocaleLowerCase().includes("import paddleocr failed");
-  };
-
-  try {
-    const fromWorker = await paddleOcrRuntime.runWithWorker(imagePath, candidates, safeMode);
-    if (fromWorker.ok) {
-      return fromWorker;
-    }
-    const payloadError = fromWorker.errorMessage ?? "输出无效";
-    attemptErrors.push(`worker: ${payloadError}`);
-    if (!isImportFailure(payloadError) && !isInterpreterNotAvailable(payloadError)) {
-      return {
-        ...fromWorker,
-        errorMessage: `worker: ${payloadError}`,
-      };
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "worker 失败";
-    attemptErrors.push(`worker: ${message}`);
-  }
-
-  const attempts = paddleOcrRuntime.buildCommandAttempts(PADDLE_OCR_PYTHON_SCRIPT, [imagePath, langArg]);
-  for (const attempt of attempts) {
-    const result = await paddleOcrRuntime.runWithCommand(attempt.command, attempt.args, safeMode);
-    if (!result.ok) {
-      const detail = (result.errorMessage ?? result.stderr.trim()) || "执行失败";
-      attemptErrors.push(`${attempt.label}: ${detail}`);
-      if (!isInterpreterNotAvailable(detail)) {
-        break;
-      }
-      continue;
-    }
-    const payload = parsePaddlePayload(result.stdout, OCR_PADDLE_CONFIDENCE_SCALE);
-    if (payload.ok) {
-      return payload;
-    }
-    const payloadError = payload.errorMessage ?? "输出无效";
-    attemptErrors.push(`${attempt.label}: ${payloadError}`);
-    if (!isImportFailure(payloadError) && !isInterpreterNotAvailable(payloadError)) {
-      return {
-        ...payload,
-        errorMessage: `${attempt.label}: ${payloadError}`,
-      };
-    }
-  }
-
-  return {
-    ok: false,
-    language: "",
-    rawText: "",
-    words: [],
-    errorMessage: attemptErrors.join(" | ") || "ONNX OCR 调用失败。",
-  };
+  return runPaddleExtractWithFallback(
+    {
+      imagePath,
+      language,
+      safeMode,
+      enablePythonFallback: OCR_ENABLE_PYTHON_FALLBACK,
+      confidenceScale: OCR_PADDLE_CONFIDENCE_SCALE,
+    },
+    {
+      runOnnxExtract,
+      buildPaddleLanguageCandidates,
+      runPaddleWithWorker: (path, candidates, mode) => paddleOcrRuntime.runWithWorker(path, candidates, mode),
+      buildPaddleCommandAttempts: (script, args) => paddleOcrRuntime.buildCommandAttempts(script, args),
+      runPaddleWithCommand: (command, args, mode) => paddleOcrRuntime.runWithCommand(command, args, mode),
+      parsePaddlePayload,
+      pythonScript: PADDLE_OCR_PYTHON_SCRIPT,
+    },
+  );
 }
 
 export function cleanupWorkshopOcrEngineCore(): void {
