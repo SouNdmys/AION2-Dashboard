@@ -302,6 +302,9 @@
   - `src/main/workshop-store/store.test.ts`
   - `src/main/workshop-store/ocr.test.ts`
   - `src/main/workshop-store/pricing-analytics.test.ts`
+  - 提交：
+    - `b4761b0` `refactor(workshop): move pricing/simulation/store domain logic out of core`
+    - `f34b31f` `test(workshop): add coverage for ocr/store domain wrappers and pricing analytics`
 - [x] A1-6.1：移除 `src/main/workshop-store-core.ts` 中遗留的 simulation/pricing 旧公开实现与仅供其使用的私有 helper，避免与域模块双实现。
 - [x] A1-6.2：将样例 seed 逻辑与样例数据常量下沉到 `src/main/workshop-store/store.ts`，删除 `seedWorkshopSampleDataCore` 与 core 内部样例 seed 常量，收敛 store 域职责。
 - [x] A1-6.3：同步更新 `src/main/workshop-store/store.test.ts`，从“委托 core helper”改为验证 store 域 seed 行为。
@@ -318,5 +321,15 @@
   - 提交：`21431ce` `refactor(catalog): move file-import entrypoint into catalog domain`
   - 回归：
     - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+- [x] A1-6.7：将 `applyCatalogDataCore` 从 `core` 解耦到专属模块 `src/main/workshop-store/catalog-import-apply.ts`。
+  - 变更点：
+    - `core` 删除 `applyCatalogDataCore` 实现，改为调用新模块；
+    - `catalog.ts` 导入流程改为直接调用 `applyCatalogData(...)`；
+    - `catalog.test.ts` mock 更新为 `catalog-import-apply` 模块。
+  - 提交：`ca78ff3` `refactor(catalog): decouple applyCatalogData into dedicated module`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store/catalog.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
