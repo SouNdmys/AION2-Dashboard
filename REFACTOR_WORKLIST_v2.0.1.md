@@ -365,4 +365,13 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.13：OCR 第三刀：抽离 OCR 提取配置 helper 到 `src/main/workshop-store/ocr-extract-config.ts`。
+  - 变更点：
+    - `sanitizeOcrLanguage / sanitizeOcrPsm / sanitizeOcrSafeMode / buildPaddleLanguageCandidates` 从 core 下沉；
+    - `extractWorkshopOcrTextCore` 及 Paddle 路径改用新模块。
+  - 提交：`2807b98` `refactor(ocr): extract extract-config sanitizers and language candidates`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
