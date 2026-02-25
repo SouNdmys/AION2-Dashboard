@@ -502,4 +502,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.30：OCR 第十五刀：抽离 trade-board 价格分支编排到 `src/main/workshop-store/ocr-tradeboard-price-resolution.ts`。
+  - 变更点：
+    - dual/single 价格提取分支与左右列角色合并逻辑从 core 下沉；
+    - `extractWorkshopOcrTextCore` 改为通过 `resolveTradeBoardPriceRows(...)` 获取价格行与列角色结果。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-price-resolution.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

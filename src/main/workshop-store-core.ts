@@ -31,18 +31,17 @@ import {
   detectTradePriceRoleByHeaderText,
   normalizeNumericToken,
 } from "./workshop-store/ocr-tradeboard-rows";
-import { extractDualPriceRowsForRect, extractPriceRowsForRect } from "./workshop-store/ocr-tradeboard-prices";
 import {
   buildTradeBoardPrimaryTextLines,
   buildTradeBoardRawText,
   buildTradeRows,
-  resolveDualPriceRolesByHeader,
 } from "./workshop-store/ocr-tradeboard-orchestration";
 import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
 import { buildTradeBoardNameRows } from "./workshop-store/ocr-tradeboard-names";
+import { resolveTradeBoardPriceRows } from "./workshop-store/ocr-tradeboard-price-resolution";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -1094,85 +1093,38 @@ export async function extractWorkshopOcrTextCore(
         },
       );
 
-      let leftValues: Array<number | null> = [];
-      let rightValues: Array<number | null> = [];
-      let rawPriceSection = "";
-      let rawPriceTsvSection = "";
-      let effectiveLeftRole: "server" | "world" = tradeBoardPreset.leftPriceRole === "world" ? "world" : "server";
-      let effectiveRightRole: "server" | "world" = tradeBoardPreset.rightPriceRole === "server" ? "server" : "world";
-      let pricesEngine = "";
-      const tradeBoardPriceExtractDeps = {
-        clamp,
-        numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
-        cropImageToTempFile,
-        cleanupTempFile,
-        runPaddleExtract,
-        stringifyOcrWords,
-      };
-
-      if (tradeBoardPreset.priceMode === "dual") {
-        const detectedRoles = await resolveDualPriceRolesByHeader(
-          {
-            imagePath,
-            pricesRect: tradeBoardPreset.pricesRect,
-            headerLanguage: namesLanguage,
-            safeMode,
-            fallbackLeftRole: effectiveLeftRole,
-            fallbackRightRole: effectiveRightRole,
-            warnings,
-          },
-          {
-            clamp,
-            cropImageToTempFile,
-            cleanupTempFile,
-            runPaddleExtract,
-            detectTradePriceRoleByHeaderText,
-          },
-        );
-        effectiveLeftRole = detectedRoles.leftRole;
-        effectiveRightRole = detectedRoles.rightRole;
-        const dualOutcome = await extractDualPriceRowsForRect(
+      const {
+        leftValues,
+        rightValues,
+        rawPriceSection,
+        rawPriceTsvSection,
+        pricesEngine,
+        effectiveLeftRole,
+        effectiveRightRole,
+      } = await resolveTradeBoardPriceRows(
+        {
           imagePath,
-          tradeBoardPreset.pricesRect,
+          pricesRect: tradeBoardPreset.pricesRect,
           effectiveRowCount,
           pricesScale,
+          namesLanguage,
           safeMode,
+          priceMode: tradeBoardPreset.priceMode === "dual" ? "dual" : "single",
+          priceColumn: tradeBoardPreset.priceColumn === "right" ? "right" : "left",
+          fallbackLeftRole: tradeBoardPreset.leftPriceRole === "world" ? "world" : "server",
+          fallbackRightRole: tradeBoardPreset.rightPriceRole === "server" ? "server" : "world",
           warnings,
-          tradeBoardPriceExtractDeps,
-        );
-        leftValues = dualOutcome.leftValues;
-        rightValues = dualOutcome.rightValues;
-        rawPriceSection = dualOutcome.rawText;
-        rawPriceTsvSection = dualOutcome.tsvText;
-        pricesEngine = dualOutcome.engine;
-        warnings.push(
-          `双价格列角色：左列=${effectiveLeftRole === "server" ? "伺服器" : "世界"}，右列=${
-            effectiveRightRole === "server" ? "伺服器" : "世界"
-          }。`,
-        );
-      } else {
-        const singleOutcome = await extractPriceRowsForRect(
-          imagePath,
-          tradeBoardPreset.pricesRect,
-          effectiveRowCount,
-          pricesScale,
-          safeMode,
-          tradeBoardPreset.priceColumn,
-          warnings,
-          "",
-          tradeBoardPriceExtractDeps,
-        );
-        if (tradeBoardPreset.priceColumn === "right") {
-          leftValues = Array.from({ length: effectiveRowCount }, () => null);
-          rightValues = singleOutcome.values;
-        } else {
-          leftValues = singleOutcome.values;
-          rightValues = Array.from({ length: effectiveRowCount }, () => null);
-        }
-        rawPriceSection = singleOutcome.rawText;
-        rawPriceTsvSection = singleOutcome.tsvText;
-        pricesEngine = singleOutcome.engine;
-      }
+        },
+        {
+          clamp,
+          numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+          cropImageToTempFile,
+          cleanupTempFile,
+          runPaddleExtract,
+          stringifyOcrWords,
+          detectTradePriceRoleByHeaderText,
+        },
+      );
 
       const tradeRows = buildTradeRows({
         effectiveRowCount,
