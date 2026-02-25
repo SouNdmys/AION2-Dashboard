@@ -68,6 +68,8 @@ const WORKSHOP_PRICE_RULE_COMPONENT_MAX_HARD = 100_000_000;
 const WORKSHOP_PRICE_NOTE_TAG_SUSPECT = "qa:suspect:auto";
 const WORKSHOP_PRICE_NOTE_TAG_HARD = "qa:hard-outlier:auto";
 const WORKSHOP_ICON_CACHE_KEY = "iconCache";
+const WORKSHOP_OCR_IMPORT_YIELD_EVERY = 40;
+const WORKSHOP_SIGNAL_YIELD_EVERY = 12;
 const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
   "燦爛的奧里哈康礫石",
   "純淨的奧里哈康磐石",
@@ -4570,7 +4572,13 @@ function isDuplicatePriceSnapshotByWindow(
   return false;
 }
 
-export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): WorkshopOcrPriceImportResult {
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
+export async function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): Promise<WorkshopOcrPriceImportResult> {
   const state = readWorkshopState();
   const sanitized = sanitizeOcrImportPayload(payload);
   const hasStructuredTradeRows = Array.isArray(sanitized.tradeRows) && sanitized.tradeRows.length > 0;
@@ -4607,13 +4615,14 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
   let duplicateSkippedCount = 0;
   let createdItemCount = 0;
 
-  parsedLines.forEach((line) => {
+  for (let index = 0; index < parsedLines.length; index += 1) {
+    const line = parsedLines[index];
     if (shouldIgnoreOcrItemName(line.itemName)) {
       const ignoredName = normalizeOcrDomainName(line.itemName) || line.itemName;
       if (priceQualityWarnings.length < 40) {
         priceQualityWarnings.push(`第 ${line.lineNumber} 行「${ignoredName}」已忽略：閃耀前綴道具不納入導入。`);
       }
-      return;
+      continue;
     }
     const correctedLineName = tryCorrectOcrNameByKnownItems(line.itemName, items);
     const normalizedLineName = correctedLineName || line.itemName;
@@ -4624,7 +4633,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       if (priceQualityWarnings.length < 40) {
         priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：价格无效（${line.unitPrice}）。`);
       }
-      return;
+      continue;
     }
     const key = normalizeLookupName(normalizedLineName);
     const capturedIcon = iconCaptureOutcome.iconByLineNumber.get(line.lineNumber);
@@ -4640,7 +4649,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     const iconMatchedItem = resolveUniqueItemByIcon(items, capturedIcon);
     if (item && !matchedByExactName && !iconMatchedItem && isQualifiedNameCollapsedToBaseName(normalizedLineName, item.name)) {
       unknownItemNameSet.add(`${normalizedLineName}（限定词前缀疑似被折叠，已跳过）`);
-      return;
+      continue;
     }
 
     if (sanitized.strictIconMatch) {
@@ -4649,7 +4658,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
           item !== undefined && !isCapturedImageIcon(item.icon) && isExactOcrNameMatch(item, normalizedLineName);
         if (!canFallbackByExactName) {
           unknownItemNameSet.add(`${normalizedLineName}（严格模式需开启图标抓取）`);
-          return;
+          continue;
         }
       }
       if (!item && iconMatchedItem) {
@@ -4658,24 +4667,24 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       }
       if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
         unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
-        return;
+        continue;
       }
       if (item && capturedIcon && isCapturedImageIcon(item.icon) && item.icon !== capturedIcon) {
         unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
-        return;
+        continue;
       }
       if (item && !isCapturedImageIcon(item.icon) && !isExactOcrNameMatch(item, normalizedLineName)) {
         unknownItemNameSet.add(`${normalizedLineName}（严格模式缺少图标基线）`);
-        return;
+        continue;
       }
       if (item && !isExactOcrNameMatch(item, normalizedLineName) && !iconMatchedItem) {
         unknownItemNameSet.add(`${normalizedLineName}（严格模式下名称不精确）`);
-        return;
+        continue;
       }
     } else {
       if (item && iconMatchedItem && item.id !== iconMatchedItem.id) {
         unknownItemNameSet.add(`${normalizedLineName}（名称与图标冲突）`);
-        return;
+        continue;
       }
       if (!item && iconMatchedItem) {
         item = iconMatchedItem;
@@ -4684,7 +4693,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       // Only block fuzzy/heuristic matches; exact key matches should be trusted.
       if (item && !matchedByExactName && !iconMatchedItem && isAmbiguousExactOcrNameMatch(item, normalizedLineName, items)) {
         unknownItemNameSet.add(`${normalizedLineName}（名称歧义，已跳过）`);
-        return;
+        continue;
       }
     }
 
@@ -4692,7 +4701,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     if (!item) {
       if (!sanitized.autoCreateMissingItems) {
         unknownItemNameSet.add(normalizedLineName);
-        return;
+        continue;
       }
       const nowIso = new Date().toISOString();
       item = {
@@ -4711,7 +4720,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       const currentItem = item;
       if (sanitized.strictIconMatch && isCapturedImageIcon(currentItem.icon) && currentItem.icon !== capturedIcon) {
         unknownItemNameSet.add(`${normalizedLineName}（图标不匹配）`);
-        return;
+        continue;
       }
       const canRefreshIcon =
         !sanitized.strictIconMatch && (matchedByExactName || (iconMatchedItem !== undefined && iconMatchedItem.id === currentItem.id));
@@ -4740,7 +4749,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       if (priceQualityWarnings.length < 40) {
         priceQualityWarnings.push(`第 ${line.lineNumber} 行「${normalizedLineName}」已跳过：${formatAnomalyReason(anomaly)}`);
       }
-      return;
+      continue;
     }
 
     const duplicated = isDuplicatePriceSnapshotByWindow(
@@ -4753,7 +4762,7 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
     );
     if (duplicated) {
       duplicateSkippedCount += 1;
-      return;
+      continue;
     }
     let note = `ocr-import#${line.market}#line-${line.lineNumber}`;
     if (anomaly.kind === "suspect") {
@@ -4782,7 +4791,10 @@ export function importWorkshopOcrPrices(payload: WorkshopOcrPriceImportInput): W
       createdItem,
     });
     importedCount += 1;
-  });
+    if ((index + 1) % WORKSHOP_OCR_IMPORT_YIELD_EVERY === 0) {
+      await yieldToEventLoop();
+    }
+  }
 
   const nextState = writeWorkshopState({
     ...state,
@@ -5203,7 +5215,7 @@ export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRul
   });
 }
 
-export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): WorkshopPriceSignalResult {
+export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Promise<WorkshopPriceSignalResult> {
   const state = readWorkshopState();
   const lookbackDays = payload?.lookbackDays === undefined ? state.signalRule.lookbackDays : sanitizeLookbackDays(payload.lookbackDays);
   const thresholdRatio =
@@ -5212,7 +5224,9 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       : sanitizeSignalThresholdRatio(payload.thresholdRatio);
   const targetMarket = payload?.market === undefined ? undefined : sanitizePriceMarket(payload.market);
   const effectiveThresholdRatio = sanitizeSignalThresholdRatio(thresholdRatio);
-  const rows: WorkshopPriceSignalRow[] = state.items.map((item) => {
+  const rows: WorkshopPriceSignalRow[] = [];
+  for (let index = 0; index < state.items.length; index += 1) {
+    const item = state.items[index];
     const history = buildWorkshopPriceHistoryResult(state, {
       itemId: item.id,
       days: lookbackDays,
@@ -5238,7 +5252,7 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     );
     const triggered = state.signalRule.enabled && assessment.trendTag === "buy-zone";
 
-    return {
+    rows.push({
       itemId: item.id,
       itemName: item.name,
       market: targetMarket,
@@ -5255,8 +5269,11 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
       reasons: assessment.reasons,
       sampleCount: history.sampleCount,
       triggered,
-    };
-  });
+    });
+    if ((index + 1) % WORKSHOP_SIGNAL_YIELD_EVERY === 0) {
+      await yieldToEventLoop();
+    }
+  }
 
   rows.sort((left, right) => {
     if (left.triggered !== right.triggered) {
@@ -5290,6 +5307,21 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     return left.itemName.localeCompare(right.itemName, "zh-CN");
   });
 
+  let triggeredCount = 0;
+  let buyZoneCount = 0;
+  let sellZoneCount = 0;
+  for (const row of rows) {
+    if (row.triggered) {
+      triggeredCount += 1;
+    }
+    if (row.trendTag === "buy-zone") {
+      buyZoneCount += 1;
+    }
+    if (row.trendTag === "sell-zone") {
+      sellZoneCount += 1;
+    }
+  }
+
   return {
     generatedAt: new Date().toISOString(),
     market: targetMarket,
@@ -5297,9 +5329,9 @@ export function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Wor
     thresholdRatio,
     effectiveThresholdRatio,
     ruleEnabled: state.signalRule.enabled,
-    triggeredCount: rows.filter((row) => row.triggered).length,
-    buyZoneCount: rows.filter((row) => row.trendTag === "buy-zone").length,
-    sellZoneCount: rows.filter((row) => row.trendTag === "sell-zone").length,
+    triggeredCount,
+    buyZoneCount,
+    sellZoneCount,
     rows,
   };
 }

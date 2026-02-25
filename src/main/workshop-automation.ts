@@ -626,7 +626,7 @@ async function runHotkeyFlow(
     if (!extracted.text.trim()) {
       return buildFailureResult("OCR 未识别到有效文本。", extracted.warnings);
     }
-    const imported = importWorkshopOcrPrices({
+    const imported = await importWorkshopOcrPrices({
       text: extracted.text,
       tradeRows: extracted.tradeRows,
       source: "import",
