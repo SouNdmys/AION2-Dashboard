@@ -454,4 +454,34 @@
   - 新增：
     - `src/main/workshop-store/ocr-tradeboard-prices.test.ts`
   - 提交：`8642462` `test(ocr): add coverage for trade-board price extraction module`
+- [x] A1-6.25：OCR 第十刀：抽离名称匹配与纠错算法到 `src/main/workshop-store/ocr-name-matching.ts`。
+  - 变更点：
+    - `normalizeLookupName / sanitizeOcrLineItemName / normalizeOcrDomainName / shouldIgnoreOcrItemName` 从 core 下沉；
+    - `resolveItemByOcrName / tryCorrectOcrNameByKnownItems / isExactOcrNameMatch / isAmbiguousExactOcrNameMatch / resolveUniqueItemByIcon / isQualifiedNameCollapsedToBaseName` 从 core 下沉；
+    - `workshop-store-core.ts` 改为依赖新模块，保留原 OCR 导入流程行为不变。
+  - 新增：
+    - `src/main/workshop-store/ocr-name-matching.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
+- [x] A1-6.26：OCR 第十一刀：抽离 Paddle runtime 与 worker 调度到 `src/main/workshop-store/ocr-paddle-runtime.ts`。
+  - 变更点：
+    - `PADDLE_OCR_PYTHON_SCRIPT / PADDLE_OCR_PYTHON_WORKER_SCRIPT` 从 core 下沉；
+    - `ensurePaddleRuntimeDirectories / createPaddleEnv / startPaddleWorker / runPaddleWithWorker / runPaddleWithCommand / resetPaddleWorkerState` 从 core 下沉；
+    - `workshop-store-core.ts` 改为通过 runtime 实例调用（`buildCommandAttempts/runWithWorker/runWithCommand/cleanup`），保持 OCR fallback 行为不变。
+  - 新增：
+    - `src/main/workshop-store/ocr-paddle-runtime.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
+- [x] A1-6.27：OCR 第十二刀：抽离 trade-board 头部角色识别与结果组装到 `src/main/workshop-store/ocr-tradeboard-orchestration.ts`。
+  - 变更点：
+    - `resolveDualPriceRolesByHeader` 从 core 下沉为可注入依赖模块（裁剪、OCR、header role 判定）；
+    - `tradeRows` 组装、主文本行生成、trade-board `rawText` 拼装从 core 下沉；
+    - `workshop-store-core.ts` 改为调用 `buildTradeRows/buildTradeBoardPrimaryTextLines/buildTradeBoardRawText`，保留行为不变。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-orchestration.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

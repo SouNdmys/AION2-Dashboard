@@ -2,13 +2,23 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { nativeImage } from "electron";
 import Store from "electron-store";
 import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
-import { tify } from "chinese-conv";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
+import {
+  isAmbiguousExactOcrNameMatch,
+  isExactOcrNameMatch,
+  isQualifiedNameCollapsedToBaseName,
+  normalizeLookupName,
+  normalizeOcrDomainName,
+  resolveItemByOcrName,
+  resolveUniqueItemByIcon,
+  sanitizeOcrLineItemName,
+  shouldIgnoreOcrItemName,
+  tryCorrectOcrNameByKnownItems,
+} from "./workshop-store/ocr-name-matching";
 import {
   buildPaddleLanguageCandidates,
   sanitizeOcrLanguage,
@@ -26,13 +36,20 @@ import {
 } from "./workshop-store/ocr-tradeboard-rows";
 import { extractDualPriceRowsForRect, extractPriceRowsForRect } from "./workshop-store/ocr-tradeboard-prices";
 import {
+  buildTradeBoardPrimaryTextLines,
+  buildTradeBoardRawText,
+  buildTradeRows,
+  resolveDualPriceRolesByHeader,
+} from "./workshop-store/ocr-tradeboard-orchestration";
+import {
   parseOcrPriceLines,
   parseOcrTradeRows,
   sanitizeOcrImportPayload,
 } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
-import { parsePaddlePayload, parsePaddlePayloadObject } from "./workshop-store/ocr-paddle-payload";
-import type { OcrTsvWord, PaddleOcrOutcome, PaddleOcrPayload } from "./workshop-store/ocr-paddle-payload";
+import { createPaddleOcrRuntime, PADDLE_OCR_PYTHON_SCRIPT } from "./workshop-store/ocr-paddle-runtime";
+import { parsePaddlePayload } from "./workshop-store/ocr-paddle-payload";
+import type { OcrTsvWord, PaddleOcrOutcome } from "./workshop-store/ocr-paddle-payload";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopOcrExtractTextInput,
@@ -88,405 +105,7 @@ const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
 const OCR_TRADE_BOARD_NAME_SCALE = 3;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
-const OCR_PADDLE_MAX_BUFFER = 64 * 1024 * 1024;
-const OCR_PADDLE_REQUEST_TIMEOUT_MS = 20_000;
 const OCR_ENABLE_PYTHON_FALLBACK = false;
-const OCR_PADDLE_RUNTIME_ROOT = path.join(os.tmpdir(), "aion2-paddle-runtime");
-const OCR_PADDLE_RUNTIME_USER = path.join(OCR_PADDLE_RUNTIME_ROOT, "user");
-const OCR_PADDLE_RUNTIME_CACHE = path.join(OCR_PADDLE_RUNTIME_ROOT, "cache");
-const OCR_PADDLE_RUNTIME_HOME = path.join(OCR_PADDLE_RUNTIME_ROOT, "paddle");
-const PADDLE_OCR_PYTHON_SCRIPT = String.raw`import json
-import os
-import sys
-
-os.environ.setdefault("FLAGS_enable_pir_api", "0")
-os.environ.setdefault("FLAGS_enable_pir_in_executor", "0")
-os.environ.setdefault("FLAGS_use_mkldnn", "0")
-os.environ.setdefault("FLAGS_prim_all", "0")
-
-try:
-    import paddle
-    from paddleocr import PaddleOCR
-    try:
-        paddle.set_flags(
-            {
-                "FLAGS_enable_pir_api": False,
-                "FLAGS_enable_pir_in_executor": False,
-                "FLAGS_use_mkldnn": False,
-                "FLAGS_prim_all": False,
-            }
-        )
-    except Exception:
-        pass
-except Exception as exc:
-    print(json.dumps({"ok": False, "error": f"import paddleocr failed: {exc}"}, ensure_ascii=False))
-    sys.exit(0)
-
-
-def parse_safe_mode(raw):
-    if raw is None:
-        return True
-    if isinstance(raw, bool):
-        return raw
-    text = str(raw).strip().lower()
-    return text not in {"0", "false", "off", "no"}
-
-
-def make_engine(lang, safe_mode):
-    strict_cpu = [
-        {
-            "lang": lang,
-            "device": "cpu",
-            "show_log": False,
-            "enable_mkldnn": False,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-            "use_angle_cls": False,
-        },
-        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
-    ]
-    performance = [
-        {
-            "lang": lang,
-            "show_log": False,
-            "enable_mkldnn": False,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-            "use_angle_cls": False,
-        },
-        {"lang": lang, "show_log": False, "enable_mkldnn": False},
-        {"lang": lang},
-    ]
-    attempts = strict_cpu if safe_mode else (performance + strict_cpu)
-    errors = []
-    for kwargs in attempts:
-        try:
-            return PaddleOCR(**kwargs)
-        except Exception as exc:
-            errors.append(str(exc))
-    raise RuntimeError("create engine failed: " + " | ".join(errors))
-
-
-def parse_line(line):
-    if not isinstance(line, (list, tuple)) or len(line) < 2:
-        return None
-    box = line[0]
-    info = line[1]
-    if not isinstance(box, (list, tuple)) or len(box) == 0:
-        return None
-    xs = []
-    ys = []
-    for point in box:
-        if not isinstance(point, (list, tuple)) or len(point) < 2:
-            continue
-        try:
-            xs.append(float(point[0]))
-            ys.append(float(point[1]))
-        except Exception:
-            continue
-    if len(xs) == 0 or len(ys) == 0:
-        return None
-    text = ""
-    confidence = -1.0
-    if isinstance(info, (list, tuple)):
-        if len(info) >= 1 and info[0] is not None:
-            text = str(info[0]).strip()
-        if len(info) >= 2:
-            try:
-                confidence = float(info[1])
-            except Exception:
-                confidence = -1.0
-    else:
-        text = str(info).strip()
-    if not text:
-        return None
-    if confidence >= 0 and confidence <= 1.5:
-        confidence = confidence * 100.0
-    left = int(min(xs))
-    top = int(min(ys))
-    right = int(max(xs))
-    bottom = int(max(ys))
-    return {
-        "text": text,
-        "left": left,
-        "top": top,
-        "width": max(1, right - left),
-        "height": max(1, bottom - top),
-        "confidence": confidence,
-    }
-
-
-def collect_words(ocr_result):
-    words = []
-    texts = []
-    if not isinstance(ocr_result, list):
-        return words, texts
-    for block in ocr_result:
-        if not isinstance(block, list):
-            continue
-        for line in block:
-            parsed = parse_line(line)
-            if not parsed:
-                continue
-            words.append(parsed)
-            texts.append(parsed["text"])
-    return words, texts
-
-
-def main():
-    if len(sys.argv) < 3:
-        print(json.dumps({"ok": False, "error": "missing args"}, ensure_ascii=False))
-        return
-    image_path = sys.argv[1]
-    langs = [entry.strip() for entry in sys.argv[2].split(",") if entry.strip()]
-    if len(langs) == 0:
-        langs = ["ch"]
-    safe_mode = parse_safe_mode(os.environ.get("AION2_OCR_SAFE_MODE", "1"))
-    errors = []
-    for lang in langs:
-        try:
-            ocr = make_engine(lang, safe_mode)
-            try:
-                result = ocr.ocr(image_path, cls=False)
-            except TypeError:
-                result = ocr.ocr(image_path)
-            words, texts = collect_words(result)
-            print(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "language": lang,
-                        "raw_text": "\n".join(texts),
-                        "words": words,
-                    },
-                    ensure_ascii=False,
-                )
-            )
-            return
-        except Exception as exc:
-            errors.append(f"{lang}: {exc}")
-    print(json.dumps({"ok": False, "error": " | ".join(errors) or "paddle ocr failed"}, ensure_ascii=False))
-
-
-if __name__ == "__main__":
-    main()
-`;
-const PADDLE_OCR_PYTHON_WORKER_SCRIPT = String.raw`import json
-import os
-import sys
-
-os.environ.setdefault("FLAGS_enable_pir_api", "0")
-os.environ.setdefault("FLAGS_enable_pir_in_executor", "0")
-os.environ.setdefault("FLAGS_use_mkldnn", "0")
-os.environ.setdefault("FLAGS_prim_all", "0")
-
-try:
-    import paddle
-    from paddleocr import PaddleOCR
-    try:
-        paddle.set_flags(
-            {
-                "FLAGS_enable_pir_api": False,
-                "FLAGS_enable_pir_in_executor": False,
-                "FLAGS_use_mkldnn": False,
-                "FLAGS_prim_all": False,
-            }
-        )
-    except Exception:
-        pass
-except Exception as exc:
-    print(json.dumps({"ok": False, "error": f"import paddleocr failed: {exc}"}, ensure_ascii=False), flush=True)
-    sys.exit(0)
-
-
-def parse_safe_mode(raw):
-    if raw is None:
-        return True
-    if isinstance(raw, bool):
-        return raw
-    text = str(raw).strip().lower()
-    return text not in {"0", "false", "off", "no"}
-
-
-def make_engine(lang, safe_mode):
-    strict_cpu = [
-        {
-            "lang": lang,
-            "device": "cpu",
-            "show_log": False,
-            "enable_mkldnn": False,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-            "use_angle_cls": False,
-        },
-        {"lang": lang, "show_log": False, "device": "cpu", "enable_mkldnn": False},
-    ]
-    performance = [
-        {
-            "lang": lang,
-            "show_log": False,
-            "enable_mkldnn": False,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "use_textline_orientation": False,
-            "use_angle_cls": False,
-        },
-        {"lang": lang, "show_log": False, "enable_mkldnn": False},
-        {"lang": lang},
-    ]
-    attempts = strict_cpu if safe_mode else (performance + strict_cpu)
-    errors = []
-    for kwargs in attempts:
-        try:
-            return PaddleOCR(**kwargs)
-        except Exception as exc:
-            errors.append(str(exc))
-    raise RuntimeError("create engine failed: " + " | ".join(errors))
-
-
-def parse_line(line):
-    if not isinstance(line, (list, tuple)) or len(line) < 2:
-        return None
-    box = line[0]
-    info = line[1]
-    if not isinstance(box, (list, tuple)) or len(box) == 0:
-        return None
-    xs = []
-    ys = []
-    for point in box:
-        if not isinstance(point, (list, tuple)) or len(point) < 2:
-            continue
-        try:
-            xs.append(float(point[0]))
-            ys.append(float(point[1]))
-        except Exception:
-            continue
-    if len(xs) == 0 or len(ys) == 0:
-        return None
-    text = ""
-    confidence = -1.0
-    if isinstance(info, (list, tuple)):
-        if len(info) >= 1 and info[0] is not None:
-            text = str(info[0]).strip()
-        if len(info) >= 2:
-            try:
-                confidence = float(info[1])
-            except Exception:
-                confidence = -1.0
-    else:
-        text = str(info).strip()
-    if not text:
-        return None
-    if confidence >= 0 and confidence <= 1.5:
-        confidence = confidence * 100.0
-    left = int(min(xs))
-    top = int(min(ys))
-    right = int(max(xs))
-    bottom = int(max(ys))
-    return {
-        "text": text,
-        "left": left,
-        "top": top,
-        "width": max(1, right - left),
-        "height": max(1, bottom - top),
-        "confidence": confidence,
-    }
-
-
-def collect_words(ocr_result):
-    words = []
-    texts = []
-    if not isinstance(ocr_result, list):
-        return words, texts
-    for block in ocr_result:
-        if not isinstance(block, list):
-            continue
-        for line in block:
-            parsed = parse_line(line)
-            if not parsed:
-                continue
-            words.append(parsed)
-            texts.append(parsed["text"])
-    return words, texts
-
-
-ENGINE_CACHE = {}
-
-
-def get_engine(lang, safe_mode):
-    key = f"{lang}|{'safe' if safe_mode else 'performance'}"
-    if key in ENGINE_CACHE:
-        return ENGINE_CACHE[key]
-    engine = make_engine(lang, safe_mode)
-    ENGINE_CACHE[key] = engine
-    return engine
-
-
-def resolve_languages(raw):
-    if isinstance(raw, list):
-        langs = [str(entry).strip() for entry in raw if str(entry).strip()]
-        return langs or ["ch"]
-    if isinstance(raw, str):
-        langs = [entry.strip() for entry in raw.split(",") if entry.strip()]
-        return langs or ["ch"]
-    return ["ch"]
-
-
-def process(req):
-    req_id = str(req.get("id", "")).strip()
-    image_path = str(req.get("image_path", "")).strip()
-    if not image_path:
-        return {"id": req_id, "ok": False, "error": "missing image_path"}
-    langs = resolve_languages(req.get("languages"))
-    safe_mode = parse_safe_mode(req.get("safe_mode", True))
-    errors = []
-    for lang in langs:
-        try:
-            ocr = get_engine(lang, safe_mode)
-            try:
-                result = ocr.ocr(image_path, cls=False)
-            except TypeError:
-                result = ocr.ocr(image_path)
-            words, texts = collect_words(result)
-            return {
-                "id": req_id,
-                "ok": True,
-                "language": lang,
-                "raw_text": "\n".join(texts),
-                "words": words,
-            }
-        except Exception as exc:
-            errors.append(f"{lang}: {exc}")
-    return {"id": req_id, "ok": False, "error": " | ".join(errors) or "paddle ocr failed"}
-
-
-def emit(payload):
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
-
-
-def main():
-    emit({"ready": True})
-    for line in sys.stdin:
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            req = json.loads(text)
-            if not isinstance(req, dict):
-                emit({"ok": False, "error": "invalid request"})
-                continue
-        except Exception as exc:
-            emit({"ok": False, "error": f"invalid json: {exc}"})
-            continue
-        emit(process(req))
-
-
-if __name__ == "__main__":
-    main()
-`;
 
 const DEFAULT_WORKSHOP_SIGNAL_RULE: WorkshopPriceSignalRule = {
   enabled: true,
@@ -805,485 +424,6 @@ function sanitizeIconToken(raw: unknown): string | undefined {
 
 function isCapturedImageIcon(icon: string | undefined): boolean {
   return typeof icon === "string" && icon.startsWith("icon-img-");
-}
-
-const LOOKUP_CJK_VARIANT_MAP: Record<string, string> = {
-  纯: "純",
-  純: "純",
-  强: "強",
-  強: "強",
-  净: "淨",
-  凈: "淨",
-  淨: "淨",
-  奥: "奧",
-  奧: "奧",
-  灿: "燦",
-  燦: "燦",
-  烂: "爛",
-  爛: "爛",
-  龙: "龍",
-  龍: "龍",
-  头: "頭",
-  頭: "頭",
-  台: "臺",
-  臺: "臺",
-  后: "後",
-  後: "後",
-  里: "裡",
-  裡: "裡",
-  矿: "礦",
-  礦: "礦",
-  铁: "鐵",
-  鐵: "鐵",
-  锭: "錠",
-  錠: "錠",
-  级: "級",
-  級: "級",
-  制: "製",
-  製: "製",
-};
-
-const OCR_QUALIFIER_PREFIXES = [
-  "燦爛的",
-  "燦爛",
-  "純淨的",
-  "純淨",
-  "高純度",
-  "精製",
-  "特級",
-  "上級",
-  "高級",
-  "濃縮",
-  "優質",
-];
-
-type OcrQualifierFamily = "brilliant" | "pure" | "highPure";
-
-interface OcrQualifierRule {
-  family: OcrQualifierFamily;
-  canonicalPrefix: string;
-  pattern: RegExp;
-}
-
-const OCR_QUALIFIER_RULES: OcrQualifierRule[] = [
-  {
-    family: "brilliant",
-    canonicalPrefix: "燦爛的",
-    pattern: /^(?:燦爛的|燦爛|燦的|燦|灿烂的|灿烂|灿的|灿)/u,
-  },
-  {
-    family: "pure",
-    canonicalPrefix: "純淨的",
-    pattern: /^(?:純淨的|純淨|純凈的|純凈|純净的|純净|純的|纯淨的|纯淨|纯凈的|纯凈|纯净的|纯净|纯的|淨的|凈的|净的)/u,
-  },
-  {
-    family: "highPure",
-    canonicalPrefix: "高純度的",
-    pattern: /^(?:高純度的|高純度|高纯度的|高纯度)/u,
-  },
-];
-
-const OCR_DOMAIN_NAME_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/慎怒/gu, "憤怒"],
-  [/憤怒望/gu, "憤怒願望"],
-  [/憤怒願$/gu, "憤怒願望"],
-  [/愤怒望/gu, "憤怒願望"],
-  [/^(?:純|纯)的/u, "純淨的"],
-  [/^珂尼$/u, "珂尼玳"],
-  [/提石/gu, "提煉石"],
-  [/提烦/gu, "提煉"],
-  [/(奧[里裡]哈康)石/gu, "$1礦石"],
-  [/龍族片/gu, "龍族鱗片"],
-];
-
-function normalizeLookupScriptVariant(value: string): string {
-  const source = value.trim();
-  if (!source) {
-    return "";
-  }
-  try {
-    return tify(source);
-  } catch {
-    return source;
-  }
-}
-
-function normalizeLookupCjkVariants(value: string): string {
-  return value.replace(/[纯純强強净凈淨奥奧灿燦烂爛龙龍头頭台臺后後里裡矿礦铁鐵锭錠级級制製]/gu, (char) => LOOKUP_CJK_VARIANT_MAP[char] ?? char);
-}
-
-function normalizeLookupName(name: string): string {
-  const scriptNormalized = normalizeLookupScriptVariant(name);
-  return normalizeLookupCjkVariants(scriptNormalized.trim().toLocaleLowerCase().replace(/\s+/g, ""));
-}
-
-function sanitizeOcrLineItemName(raw: string): string {
-  const normalized = raw
-    .normalize("NFKC")
-    .replace(/[\u00A0\u3000]/g, " ")
-    .replace(/[|丨]/g, " ")
-    .replace(/[，]/g, ",")
-    .replace(/[：]/g, ":")
-    .replace(/[“”‘’"'`]/g, "")
-    .replace(/[()（）[\]{}<>﹤﹥]/g, " ")
-    .replace(/[^0-9a-zA-Z\u3400-\u9fff]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const compact = normalized.replace(/\s+/g, "");
-  return compact ? normalized : "";
-}
-
-function normalizeOcrDomainName(rawName: string): string {
-  let value = sanitizeOcrLineItemName(rawName).replace(/\s+/g, "");
-  if (!value) {
-    return "";
-  }
-  value = normalizeLookupScriptVariant(value);
-  OCR_DOMAIN_NAME_REPLACEMENTS.forEach(([pattern, replacement]) => {
-    value = value.replace(pattern, replacement);
-  });
-  return value;
-}
-
-function shouldIgnoreOcrItemName(rawName: string): boolean {
-  const normalized = normalizeOcrDomainName(rawName);
-  if (!normalized) {
-    return false;
-  }
-  const withoutLevelPrefix = normalized.replace(/^道具(?:等級|等级)\d+/u, "");
-  return withoutLevelPrefix.startsWith("閃耀的");
-}
-
-function findOcrQualifierRule(rawName: string): OcrQualifierRule | undefined {
-  const compact = normalizeOcrDomainName(rawName);
-  if (!compact) {
-    return undefined;
-  }
-  return OCR_QUALIFIER_RULES.find((rule) => rule.pattern.test(compact));
-}
-
-function resolveOcrQualifierFamily(rawName: string): OcrQualifierFamily | undefined {
-  return findOcrQualifierRule(rawName)?.family;
-}
-
-function normalizeOcrQualifierPrefix(rawName: string): string {
-  const compact = normalizeOcrDomainName(rawName);
-  if (!compact) {
-    return "";
-  }
-  const rule = findOcrQualifierRule(compact);
-  if (!rule) {
-    return compact;
-  }
-  const matched = compact.match(rule.pattern)?.[0] ?? "";
-  if (!matched || matched === rule.canonicalPrefix) {
-    return compact;
-  }
-  const rest = compact.slice(matched.length);
-  if (!rest) {
-    return compact;
-  }
-  return `${rule.canonicalPrefix}${rest}`;
-}
-
-function buildOcrLookupCandidates(rawName: string): string[] {
-  const candidates = new Set<string>();
-  const add = (value: string): void => {
-    const normalized = normalizeLookupName(value);
-    if (normalized.length >= 2) {
-      candidates.add(normalized);
-    }
-  };
-  add(rawName);
-  const domainNormalized = normalizeOcrDomainName(rawName);
-  add(domainNormalized);
-  const cleaned = sanitizeOcrLineItemName(rawName).replace(/[^0-9a-zA-Z\u3400-\u9fff]/gu, "");
-  add(cleaned);
-  add(normalizeOcrDomainName(cleaned));
-  const normalizedQualifier = normalizeOcrQualifierPrefix(cleaned || rawName);
-  if (normalizedQualifier && normalizedQualifier !== cleaned) {
-    add(normalizedQualifier);
-  }
-  const normalizedCleaned = normalizeLookupName(cleaned);
-  // Keep limited tolerance for OCR leading numeric noise, but do not trim arbitrary prefixes.
-  const trimmedLeadingDigits = normalizedCleaned.replace(/^[0-9]+/u, "");
-  if (trimmedLeadingDigits !== normalizedCleaned) {
-    add(trimmedLeadingDigits);
-  }
-  return Array.from(candidates);
-}
-
-function hasQualifiedPrefix(name: string): boolean {
-  const key = normalizeLookupName(sanitizeOcrLineItemName(name));
-  if (!key) {
-    return false;
-  }
-  if (resolveOcrQualifierFamily(name)) {
-    return true;
-  }
-  return OCR_QUALIFIER_PREFIXES.some((prefix) => key.startsWith(normalizeLookupName(prefix)));
-}
-
-function isQualifiedNameCollapsedToBaseName(ocrName: string, matchedItemName: string): boolean {
-  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
-  const matchedKey = normalizeLookupName(matchedItemName);
-  if (!ocrKey || !matchedKey || ocrKey === matchedKey) {
-    return false;
-  }
-  if (!ocrKey.endsWith(matchedKey)) {
-    return false;
-  }
-  if (ocrKey.length - matchedKey.length < 2) {
-    return false;
-  }
-  return hasQualifiedPrefix(ocrName) && !hasQualifiedPrefix(matchedItemName);
-}
-
-function levenshteinDistance(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-  if (!left) {
-    return right.length;
-  }
-  if (!right) {
-    return left.length;
-  }
-  const prev = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= left.length; i += 1) {
-    let diagonal = prev[0];
-    prev[0] = i;
-    for (let j = 1; j <= right.length; j += 1) {
-      const up = prev[j];
-      const leftCost = prev[j - 1] + 1;
-      const upCost = up + 1;
-      const replaceCost = diagonal + (left[i - 1] === right[j - 1] ? 0 : 1);
-      prev[j] = Math.min(leftCost, upCost, replaceCost);
-      diagonal = up;
-    }
-  }
-  return prev[right.length];
-}
-
-function commonPrefixLength(left: string, right: string): number {
-  const max = Math.min(left.length, right.length);
-  let count = 0;
-  while (count < max && left[count] === right[count]) {
-    count += 1;
-  }
-  return count;
-}
-
-function commonSuffixLength(left: string, right: string): number {
-  const max = Math.min(left.length, right.length);
-  let count = 0;
-  while (count < max && left[left.length - 1 - count] === right[right.length - 1 - count]) {
-    count += 1;
-  }
-  return count;
-}
-
-function tryCorrectOcrNameByKnownItems(rawOcrName: string, items: WorkshopItem[]): string {
-  const sanitized = sanitizeOcrLineItemName(rawOcrName);
-  const domainNormalized = normalizeOcrDomainName(sanitized || rawOcrName) || sanitized;
-  const normalizedQualifierName = normalizeOcrQualifierPrefix(domainNormalized);
-  const normalizedQualifierKey = normalizeLookupName(normalizedQualifierName);
-  const ocrKey = normalizeLookupName(domainNormalized);
-  const ocrQualifierFamily = resolveOcrQualifierFamily(domainNormalized) ?? resolveOcrQualifierFamily(normalizedQualifierName);
-  const fallbackName = domainNormalized || rawOcrName;
-  const seedKey = normalizedQualifierKey || ocrKey;
-  if (!seedKey || seedKey.length < 3) {
-    return fallbackName;
-  }
-  const exactItem = items.find((item) => {
-    const itemKey = normalizeLookupName(item.name);
-    return itemKey === seedKey || itemKey === ocrKey;
-  });
-  if (exactItem) {
-    return exactItem.name;
-  }
-
-  const candidates: Array<{ itemName: string; score: number }> = [];
-  items.forEach((item) => {
-    const itemQualifierFamily = resolveOcrQualifierFamily(item.name);
-    if (ocrQualifierFamily && itemQualifierFamily !== ocrQualifierFamily) {
-      return;
-    }
-    const itemKey = normalizeLookupName(item.name);
-    const maxLengthGap = ocrQualifierFamily ? 2 : 1;
-    if (!itemKey || Math.abs(itemKey.length - seedKey.length) > maxLengthGap) {
-      return;
-    }
-    const distance = levenshteinDistance(seedKey, itemKey);
-    const maxDistance = ocrQualifierFamily ? 2 : 1;
-    if (distance <= 0 || distance > maxDistance) {
-      return;
-    }
-    const prefix = commonPrefixLength(seedKey, itemKey);
-    const suffix = commonSuffixLength(seedKey, itemKey);
-    if (ocrQualifierFamily && suffix < 2) {
-      return;
-    }
-    // Require at least a stable 2-char anchor (prefix or suffix) to avoid over-correction.
-    if (prefix < 2 && suffix < 2) {
-      return;
-    }
-    let score = prefix * 3 + suffix * 2 - Math.abs(itemKey.length - seedKey.length) - distance * 2;
-    if (ocrQualifierFamily && itemQualifierFamily === ocrQualifierFamily) {
-      score += 5;
-    }
-    candidates.push({ itemName: item.name, score });
-  });
-  if (candidates.length === 0) {
-    return fallbackName;
-  }
-  candidates.sort((left, right) => {
-    if (right.score !== left.score) {
-      return right.score - left.score;
-    }
-    return left.itemName.localeCompare(right.itemName, "zh-CN");
-  });
-  const best = candidates[0];
-  const second = candidates[1];
-  if (second && second.score >= best.score - 1) {
-    return fallbackName;
-  }
-  return best.itemName;
-}
-
-function resolveItemByOcrName(itemByLookupName: Map<string, WorkshopItem>, rawName: string): WorkshopItem | undefined {
-  const candidates = buildOcrLookupCandidates(rawName);
-  const ocrQualifierFamily = resolveOcrQualifierFamily(rawName) ?? resolveOcrQualifierFamily(normalizeOcrQualifierPrefix(rawName));
-  const isQualifierCompatible = (itemName: string): boolean => {
-    if (!ocrQualifierFamily) {
-      return true;
-    }
-    return resolveOcrQualifierFamily(itemName) === ocrQualifierFamily;
-  };
-  for (const candidate of candidates) {
-    const exact = itemByLookupName.get(candidate);
-    if (exact && isQualifierCompatible(exact.name)) {
-      return exact;
-    }
-  }
-
-  let bestContainItem: WorkshopItem | undefined;
-  let bestContainOverlap = -1;
-  let bestContainScore = -1;
-  itemByLookupName.forEach((item, lookup) => {
-    if (!isQualifierCompatible(item.name)) {
-      return;
-    }
-    if (lookup.length < 4) {
-      return;
-    }
-    candidates.forEach((candidate) => {
-      const overlap = Math.min(candidate.length, lookup.length);
-      if (overlap < 4) {
-        return;
-      }
-      if (!candidate.includes(lookup) && !lookup.includes(candidate)) {
-        return;
-      }
-      const score = overlap / Math.max(candidate.length, lookup.length);
-      if (
-        overlap > bestContainOverlap ||
-        (overlap === bestContainOverlap && score > bestContainScore)
-      ) {
-        bestContainItem = item;
-        bestContainOverlap = overlap;
-        bestContainScore = score;
-      }
-    });
-  });
-  if (bestContainItem) {
-    return bestContainItem;
-  }
-
-  const fuzzy: Array<{ item: WorkshopItem; ratio: number; maxLen: number }> = [];
-  itemByLookupName.forEach((item, lookup) => {
-    if (!isQualifierCompatible(item.name)) {
-      return;
-    }
-    candidates.forEach((candidate) => {
-      if (candidate.length < 4 || lookup.length < 4) {
-        return;
-      }
-      if (Math.abs(candidate.length - lookup.length) > 4) {
-        return;
-      }
-      const dist = levenshteinDistance(candidate, lookup);
-      const maxLen = Math.max(candidate.length, lookup.length);
-      const ratio = 1 - dist / maxLen;
-      const threshold = maxLen >= 8 ? 0.62 : 0.68;
-      if (ratio < threshold) {
-        return;
-      }
-      fuzzy.push({ item, ratio, maxLen });
-    });
-  });
-  if (fuzzy.length === 0) {
-    return undefined;
-  }
-  fuzzy.sort((left, right) => {
-    if (right.ratio !== left.ratio) {
-      return right.ratio - left.ratio;
-    }
-    if (right.maxLen !== left.maxLen) {
-      return right.maxLen - left.maxLen;
-    }
-    return left.item.name.localeCompare(right.item.name, "zh-CN");
-  });
-  const best = fuzzy[0];
-  const second = fuzzy[1];
-  if (best.ratio >= 0.9) {
-    return best.item;
-  }
-  if (!second || best.ratio - second.ratio >= 0.08) {
-    return best.item;
-  }
-  return undefined;
-}
-
-function resolveUniqueItemByIcon(items: WorkshopItem[], icon: string | undefined): WorkshopItem | undefined {
-  if (!icon) {
-    return undefined;
-  }
-  let matched: WorkshopItem | undefined;
-  for (const item of items) {
-    if (item.icon !== icon) {
-      continue;
-    }
-    if (matched) {
-      return undefined;
-    }
-    matched = item;
-  }
-  return matched;
-}
-
-function isAmbiguousExactOcrNameMatch(item: WorkshopItem, ocrName: string, items: WorkshopItem[]): boolean {
-  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
-  if (!ocrKey) {
-    return false;
-  }
-  const itemKey = normalizeLookupName(item.name);
-  if (!itemKey || itemKey !== ocrKey) {
-    return false;
-  }
-  return items.some((other) => {
-    if (other.id === item.id) {
-      return false;
-    }
-    const otherKey = normalizeLookupName(other.name);
-    return otherKey.length > ocrKey.length && otherKey.includes(ocrKey);
-  });
-}
-
-function isExactOcrNameMatch(item: WorkshopItem, ocrName: string): boolean {
-  const ocrKey = normalizeLookupName(sanitizeOcrLineItemName(ocrName));
-  const itemKey = normalizeLookupName(item.name);
-  return Boolean(ocrKey) && ocrKey === itemKey;
 }
 
 function inferItemIcon(name: string, category: WorkshopItemCategory): string | undefined {
@@ -1718,320 +858,16 @@ function normalizeOcrText(raw: string): string {
     .join("\n");
 }
 
-interface PaddleCommandAttempt {
-  command: string;
-  args: string[];
-  label: string;
-}
-
-interface PaddleWorkerPendingRequest {
-  resolve: (value: PaddleOcrOutcome) => void;
-  reject: (reason: Error) => void;
-  timeoutId: NodeJS.Timeout;
-}
-
 interface OnnxOcrEngine {
   detect: (imagePath: string, options?: unknown) => Promise<OnnxOcrLine[]>;
   destroy?: () => void | Promise<void>;
 }
 
-let paddleWorkerProcess: ChildProcessWithoutNullStreams | null = null;
-let paddleWorkerStartPromise: Promise<void> | null = null;
-let paddleWorkerStdoutBuffer = "";
-let paddleWorkerStderrBuffer = "";
-const paddleWorkerPendingRequests = new Map<string, PaddleWorkerPendingRequest>();
 let onnxOcrEngine: OnnxOcrEngine | null = null;
 let onnxOcrEnginePromise: Promise<OnnxOcrEngine> | null = null;
-
-function ensurePaddleRuntimeDirectories(): void {
-  try {
-    fs.mkdirSync(OCR_PADDLE_RUNTIME_ROOT, { recursive: true });
-    fs.mkdirSync(OCR_PADDLE_RUNTIME_USER, { recursive: true });
-    fs.mkdirSync(OCR_PADDLE_RUNTIME_CACHE, { recursive: true });
-    fs.mkdirSync(OCR_PADDLE_RUNTIME_HOME, { recursive: true });
-  } catch {
-    // best effort; if mkdir fails, spawn will still try with current env
-  }
-}
-
-function createPaddleEnv(safeMode: boolean): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    HOME: OCR_PADDLE_RUNTIME_USER,
-    USERPROFILE: OCR_PADDLE_RUNTIME_USER,
-    XDG_CACHE_HOME: OCR_PADDLE_RUNTIME_CACHE,
-    PADDLE_HOME: OCR_PADDLE_RUNTIME_HOME,
-    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True",
-    FLAGS_enable_pir_api: "0",
-    FLAGS_enable_pir_in_executor: "0",
-    FLAGS_use_mkldnn: "0",
-    FLAGS_prim_all: "0",
-    PYTHONUTF8: "1",
-    PYTHONIOENCODING: "utf-8",
-    AION2_OCR_SAFE_MODE: safeMode ? "1" : "0",
-  };
-}
-
-function buildPaddleCommandAttempts(
-  script: string,
-  scriptArgs: string[],
-  unbuffered = false,
-): PaddleCommandAttempt[] {
-  const bufferArg = unbuffered ? ["-u"] : [];
-  return [
-    { command: "py", args: ["-3.11", ...bufferArg, "-c", script, ...scriptArgs], label: "py-3.11" },
-    { command: "py", args: ["-3", ...bufferArg, "-c", script, ...scriptArgs], label: "py-3" },
-    { command: "python", args: [...bufferArg, "-c", script, ...scriptArgs], label: "python" },
-  ];
-}
-
-function trimBuffer(input: string): string {
-  if (input.length <= OCR_PADDLE_MAX_BUFFER) {
-    return input;
-  }
-  return input.slice(input.length - OCR_PADDLE_MAX_BUFFER);
-}
-
-function resetPaddleWorkerState(reason: string): void {
-  const worker = paddleWorkerProcess;
-  paddleWorkerProcess = null;
-  paddleWorkerStartPromise = null;
-  paddleWorkerStdoutBuffer = "";
-  paddleWorkerStderrBuffer = "";
-  const error = new Error(`OCR 常驻进程不可用：${reason}`);
-  paddleWorkerPendingRequests.forEach((pending) => {
-    clearTimeout(pending.timeoutId);
-    pending.reject(error);
-  });
-  paddleWorkerPendingRequests.clear();
-  if (worker && !worker.killed) {
-    try {
-      worker.kill();
-    } catch {
-      // ignore worker termination failure
-    }
-  }
-}
-
-function processPaddleWorkerStdoutLine(rawLine: string): void {
-  const line = rawLine.trim();
-  if (!line) {
-    return;
-  }
-  let parsed: PaddleOcrPayload | null = null;
-  try {
-    parsed = JSON.parse(line) as PaddleOcrPayload;
-  } catch {
-    return;
-  }
-  if (!parsed || parsed.ready === true) {
-    return;
-  }
-  const requestId = typeof parsed.id === "string" ? parsed.id : "";
-  if (!requestId) {
-    return;
-  }
-  const pending = paddleWorkerPendingRequests.get(requestId);
-  if (!pending) {
-    return;
-  }
-  paddleWorkerPendingRequests.delete(requestId);
-  clearTimeout(pending.timeoutId);
-  pending.resolve(parsePaddlePayloadObject(parsed, OCR_PADDLE_CONFIDENCE_SCALE));
-}
-
-function attachPaddleWorkerListeners(worker: ChildProcessWithoutNullStreams): void {
-  worker.stdout.setEncoding("utf8");
-  worker.stderr.setEncoding("utf8");
-  worker.stdout.on("data", (chunk: string) => {
-    paddleWorkerStdoutBuffer = trimBuffer(paddleWorkerStdoutBuffer + chunk);
-    let lineBreakIndex = paddleWorkerStdoutBuffer.indexOf("\n");
-    while (lineBreakIndex >= 0) {
-      const line = paddleWorkerStdoutBuffer.slice(0, lineBreakIndex).replace(/\r$/u, "");
-      paddleWorkerStdoutBuffer = paddleWorkerStdoutBuffer.slice(lineBreakIndex + 1);
-      processPaddleWorkerStdoutLine(line);
-      lineBreakIndex = paddleWorkerStdoutBuffer.indexOf("\n");
-    }
-  });
-  worker.stderr.on("data", (chunk: string) => {
-    paddleWorkerStderrBuffer = trimBuffer(paddleWorkerStderrBuffer + chunk);
-  });
-  worker.on("error", (err) => {
-    if (paddleWorkerProcess !== worker) {
-      return;
-    }
-    resetPaddleWorkerState(err.message || "进程异常");
-  });
-  worker.on("close", (code) => {
-    if (paddleWorkerProcess !== worker) {
-      return;
-    }
-    const stderrTail = paddleWorkerStderrBuffer.trim();
-    const detail = stderrTail ? `退出码 ${code ?? -1} / ${stderrTail}` : `退出码 ${code ?? -1}`;
-    resetPaddleWorkerState(detail);
-  });
-}
-
-async function startPaddleWorker(): Promise<void> {
-  if (paddleWorkerProcess && !paddleWorkerProcess.killed) {
-    return;
-  }
-  if (paddleWorkerStartPromise) {
-    return paddleWorkerStartPromise;
-  }
-  paddleWorkerStartPromise = (async () => {
-    ensurePaddleRuntimeDirectories();
-    const attempts = buildPaddleCommandAttempts(PADDLE_OCR_PYTHON_WORKER_SCRIPT, [], true);
-    const errors: string[] = [];
-    for (const attempt of attempts) {
-      try {
-        const worker = await new Promise<ChildProcessWithoutNullStreams>((resolve, reject) => {
-          let settled = false;
-          const child = spawn(attempt.command, attempt.args, {
-            windowsHide: true,
-            env: createPaddleEnv(true),
-            shell: false,
-          });
-          const finishResolve = (): void => {
-            if (settled) {
-              return;
-            }
-            settled = true;
-            resolve(child);
-          };
-          const finishReject = (message: string): void => {
-            if (settled) {
-              return;
-            }
-            settled = true;
-            reject(new Error(message));
-          };
-          child.once("spawn", finishResolve);
-          child.once("error", (err) => finishReject(err.message || "启动失败"));
-          child.once("close", (code) => finishReject(`启动后立即退出: ${code ?? -1}`));
-        });
-        paddleWorkerProcess = worker;
-        paddleWorkerStdoutBuffer = "";
-        paddleWorkerStderrBuffer = "";
-        attachPaddleWorkerListeners(worker);
-        return;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "启动失败";
-        errors.push(`${attempt.label}: ${message}`);
-      }
-    }
-    throw new Error(errors.join(" | ") || "无法启动 OCR 常驻进程。");
-  })();
-  try {
-    await paddleWorkerStartPromise;
-  } finally {
-    paddleWorkerStartPromise = null;
-  }
-}
-
-async function runPaddleWithWorker(imagePath: string, candidates: string[], safeMode: boolean): Promise<PaddleOcrOutcome> {
-  await startPaddleWorker();
-  const worker = paddleWorkerProcess;
-  if (!worker || worker.killed || worker.stdin.destroyed) {
-    throw new Error("OCR 常驻进程未就绪。");
-  }
-  const requestId = randomUUID();
-  return new Promise<PaddleOcrOutcome>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      if (paddleWorkerPendingRequests.delete(requestId)) {
-        resetPaddleWorkerState("请求超时");
-        reject(new Error(`OCR 常驻请求超时（>${OCR_PADDLE_REQUEST_TIMEOUT_MS}ms）`));
-      }
-    }, OCR_PADDLE_REQUEST_TIMEOUT_MS);
-    paddleWorkerPendingRequests.set(requestId, { resolve, reject, timeoutId });
-    try {
-      worker.stdin.write(
-        `${JSON.stringify({ id: requestId, image_path: imagePath, languages: candidates, safe_mode: safeMode })}\n`,
-        "utf8",
-      );
-    } catch (err) {
-      clearTimeout(timeoutId);
-      paddleWorkerPendingRequests.delete(requestId);
-      const message = err instanceof Error ? err.message : "发送请求失败";
-      reject(new Error(message));
-    }
-  });
-}
-
-async function runPaddleWithCommand(
-  command: string,
-  args: string[],
-  safeMode: boolean,
-): Promise<{ stdout: string; stderr: string; ok: boolean; errorMessage?: string }> {
-  ensurePaddleRuntimeDirectories();
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      windowsHide: true,
-      env: createPaddleEnv(safeMode),
-      shell: false,
-    });
-    let stdout = "";
-    let stderr = "";
-    let resolved = false;
-    const finish = (value: { stdout: string; stderr: string; ok: boolean; errorMessage?: string }): void => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      resolve(value);
-    };
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-      if (stdout.length + stderr.length > OCR_PADDLE_MAX_BUFFER) {
-        child.kill();
-        finish({
-          stdout,
-          stderr,
-          ok: false,
-          errorMessage: "OCR 输出过大，已中断。",
-        });
-      }
-    });
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
-      if (stdout.length + stderr.length > OCR_PADDLE_MAX_BUFFER) {
-        child.kill();
-        finish({
-          stdout,
-          stderr,
-          ok: false,
-          errorMessage: "OCR 输出过大，已中断。",
-        });
-      }
-    });
-    child.on("error", (err) => {
-      finish({
-        stdout,
-        stderr,
-        ok: false,
-        errorMessage: err.message,
-      });
-    });
-    child.on("close", (code) => {
-      if (code !== 0 && !stdout.trim()) {
-        finish({
-          stdout,
-          stderr,
-          ok: false,
-          errorMessage: stderr.trim() || `进程退出码 ${code ?? -1}`,
-        });
-        return;
-      }
-      finish({
-        stdout,
-        stderr,
-        ok: true,
-      });
-    });
-  });
-}
+const paddleOcrRuntime = createPaddleOcrRuntime({
+  confidenceScale: OCR_PADDLE_CONFIDENCE_SCALE,
+});
 
 async function ensureOnnxOcrEngine(_safeMode = true): Promise<OnnxOcrEngine> {
   if (onnxOcrEngine) {
@@ -2098,7 +934,7 @@ async function runPaddleExtract(imagePath: string, language: string, safeMode = 
   };
 
   try {
-    const fromWorker = await runPaddleWithWorker(imagePath, candidates, safeMode);
+    const fromWorker = await paddleOcrRuntime.runWithWorker(imagePath, candidates, safeMode);
     if (fromWorker.ok) {
       return fromWorker;
     }
@@ -2115,9 +951,9 @@ async function runPaddleExtract(imagePath: string, language: string, safeMode = 
     attemptErrors.push(`worker: ${message}`);
   }
 
-  const attempts = buildPaddleCommandAttempts(PADDLE_OCR_PYTHON_SCRIPT, [imagePath, langArg]);
+  const attempts = paddleOcrRuntime.buildCommandAttempts(PADDLE_OCR_PYTHON_SCRIPT, [imagePath, langArg]);
   for (const attempt of attempts) {
-    const result = await runPaddleWithCommand(attempt.command, attempt.args, safeMode);
+    const result = await paddleOcrRuntime.runWithCommand(attempt.command, attempt.args, safeMode);
     if (!result.ok) {
       const detail = (result.errorMessage ?? result.stderr.trim()) || "执行失败";
       attemptErrors.push(`${attempt.label}: ${detail}`);
@@ -2164,8 +1000,8 @@ export function cleanupWorkshopOcrEngineCore(): void {
   }
   onnxOcrEngine = null;
   onnxOcrEnginePromise = null;
-  if (paddleWorkerProcess || paddleWorkerPendingRequests.size > 0) {
-    resetPaddleWorkerState("应用退出");
+  if (paddleOcrRuntime.hasActivity()) {
+    paddleOcrRuntime.cleanup("应用退出");
   }
 }
 
@@ -2244,82 +1080,6 @@ function cleanupTempFile(filePath: string | null): void {
   }
 }
 
-async function resolveDualPriceRolesByHeader(
-  imagePath: string,
-  pricesRect: WorkshopRect,
-  language: string,
-  safeMode: boolean,
-  fallbackLeftRole: "server" | "world",
-  fallbackRightRole: "server" | "world",
-  warnings: string[],
-): Promise<{ leftRole: "server" | "world"; rightRole: "server" | "world" }> {
-  const headerHeight = clamp(Math.floor(pricesRect.height * 0.16), 40, 180);
-  const leftWidth = Math.max(1, Math.floor(pricesRect.width / 2));
-  const rightWidth = Math.max(1, pricesRect.width - leftWidth);
-  const leftRect: WorkshopRect = {
-    x: pricesRect.x,
-    y: pricesRect.y,
-    width: leftWidth,
-    height: headerHeight,
-  };
-  const rightRect: WorkshopRect = {
-    x: pricesRect.x + leftWidth,
-    y: pricesRect.y,
-    width: rightWidth,
-    height: headerHeight,
-  };
-  const headerLanguage = buildPaddleLanguageCandidates(language).join("+");
-
-  const readHeaderText = async (rect: WorkshopRect, label: "左列" | "右列"): Promise<string> => {
-    let tempPath: string | null = null;
-    try {
-      tempPath = cropImageToTempFile(imagePath, rect, 2);
-      const extract = await runPaddleExtract(tempPath, headerLanguage, safeMode);
-      if (!extract.ok) {
-        warnings.push(`${label}表头识别失败：${extract.errorMessage ?? "未知错误"}`);
-        return "";
-      }
-      return extract.rawText;
-    } catch (err) {
-      warnings.push(`${label}表头识别失败：${err instanceof Error ? err.message : "未知异常"}`);
-      return "";
-    } finally {
-      cleanupTempFile(tempPath);
-    }
-  };
-
-  const [leftHeaderText, rightHeaderText] = await Promise.all([
-    readHeaderText(leftRect, "左列"),
-    readHeaderText(rightRect, "右列"),
-  ]);
-  const leftDetected = detectTradePriceRoleByHeaderText(leftHeaderText);
-  const rightDetected = detectTradePriceRoleByHeaderText(rightHeaderText);
-
-  if (leftDetected && rightDetected && leftDetected !== rightDetected) {
-    return {
-      leftRole: leftDetected,
-      rightRole: rightDetected,
-    };
-  }
-  if (leftDetected && !rightDetected) {
-    return {
-      leftRole: leftDetected,
-      rightRole: leftDetected === "server" ? "world" : "server",
-    };
-  }
-  if (!leftDetected && rightDetected) {
-    return {
-      leftRole: rightDetected === "server" ? "world" : "server",
-      rightRole: rightDetected,
-    };
-  }
-  warnings.push("价格表头自动识别失败，已回退到手动列角色预设。");
-  return {
-    leftRole: fallbackLeftRole,
-    rightRole: fallbackRightRole,
-  };
-}
-
 export async function extractWorkshopOcrTextCore(
   payload: WorkshopOcrExtractTextInput,
 ): Promise<WorkshopOcrExtractTextResult> {
@@ -2391,13 +1151,22 @@ export async function extractWorkshopOcrTextCore(
 
       if (tradeBoardPreset.priceMode === "dual") {
         const detectedRoles = await resolveDualPriceRolesByHeader(
-          imagePath,
-          tradeBoardPreset.pricesRect,
-          namesLanguage,
-          safeMode,
-          effectiveLeftRole,
-          effectiveRightRole,
-          warnings,
+          {
+            imagePath,
+            pricesRect: tradeBoardPreset.pricesRect,
+            headerLanguage: namesLanguage,
+            safeMode,
+            fallbackLeftRole: effectiveLeftRole,
+            fallbackRightRole: effectiveRightRole,
+            warnings,
+          },
+          {
+            clamp,
+            cropImageToTempFile,
+            cleanupTempFile,
+            runPaddleExtract,
+            detectTradePriceRoleByHeaderText,
+          },
         );
         effectiveLeftRole = detectedRoles.leftRole;
         effectiveRightRole = detectedRoles.rightRole;
@@ -2444,61 +1213,32 @@ export async function extractWorkshopOcrTextCore(
         pricesEngine = singleOutcome.engine;
       }
 
-      const tradeRows: WorkshopOcrExtractTextResult["tradeRows"] = [];
-      for (let index = 0; index < effectiveRowCount; index += 1) {
-        const itemName = nameRows[index];
-        if (!itemName) {
-          continue;
-        }
-        const leftPrice = leftValues[index] ?? null;
-        const rightPrice = rightValues[index] ?? null;
-        const serverPrice =
-          effectiveLeftRole === "server"
-            ? leftPrice
-            : effectiveRightRole === "server"
-              ? rightPrice
-              : null;
-        const worldPrice =
-          effectiveLeftRole === "world"
-            ? leftPrice
-            : effectiveRightRole === "world"
-              ? rightPrice
-              : null;
-        if (serverPrice === null && worldPrice === null) {
-          continue;
-        }
-        tradeRows.push({
-          lineNumber: index + 1,
-          itemName,
-          serverPrice,
-          worldPrice,
-        });
-      }
-
-      const textLines = tradeRows
-        .map((row) => {
-          const primary =
-            tradeBoardPreset.priceColumn === "right"
-              ? effectiveRightRole === "server"
-                ? row.serverPrice ?? row.worldPrice
-                : row.worldPrice ?? row.serverPrice
-              : effectiveLeftRole === "server"
-                ? row.serverPrice ?? row.worldPrice
-                : row.worldPrice ?? row.serverPrice;
-          if (primary === null) {
-            return null;
-          }
-          return `${row.itemName} ${primary}`;
-        })
-        .filter((entry): entry is string => entry !== null);
+      const tradeRows = buildTradeRows({
+        effectiveRowCount,
+        nameRows,
+        leftValues,
+        rightValues,
+        effectiveLeftRole,
+        effectiveRightRole,
+      });
+      const textLines = buildTradeBoardPrimaryTextLines({
+        tradeRows,
+        priceColumn: tradeBoardPreset.priceColumn,
+        effectiveLeftRole,
+        effectiveRightRole,
+      });
       if (tradeRows.length < effectiveRowCount) {
         warnings.push(`识别行不足：有效行 ${tradeRows.length}/${effectiveRowCount}。`);
       }
       const text = textLines.join("\n");
       return {
-        rawText: `${namesExtract.rawText}\n\n---PRICE---\n\n${rawPriceSection}\n\n---NAMES_WORDS---\n\n${stringifyOcrWords(
-          namesExtract.words,
-        )}\n\n---PRICES_WORDS---\n\n${rawPriceTsvSection}`,
+        rawText: buildTradeBoardRawText({
+          namesRawText: namesExtract.rawText,
+          rawPriceSection,
+          namesWords: namesExtract.words,
+          rawPriceTsvSection,
+          stringifyOcrWords,
+        }),
         text,
         lineCount: tradeRows.length,
         warnings,
