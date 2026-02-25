@@ -78,6 +78,7 @@
 - `aa5e5f6` `test(smoke): add electron ui regression script for key workflows` (4.4 阶段进展)
 - `4b29680` `refactor(workshop): make ocr import and signal compute interruptible` (5.1 阶段进展)
 - `993489a` `security(window): enable sandboxed renderer and isolate overlay` (5.2 阶段进展)
+- `0a7274b` `test(unit): add vitest suite for shared time and engine` (5.3 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -153,7 +154,7 @@
 任务:
 - [x] 5.1 将工坊重计算（价格信号/部分 OCR 后处理）迁移到 worker 或可中断计算路径。
 - [x] 5.2 收紧 BrowserWindow 安全配置（逐步移除 `contextIsolation: false` / `sandbox: false` 依赖）。
-- [ ] 5.3 补最小测试体系（`shared/engine`、`shared/time`、关键 store 逻辑）。
+- [x] 5.3 补最小测试体系（`shared/engine`、`shared/time`、关键 store 逻辑）。
 - [ ] 5.4 文档同步（规则、发布流程、回滚流程）。
 
 验收:
@@ -253,7 +254,15 @@
   - IPC 错误 token 编解码改为无 Node 模块依赖实现，确保沙箱 preload 仍可解析为标准格式 `[channel][code] message`。
   - 关键提交:
     - `993489a` `security(window): enable sandboxed renderer and isolate overlay`
+- `5.3` 已收尾完成:
+  - 新增 `vitest` 最小单测体系（`vitest.config.ts` + `npm run test:unit` / `npm run test:unit:watch`）。
+  - 为 `shared/time` 增加重置与调度时间回归（daily/weekly reset、scheduled tick、下一次刷新时间窗口）。
+  - 为 `shared/engine` 增加关键业务回归（任务打卡、券消耗、set_completed、能量校验、日/周刷新状态重建）。
+  - `npm run test:smoke` 接入 `test:unit` 前置执行，形成“单测 + 构建 + UI smoke”最小闭环。
+  - 关键提交:
+    - `0a7274b` `test(unit): add vitest suite for shared time and engine`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
+  - `npm run test:unit`
   - `npm run smoke:ui`
