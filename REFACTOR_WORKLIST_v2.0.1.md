@@ -374,4 +374,12 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.14：为 OCR 新拆分模块补单测覆盖。
+  - 新增：
+    - `src/main/workshop-store/ocr-import-parser.test.ts`
+    - `src/main/workshop-store/ocr-extract-config.test.ts`
+  - 提交：`6f82e24` `test(ocr): add unit coverage for parser and extract-config helpers`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
