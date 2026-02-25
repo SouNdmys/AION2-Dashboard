@@ -14,7 +14,7 @@
 - [ ] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
 - [x] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
 - [x] 1.2 将 `src/renderer/src/WorkshopView.tsx` 拆为 `features/workshop/*` 子模块（OCR、历史、模拟、库存）。
-- [ ] 1.3 将 `src/main/workshop-store.ts` 拆为 `catalog/ocr/pricing/simulation/store` 模块。
+- [x] 1.3 将 `src/main/workshop-store.ts` 拆为 `catalog/ocr/pricing/simulation/store` 模块。
 - [x] 1.4 将 `src/main/ipc.ts` 按域拆分注册（app/account/character/workshop）。
 
 验收:
@@ -69,6 +69,8 @@
 - `e57d0f9` `refactor(ipc): split handler registration by domain with payload guards`
 - `8290ad8` `refactor(renderer): extract usePersistedState and remove repeated localStorage effects`
 - `31b9bcc` `refactor(renderer): centralize aionApi access via app/workshop action hooks`
+- `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
+- `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
 - `708f4bd` `refactor(workshop): move view helpers and persistence config out of WorkshopView` (1.2 阶段进展)
 - `5ada73d` `refactor(dashboard): split toolbar and dashboard side panels into view components` (1.1 第二阶段进展)
@@ -174,3 +176,20 @@
 - 明日（2026-02-25）计划:
   - 启动 `1.3`：拆分 `src/main/workshop-store.ts` 为 `catalog/ocr/pricing/simulation/store` 模块。
   - 建议先做“只迁文件与调用接线，不改行为”的第一刀，再跑 `typecheck/build` 与页面回归。
+
+## 交接记录（2026-02-25）
+
+- `1.3` 已收尾完成:
+  - 新增 `src/main/workshop-store-core.ts`，承载原 `workshop-store.ts` 全量实现。
+  - 新增 `src/main/workshop-store/{catalog,ocr,pricing,simulation,store}.ts` 域模块转发层。
+  - `src/main/workshop-store.ts` 改为聚合导出入口。
+  - 主进程调用点改为按域引用:
+    - `src/main/ipc/register-workshop-handlers.ts`
+    - `src/main/workshop-automation.ts`
+    - `src/main/index.ts`
+  - 关键提交:
+    - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge`
+    - `82b9bd4` `refactor(main): route workshop consumers through domain store modules`
+- 本次改动已通过:
+  - `npm run typecheck`
+  - `npm run build`
