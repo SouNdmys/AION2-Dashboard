@@ -520,4 +520,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.32：OCR 第十七刀：抽离 trade-board 主分支 orchestrator 到 `src/main/workshop-store/ocr-tradeboard-extract.ts`。
+  - 变更点：
+    - `extractWorkshopOcrTextCore` 中 trade-board 分支（名称区 OCR、名称行构建、价格编排、结果拼装）整体下沉；
+    - core 改为“入口分流 + 依赖注入”。
+  - 新增：
+    - `src/main/workshop-store/ocr-tradeboard-extract.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

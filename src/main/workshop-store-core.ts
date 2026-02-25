@@ -32,17 +32,11 @@ import {
   normalizeNumericToken,
 } from "./workshop-store/ocr-tradeboard-rows";
 import {
-  buildTradeBoardPrimaryTextLines,
-  buildTradeBoardRawText,
-  buildTradeRows,
-} from "./workshop-store/ocr-tradeboard-orchestration";
-import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
 import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
-import { buildTradeBoardNameRows } from "./workshop-store/ocr-tradeboard-names";
-import { resolveTradeBoardPriceRows } from "./workshop-store/ocr-tradeboard-price-resolution";
+import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -105,7 +99,6 @@ const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
 ]);
 const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
-const OCR_TRADE_BOARD_NAME_SCALE = 3;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_ENABLE_PYTHON_FALLBACK = false;
 
@@ -1014,100 +1007,29 @@ export async function extractWorkshopOcrTextCore(
   const tradeBoardPreset = sanitizeTradeBoardPreset(payload.tradeBoardPreset);
 
   if (tradeBoardPreset) {
-    let namesTempPath: string | null = null;
-    try {
-      const namesLanguage = buildPaddleLanguageCandidates(language).join("+");
-      const namesScale = OCR_TRADE_BOARD_NAME_SCALE;
-      const pricesScale = 2;
-      namesTempPath = cropImageToTempFile(imagePath, tradeBoardPreset.namesRect, namesScale);
-      const namesExtract = await runPaddleExtract(namesTempPath, namesLanguage, safeMode);
-      if (!namesExtract.ok) {
-        throw new Error(`名称区 OCR 失败：${formatPaddleOcrError(namesExtract.errorMessage)}`);
-      }
-      const { effectiveRowCount, nameRows } = buildTradeBoardNameRows(
-        {
-          namesWords: namesExtract.words,
-          namesRawText: namesExtract.rawText,
-          expectedRowCount: tradeBoardPreset.rowCount,
-          namesRectHeight: tradeBoardPreset.namesRect.height,
-          namesScale,
-          warnings,
-        },
-        {
-          sanitizeOcrLineItemName,
-          clamp,
-          nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
-        },
-      );
-
-      const {
-        leftValues,
-        rightValues,
-        rawPriceSection,
-        rawPriceTsvSection,
-        pricesEngine,
-        effectiveLeftRole,
-        effectiveRightRole,
-      } = await resolveTradeBoardPriceRows(
-        {
-          imagePath,
-          pricesRect: tradeBoardPreset.pricesRect,
-          effectiveRowCount,
-          pricesScale,
-          namesLanguage,
-          safeMode,
-          priceMode: tradeBoardPreset.priceMode === "dual" ? "dual" : "single",
-          priceColumn: tradeBoardPreset.priceColumn === "right" ? "right" : "left",
-          fallbackLeftRole: tradeBoardPreset.leftPriceRole === "world" ? "world" : "server",
-          fallbackRightRole: tradeBoardPreset.rightPriceRole === "server" ? "server" : "world",
-          warnings,
-        },
-        {
-          clamp,
-          numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
-          cropImageToTempFile,
-          cleanupTempFile,
-          runPaddleExtract,
-          stringifyOcrWords,
-          detectTradePriceRoleByHeaderText,
-        },
-      );
-
-      const tradeRows = buildTradeRows({
-        effectiveRowCount,
-        nameRows,
-        leftValues,
-        rightValues,
-        effectiveLeftRole,
-        effectiveRightRole,
-      });
-      const textLines = buildTradeBoardPrimaryTextLines({
-        tradeRows,
-        priceColumn: tradeBoardPreset.priceColumn,
-        effectiveLeftRole,
-        effectiveRightRole,
-      });
-      if (tradeRows.length < effectiveRowCount) {
-        warnings.push(`识别行不足：有效行 ${tradeRows.length}/${effectiveRowCount}。`);
-      }
-      const text = textLines.join("\n");
-      return {
-        rawText: buildTradeBoardRawText({
-          namesRawText: namesExtract.rawText,
-          rawPriceSection,
-          namesWords: namesExtract.words,
-          rawPriceTsvSection,
-          stringifyOcrWords,
-        }),
-        text,
-        lineCount: tradeRows.length,
+    return extractTradeBoardOcrText(
+      {
+        imagePath,
+        language,
+        psm,
+        safeMode,
+        tradeBoardPreset,
         warnings,
-        engine: `onnx-ocr(names=${namesExtract.language || namesLanguage}, prices=${pricesEngine}, psm=${psm}, trade-board-roi)`,
-        tradeRows,
-      };
-    } finally {
-      cleanupTempFile(namesTempPath);
-    }
+      },
+      {
+        buildPaddleLanguageCandidates,
+        cropImageToTempFile,
+        cleanupTempFile,
+        runPaddleExtract,
+        formatPaddleOcrError,
+        sanitizeOcrLineItemName,
+        clamp,
+        detectTradePriceRoleByHeaderText,
+        stringifyOcrWords,
+        nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
+        numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+      },
+    );
   }
 
   const primary = await runPaddleExtract(imagePath, language, safeMode);
