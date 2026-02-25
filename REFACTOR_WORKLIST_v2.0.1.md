@@ -556,4 +556,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.36：OCR 第二十一刀：抽离 OCR 导入运行时工具到 `src/main/workshop-store/ocr-import-runtime.ts`。
+  - 变更点：
+    - `isDuplicatePriceSnapshotByWindow / yieldToEventLoop` 从 core 下沉；
+    - core 改为引用 `ocr-import-runtime`，并保持 `yieldToEventLoop` 兼容导出。
+  - 新增：
+    - `src/main/workshop-store/ocr-import-runtime.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

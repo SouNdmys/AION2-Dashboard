@@ -39,6 +39,7 @@ import { cleanupTempFile, stringifyOcrWords } from "./workshop-store/ocr-extract
 import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
 import { extractWorkshopOcrTextEntry } from "./workshop-store/ocr-extract-entry";
 import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
+import { isDuplicatePriceSnapshotByWindow, yieldToEventLoop } from "./workshop-store/ocr-import-runtime";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -66,6 +67,8 @@ import type {
   WorkshopRecipeInput,
   WorkshopState,
 } from "../shared/types";
+
+export { yieldToEventLoop };
 
 export const WORKSHOP_STATE_VERSION = 6;
 export const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
@@ -1005,50 +1008,6 @@ export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
     ...state,
     version: WORKSHOP_STATE_VERSION,
     prices: state.prices.filter((entry) => entry.id !== snapshotId),
-  });
-}
-
-function isDuplicatePriceSnapshotByWindow(
-  prices: WorkshopPriceSnapshot[],
-  itemId: string,
-  market: WorkshopPriceMarket | undefined,
-  unitPrice: number,
-  capturedAtIso: string,
-  dedupeWithinSeconds: number,
-): boolean {
-  if (dedupeWithinSeconds <= 0) {
-    return false;
-  }
-  const capturedAtMs = new Date(capturedAtIso).getTime();
-  if (!Number.isFinite(capturedAtMs)) {
-    return false;
-  }
-  const dedupeWindowMs = dedupeWithinSeconds * 1000;
-  for (let index = prices.length - 1; index >= 0; index -= 1) {
-    const row = prices[index];
-    if (row.itemId !== itemId) {
-      continue;
-    }
-    if ((row.market ?? "single") !== (market ?? "single")) {
-      continue;
-    }
-    if (row.unitPrice !== unitPrice) {
-      continue;
-    }
-    const rowMs = new Date(row.capturedAt).getTime();
-    if (!Number.isFinite(rowMs)) {
-      continue;
-    }
-    if (Math.abs(capturedAtMs - rowMs) <= dedupeWindowMs) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
   });
 }
 
