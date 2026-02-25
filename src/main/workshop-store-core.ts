@@ -9,6 +9,12 @@ import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
 import { tify } from "chinese-conv";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
+import {
+  buildPaddleLanguageCandidates,
+  sanitizeOcrLanguage,
+  sanitizeOcrPsm,
+  sanitizeOcrSafeMode,
+} from "./workshop-store/ocr-extract-config";
 import { buildExpectedIconByLineNumber, captureOcrLineIcons } from "./workshop-store/ocr-icon-capture";
 import {
   parseOcrPriceLines,
@@ -67,8 +73,6 @@ const WORKSHOP_KNOWN_INVALID_ITEM_NAMES = new Set<string>([
   "高純度的奧里哈康磐石",
   "新鮮的金盒花",
 ]);
-const WORKSHOP_OCR_DEFAULT_LANGUAGE = "chi_tra";
-const WORKSHOP_OCR_DEFAULT_PSM = 6;
 const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
 const OCR_TRADE_BOARD_NAME_SCALE = 3;
@@ -1699,63 +1703,6 @@ function parseIntLike(raw: unknown): number | null {
     return null;
   }
   return Math.floor(raw);
-}
-
-function sanitizeOcrLanguage(raw: unknown): string {
-  if (typeof raw !== "string") {
-    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
-  }
-  const value = raw.trim();
-  if (!value) {
-    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
-  }
-  if (!/^[a-zA-Z0-9_+]+$/u.test(value)) {
-    return WORKSHOP_OCR_DEFAULT_LANGUAGE;
-  }
-  return value;
-}
-
-function sanitizeOcrPsm(raw: unknown): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return WORKSHOP_OCR_DEFAULT_PSM;
-  }
-  return clamp(Math.floor(raw), 3, 13);
-}
-
-function sanitizeOcrSafeMode(raw: unknown): boolean {
-  return raw !== false;
-}
-
-function buildPaddleLanguageCandidates(language: string): string[] {
-  const parts = language
-    .split("+")
-    .map((entry) => entry.trim().toLocaleLowerCase())
-    .filter(Boolean);
-  const candidates: string[] = [];
-  const add = (value: string): void => {
-    if (!candidates.includes(value)) {
-      candidates.push(value);
-    }
-  };
-  parts.forEach((part) => {
-    if (part === "chi_tra") {
-      add("chinese_cht");
-      add("ch");
-      return;
-    }
-    if (part === "chi_sim") {
-      add("ch");
-      return;
-    }
-    if (part === "eng") {
-      add("en");
-      return;
-    }
-    add(part);
-  });
-  add("ch");
-  add("en");
-  return candidates;
 }
 
 function sanitizeRect(raw: unknown): WorkshopRect | null {
