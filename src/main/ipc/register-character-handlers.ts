@@ -1,4 +1,3 @@
-import { ipcMain } from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc";
 import {
   addCharacter,
@@ -17,6 +16,7 @@ import {
   updateWeeklyCompletions,
 } from "../store";
 import { readObjectPayload, readOptionalBoolean, readOptionalNumber, readOptionalString, readString, readStringArray } from "./guards";
+import { registerIpcHandler } from "./register-handler";
 
 function readLane(payload: Record<string, unknown>, channel: string): "lower" | "middle" {
   const lane = readString(payload, "lane", channel);
@@ -55,27 +55,27 @@ function readOptionalNullableNumber(payload: Record<string, unknown>, key: strin
 }
 
 export function registerCharacterIpcHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.addCharacter, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.addCharacter, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.addCharacter;
     const body = readObjectPayload(payload, channel);
     return addCharacter(readString(body, "name", channel), readOptionalString(body, "accountId", channel));
   });
-  ipcMain.handle(IPC_CHANNELS.renameCharacter, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.renameCharacter, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.renameCharacter;
     const body = readObjectPayload(payload, channel);
     return renameCharacter(readString(body, "characterId", channel), readString(body, "name", channel));
   });
-  ipcMain.handle(IPC_CHANNELS.deleteCharacter, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.deleteCharacter, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.deleteCharacter;
     const body = readObjectPayload(payload, channel);
     return deleteCharacter(readString(body, "characterId", channel));
   });
-  ipcMain.handle(IPC_CHANNELS.selectCharacter, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.selectCharacter, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.selectCharacter;
     const body = readObjectPayload(payload, channel);
     return selectCharacter(readString(body, "characterId", channel));
   });
-  ipcMain.handle(IPC_CHANNELS.updateCharacterProfile, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateCharacterProfile, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateCharacterProfile;
     const body = readObjectPayload(payload, channel);
     return updateCharacterProfile(readString(body, "characterId", channel), {
@@ -83,16 +83,16 @@ export function registerCharacterIpcHandlers(): void {
       gearScore: readOptionalNullableNumber(body, "gearScore", channel),
     });
   });
-  ipcMain.handle(IPC_CHANNELS.reorderCharacters, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.reorderCharacters, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.reorderCharacters;
     const body = readObjectPayload(payload, channel);
     return reorderCharacters(readStringArray(body, "characterIds", channel));
   });
-  ipcMain.handle(IPC_CHANNELS.applyTaskAction, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.applyTaskAction, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.applyTaskAction;
     return applyAction(readObjectPayload(payload, channel) as unknown as Parameters<typeof applyAction>[0]);
   });
-  ipcMain.handle(IPC_CHANNELS.applyCorridorCompletion, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.applyCorridorCompletion, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.applyCorridorCompletion;
     const body = readObjectPayload(payload, channel);
     const completed = readOptionalNumber(body, "completed", channel);
@@ -101,7 +101,7 @@ export function registerCharacterIpcHandlers(): void {
     }
     return applyCorridorCompletion(readString(body, "characterId", channel), readLane(body, channel), completed);
   });
-  ipcMain.handle(IPC_CHANNELS.setCorridorCompleted, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.setCorridorCompleted, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.setCorridorCompleted;
     const body = readObjectPayload(payload, channel);
     const completed = readOptionalNumber(body, "completed", channel);
@@ -110,7 +110,7 @@ export function registerCharacterIpcHandlers(): void {
     }
     return setCorridorCompleted(readString(body, "characterId", channel), readLane(body, channel), completed);
   });
-  ipcMain.handle(IPC_CHANNELS.updateArtifactStatus, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateArtifactStatus, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateArtifactStatus;
     const body = readObjectPayload(payload, channel);
     const lowerAvailable = readOptionalNumber(body, "lowerAvailable", channel);
@@ -128,7 +128,7 @@ export function registerCharacterIpcHandlers(): void {
       middleNextAt: middleNextAt === undefined ? null : middleNextAt,
     });
   });
-  ipcMain.handle(IPC_CHANNELS.updateEnergySegments, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateEnergySegments, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateEnergySegments;
     const body = readObjectPayload(payload, channel);
     const baseCurrent = readOptionalNumber(body, "baseCurrent", channel);
@@ -138,7 +138,7 @@ export function registerCharacterIpcHandlers(): void {
     }
     return updateEnergySegments(readString(body, "characterId", channel), baseCurrent, bonusCurrent);
   });
-  ipcMain.handle(IPC_CHANNELS.updateRaidCounts, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateRaidCounts, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateRaidCounts;
     const body = readObjectPayload(payload, channel);
     return updateRaidCounts(readString(body, "characterId", channel), {
@@ -163,7 +163,7 @@ export function registerCharacterIpcHandlers(): void {
       sanctumBoxRemaining: readOptionalNumber(body, "sanctumBoxRemaining", channel),
     });
   });
-  ipcMain.handle(IPC_CHANNELS.updateWeeklyCompletions, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateWeeklyCompletions, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateWeeklyCompletions;
     const body = readObjectPayload(payload, channel);
     return updateWeeklyCompletions(readString(body, "characterId", channel), {
@@ -171,7 +171,7 @@ export function registerCharacterIpcHandlers(): void {
       transcendenceCompleted: readOptionalNumber(body, "transcendenceCompleted", channel),
     });
   });
-  ipcMain.handle(IPC_CHANNELS.updateAodePlan, (_event, payload: unknown) => {
+  registerIpcHandler(IPC_CHANNELS.updateAodePlan, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateAodePlan;
     const body = readObjectPayload(payload, channel);
     return updateAodePlan(readString(body, "characterId", channel), {
