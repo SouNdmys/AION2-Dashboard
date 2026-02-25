@@ -17,6 +17,7 @@ import {
 } from "./workshop-store/ocr-extract-config";
 import { buildExpectedIconByLineNumber, captureOcrLineIcons } from "./workshop-store/ocr-icon-capture";
 import { sanitizeTradeBoardPreset } from "./workshop-store/ocr-tradeboard-preset";
+import { estimateOcrRowCount, groupOcrWordsByRow } from "./workshop-store/ocr-row-grouping";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -2477,42 +2478,6 @@ function parseNonEmptyLines(text: string): string[] {
     .filter(Boolean);
 }
 
-function estimateRowCountFromWords(words: OcrTsvWord[]): number | null {
-  const effectiveWords = words.filter((word) => sanitizeOcrLineItemName(word.text).trim().length > 0);
-  if (effectiveWords.length === 0) {
-    return null;
-  }
-  const points = effectiveWords
-    .map((word) => ({
-      centerY: word.top + word.height / 2,
-      height: Math.max(1, word.height),
-    }))
-    .sort((left, right) => left.centerY - right.centerY);
-  if (points.length === 0) {
-    return null;
-  }
-  const heights = points.map((entry) => entry.height).sort((left, right) => left - right);
-  const medianHeight = heights[Math.floor(heights.length / 2)] ?? 1;
-  const mergeDistance = Math.max(8, Math.floor(medianHeight * 0.65));
-
-  let clusterCount = 0;
-  let clusterCenter = 0;
-  points.forEach((entry) => {
-    if (clusterCount === 0) {
-      clusterCount = 1;
-      clusterCenter = entry.centerY;
-      return;
-    }
-    if (Math.abs(entry.centerY - clusterCenter) <= mergeDistance) {
-      clusterCenter = (clusterCenter + entry.centerY) / 2;
-      return;
-    }
-    clusterCount += 1;
-    clusterCenter = entry.centerY;
-  });
-  return clamp(clusterCount, 1, 30);
-}
-
 function resolveTradeBoardRowCount(
   configuredRowCount: number,
   nameWords: OcrTsvWord[],
@@ -2522,7 +2487,10 @@ function resolveTradeBoardRowCount(
   if (configuredRowCount > 0) {
     return configuredRowCount;
   }
-  const fromWords = estimateRowCountFromWords(nameWords);
+  const fromWords = estimateOcrRowCount(nameWords, {
+    sanitizeName: sanitizeOcrLineItemName,
+    clamp,
+  });
   const fallbackLineCount = clamp(parseNonEmptyLines(nameRawText).length, 0, 30);
   const candidates: number[] = [];
   if (fromWords !== null && fromWords > 0) {
@@ -2538,19 +2506,8 @@ function resolveTradeBoardRowCount(
   return resolved;
 }
 
-function groupWordsByRow<T extends OcrTsvWord>(words: T[], rowCount: number, totalHeight: number, startTop = 0): T[][] {
-  const buckets: T[][] = Array.from({ length: rowCount }, () => []);
-  const rowHeight = totalHeight / rowCount;
-  words.forEach((word) => {
-    const centerY = word.top + word.height / 2 - startTop;
-    const rowIndex = clamp(Math.floor(centerY / Math.max(1, rowHeight)), 0, rowCount - 1);
-    buckets[rowIndex].push(word);
-  });
-  return buckets.map((bucket) => bucket.sort((left, right) => left.left - right.left));
-}
-
 function buildNameRowsFromWords(words: OcrTsvWord[], rowCount: number, totalHeight: number): Array<string | null> {
-  const rows = groupWordsByRow(words, rowCount, totalHeight);
+  const rows = groupOcrWordsByRow(words, rowCount, totalHeight, clamp);
   return rows.map((row) => {
     const confidentWords = row.filter((word) => word.confidence < 0 || word.confidence >= OCR_TSV_NAME_CONFIDENCE_MIN);
     const effectiveWords = confidentWords.length > 0 ? confidentWords : row;
@@ -2596,7 +2553,7 @@ function buildPriceRowsFromWords(
   const rowSpanPadding = Math.floor(distributionHeight * 0.06);
   const spanTop = Math.max(0, minTop - rowSpanPadding);
   const spanBottom = maxBottom + rowSpanPadding;
-  const rows = groupWordsByRow(numericWords, rowCount, Math.max(1, spanBottom - spanTop), spanTop);
+  const rows = groupOcrWordsByRow(numericWords, rowCount, Math.max(1, spanBottom - spanTop), clamp, spanTop);
   return rows.map((row, index) => {
     if (row.length === 0) {
       rowWarnings.push(`第 ${index + 1} 行价格解析失败（词框无数字词）。`);
