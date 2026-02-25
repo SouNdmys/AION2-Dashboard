@@ -11,7 +11,7 @@
 - 降低 `App.tsx` / `WorkshopView.tsx` / `workshop-store.ts` 的单文件复杂度。
 
 任务:
-- [ ] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
+- [x] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
 - [x] 1.1 将 `src/renderer/src/App.tsx` 拆为 `features/dashboard/*` 子模块（视图、hooks、actions）。
 - [x] 1.2 将 `src/renderer/src/WorkshopView.tsx` 拆为 `features/workshop/*` 子模块（OCR、历史、模拟、库存）。
 - [x] 1.3 将 `src/main/workshop-store.ts` 拆为 `catalog/ocr/pricing/simulation/store` 模块。
@@ -76,6 +76,7 @@
 - `7b6cb2a` `refactor(ipc): standardize invoke errors with channel and business codes` (3.4 阶段进展)
 - `627d25e` `refactor(workshop): move derived models into memoized selector layer` (4.3 阶段进展)
 - `aa5e5f6` `test(smoke): add electron ui regression script for key workflows` (4.4 阶段进展)
+- `4b29680` `refactor(workshop): make ocr import and signal compute interruptible` (5.1 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -149,7 +150,7 @@
 - 主线程更稳、边界更安全、回归成本更低。
 
 任务:
-- [ ] 5.1 将工坊重计算（价格信号/部分 OCR 后处理）迁移到 worker 或可中断计算路径。
+- [x] 5.1 将工坊重计算（价格信号/部分 OCR 后处理）迁移到 worker 或可中断计算路径。
 - [ ] 5.2 收紧 BrowserWindow 安全配置（逐步移除 `contextIsolation: false` / `sandbox: false` 依赖）。
 - [ ] 5.3 补最小测试体系（`shared/engine`、`shared/time`、关键 store 逻辑）。
 - [ ] 5.4 文档同步（规则、发布流程、回滚流程）。
@@ -238,6 +239,12 @@
     - `npm run test:smoke`
   - 关键提交:
     - `aa5e5f6` `test(smoke): add electron ui regression script for key workflows`
+- `5.1` 已收尾完成:
+  - `importWorkshopOcrPrices` 改为可中断异步处理：OCR 行处理按分片让出事件循环，降低大批量导入时主线程阻塞。
+  - `getWorkshopPriceSignals` 改为可中断异步处理：逐条计算信号并周期性让出事件循环，稳定大数据量计算响应。
+  - 热键自动抓价流程接线改为 `await importWorkshopOcrPrices(...)`，与异步计算路径一致。
+  - 关键提交:
+    - `4b29680` `refactor(workshop): make ocr import and signal compute interruptible`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
