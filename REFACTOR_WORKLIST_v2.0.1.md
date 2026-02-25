@@ -276,3 +276,47 @@
   - `npm run check:prepackage`
   - `npm run smoke:ui`
   - `npm run test:smoke`
+
+## 后续优化执行笔记（2026-02-25）
+
+目标:
+- 对齐最新 review：从“表层分层”推进到“可测试分层”。
+
+执行清单（按优先级）:
+- [ ] A1 拆分 `src/main/workshop-store-core.ts` 为真实域实现（非 re-export），并补域单测。
+- [ ] A2 拆分 `src/main/store.ts` 为 `domain + infra adapter`，使业务规则可脱离 Electron I/O 测试。
+- [ ] A3 为 renderer 主页面补 CSP（先 production strict baseline，再按需放开）。
+- [ ] A4 继续瘦身 `src/renderer/src/App.tsx` 编排层（状态和副作用下沉到 hook/view-model）。
+
+本轮推进记录:
+- [x] A1-1：将 `src/main/workshop-store/pricing.ts` 从转发层改为真实实现层（价格快照/历史/信号/规则更新）。
+- [x] A1-2：新增 `src/main/workshop-store/pricing-analytics.ts`，下沉纯计算逻辑（趋势判定、星期均价）。
+- [x] A1-3：新增 `src/main/workshop-store/pricing-analytics.test.ts`，覆盖趋势判定与星期均价回归。
+- [x] A1-4.1：将 `src/main/workshop-store/simulation.ts` 从转发层改为真实实现层（模拟/可制作推荐）。
+- [x] A1-4.2：将 `src/main/workshop-store/catalog.ts` 从转发层改为真实实现层（物品/配方增删改）。
+- [x] A1-4.3：将 `src/main/workshop-store/store.ts` 从转发层改为真实实现层（状态读取/库存写入），样例 seed 改为 core helper 调用。
+- [x] A1-4.4：将 `src/main/workshop-store/ocr.ts` 从转发层改为域入口实现（调用 core OCR helper，去除直接 re-export）。
+- [x] A1-4.5：core 清理：移除 `getWorkshopState/upsertWorkshopItem/deleteWorkshopItem/upsertWorkshopRecipe/deleteWorkshopRecipe/upsertWorkshopInventory` 旧公开导出；OCR/目录导入/样例 seed 改为 `*Core` helper 导出，避免对外 API 与域层重复。
+- [x] A1-5：补回归测试（workshop 域模块）：
+  - `src/main/workshop-store/catalog.test.ts`
+  - `src/main/workshop-store/store.test.ts`
+  - `src/main/workshop-store/ocr.test.ts`
+  - `src/main/workshop-store/pricing-analytics.test.ts`
+- [x] A1-6.1：移除 `src/main/workshop-store-core.ts` 中遗留的 simulation/pricing 旧公开实现与仅供其使用的私有 helper，避免与域模块双实现。
+- [x] A1-6.2：将样例 seed 逻辑与样例数据常量下沉到 `src/main/workshop-store/store.ts`，删除 `seedWorkshopSampleDataCore` 与 core 内部样例 seed 常量，收敛 store 域职责。
+- [x] A1-6.3：同步更新 `src/main/workshop-store/store.test.ts`，从“委托 core helper”改为验证 store 域 seed 行为。
+- [x] A1-6.4：回归验证通过：
+  - `npm run typecheck`
+  - `npm run test:unit -- src/main/workshop-store`
+- [x] A1-6.5：抽离 catalog 纯 helper 到独立共享模块 `src/main/workshop-store/catalog-import-shared.ts`（名称标准化、CSV 解析、导入路径与内置目录定位/签名）。
+  - 提交：`62bbe2f` `refactor(catalog): extract shared catalog parsing and path helpers`
+- [x] A1-6.6：将目录文件导入入口下沉到 `src/main/workshop-store/catalog.ts`，`core` 仅保留可复用的 `applyCatalogDataCore`。
+  - 变更点：
+    - 删除 `importWorkshopCatalogFromFileCore`（core 对外入口收敛）
+    - `catalog.ts#importWorkshopCatalogFromFile(...)` 负责路径解析/读取/解析/写回
+    - `catalog.test.ts` 更新为验证 catalog 域导入流程（不再仅验证“委托 core helper”）
+  - 提交：`21431ce` `refactor(catalog): move file-import entrypoint into catalog domain`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+- [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
