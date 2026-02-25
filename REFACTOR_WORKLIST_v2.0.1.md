@@ -30,7 +30,7 @@
 任务:
 - [x] 2.1 将 `getAppState()` 从写入型改为纯读取（刷新逻辑与持久化解耦）。
 - [x] 2.2 优化 `commitMutation`（减少 `structuredClone` / `JSON.stringify` 比较热路径开销）。
-- [ ] 2.3 历史记录由“全量 before 快照”演进为可控增量（或保留快照但加容量与压缩策略）。
+- [x] 2.3 历史记录由“全量 before 快照”演进为可控增量（或保留快照但加容量与压缩策略）。
 - [x] 2.4 工坊状态读写增加脏检查，避免无效写盘。
 
 验收:
@@ -71,6 +71,7 @@
 - `31b9bcc` `refactor(renderer): centralize aionApi access via app/workshop action hooks`
 - `368b1b4` `refactor(store): avoid snapshot cloning in commitMutation hot path` (2.2 阶段进展)
 - `e5fc02c` `refactor(store): lazily build history snapshot only when changed` (2.2 阶段进展)
+- `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback` (2.3 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -199,6 +200,12 @@
   - 关键提交:
     - `368b1b4` `refactor(store): avoid snapshot cloning in commitMutation hot path`
     - `e5fc02c` `refactor(store): lazily build history snapshot only when changed`
+- `2.3` 已收尾完成:
+  - `OperationLogEntry` 增加 `beforeDelta`，保留 `before` 兼容旧数据。
+  - 新增增量回滚模型（角色级 `characterChanges` + `characterOrder`），撤销优先回放 delta。
+  - `commitMutation` 在记录历史时自动在 delta 与 full snapshot 之间择优（按序列化体积比）。
+  - 关键提交:
+    - `02f09f8` `refactor(store): add incremental history deltas with snapshot fallback`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
