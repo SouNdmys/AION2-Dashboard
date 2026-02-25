@@ -17,7 +17,15 @@ import {
 } from "./workshop-store/ocr-extract-config";
 import { buildExpectedIconByLineNumber, captureOcrLineIcons } from "./workshop-store/ocr-icon-capture";
 import { sanitizeTradeBoardPreset } from "./workshop-store/ocr-tradeboard-preset";
-import { estimateOcrRowCount, groupOcrWordsByRow } from "./workshop-store/ocr-row-grouping";
+import {
+  buildNameRowsFromWords,
+  buildPriceRowsFromWords,
+  detectTradePriceRoleByHeaderText,
+  normalizeNumericToken,
+  parseNonEmptyLines,
+  parsePriceFromLine,
+  resolveTradeBoardRowCount,
+} from "./workshop-store/ocr-tradeboard-rows";
 import {
   parseOcrPriceLines,
   parseOcrTradeRows,
@@ -2188,30 +2196,6 @@ function formatPaddleOcrError(raw: string | undefined): string {
   return message;
 }
 
-function normalizeNumericToken(raw: string): number | null {
-  const normalized = raw
-    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xff10 + 0x30))
-    .replace(/[，、]/g, ",")
-    .replace(/[。．]/g, ".")
-    .replace(/[,\.\s]/g, "")
-    .replace(/[oO〇○]/g, "0")
-    .replace(/[lI|!]/g, "1")
-    .replace(/[zZ]/g, "2")
-    .replace(/[sS$]/g, "5")
-    .replace(/[gG]/g, "6")
-    .replace(/[bB]/g, "8")
-    .replace(/[qQ]/g, "9")
-    .replace(/[^0-9]/g, "");
-  if (!normalized) {
-    return null;
-  }
-  const num = Number(normalized);
-  if (!Number.isFinite(num) || num < 0) {
-    return null;
-  }
-  return Math.floor(num);
-}
-
 function cropImageToTempFile(imagePath: string, rect: WorkshopRect, scale = 1): string {
   const image = nativeImage.createFromPath(imagePath);
   if (image.isEmpty()) {
@@ -2259,137 +2243,6 @@ function cleanupTempFile(filePath: string | null): void {
   } catch {
     // ignore
   }
-}
-
-function parsePriceFromLine(line: string, column: "left" | "right"): number | null {
-  const matches = Array.from(line.matchAll(/([0-9０-９oOlI|!sSbB$zZgGqQ〇○][0-9０-９oOlI|!sSbB$zZgGqQ〇○,\.\s，。．、]*)/g)).map(
-    (entry) => entry[1] ?? "",
-  );
-  if (matches.length === 0) {
-    return null;
-  }
-  const picked = column === "right" ? matches[matches.length - 1] : matches[0];
-  return normalizeNumericToken(picked);
-}
-
-function parseNonEmptyLines(text: string): string[] {
-  return text
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function resolveTradeBoardRowCount(
-  configuredRowCount: number,
-  nameWords: OcrTsvWord[],
-  nameRawText: string,
-  warnings: string[],
-): number {
-  if (configuredRowCount > 0) {
-    return configuredRowCount;
-  }
-  const fromWords = estimateOcrRowCount(nameWords, {
-    sanitizeName: sanitizeOcrLineItemName,
-    clamp,
-  });
-  const fallbackLineCount = clamp(parseNonEmptyLines(nameRawText).length, 0, 30);
-  const candidates: number[] = [];
-  if (fromWords !== null && fromWords > 0) {
-    candidates.push(fromWords);
-  }
-  if (fallbackLineCount > 0) {
-    candidates.push(fallbackLineCount);
-  }
-  const resolved = candidates.length > 0 ? clamp(Math.max(...candidates), 1, 30) : 7;
-  warnings.push(
-    `交易行可见行数自动识别：${resolved} 行（词框=${fromWords ?? "--"}，文本行=${fallbackLineCount || "--"}）。`,
-  );
-  return resolved;
-}
-
-function buildNameRowsFromWords(words: OcrTsvWord[], rowCount: number, totalHeight: number): Array<string | null> {
-  const rows = groupOcrWordsByRow(words, rowCount, totalHeight, clamp);
-  return rows.map((row) => {
-    const confidentWords = row.filter((word) => word.confidence < 0 || word.confidence >= OCR_TSV_NAME_CONFIDENCE_MIN);
-    const effectiveWords = confidentWords.length > 0 ? confidentWords : row;
-    const text = effectiveWords
-      .map((word) => sanitizeOcrLineItemName(word.text).replace(/\s+/g, ""))
-      .filter(Boolean)
-      .join("")
-      .trim();
-    return text || null;
-  });
-}
-
-function buildPriceRowsFromWords(
-  words: OcrTsvWord[],
-  rowCount: number,
-  column: "left" | "right",
-  rowWarnings: string[],
-): Array<number | null> {
-  const numericWordsRaw = words
-    .map((word) => ({
-      ...word,
-      value: normalizeNumericToken(word.text),
-    }))
-    .filter((entry): entry is OcrTsvWord & { value: number } => entry.value !== null);
-  const confidentNumericWords = numericWordsRaw.filter(
-    (entry) => entry.confidence < 0 || entry.confidence >= OCR_TSV_NUMERIC_CONFIDENCE_MIN,
-  );
-  const numericWords = confidentNumericWords.length > 0 ? confidentNumericWords : numericWordsRaw;
-  if (numericWords.length === 0) {
-    return Array.from({ length: rowCount }, (_, index) => {
-      rowWarnings.push(`第 ${index + 1} 行价格解析失败（词框无数字词）。`);
-      return null;
-    });
-  }
-
-  let minTop = Number.POSITIVE_INFINITY;
-  let maxBottom = Number.NEGATIVE_INFINITY;
-  numericWords.forEach((word) => {
-    minTop = Math.min(minTop, word.top);
-    maxBottom = Math.max(maxBottom, word.top + word.height);
-  });
-  const distributionHeight = Math.max(1, maxBottom - minTop);
-  const rowSpanPadding = Math.floor(distributionHeight * 0.06);
-  const spanTop = Math.max(0, minTop - rowSpanPadding);
-  const spanBottom = maxBottom + rowSpanPadding;
-  const rows = groupOcrWordsByRow(numericWords, rowCount, Math.max(1, spanBottom - spanTop), clamp, spanTop);
-  return rows.map((row, index) => {
-    if (row.length === 0) {
-      rowWarnings.push(`第 ${index + 1} 行价格解析失败（词框无数字词）。`);
-      return null;
-    }
-    row.sort((left, right) => left.left - right.left);
-    const picked = column === "right" ? row[row.length - 1] : row[0];
-    return picked.value;
-  });
-}
-
-function detectTradePriceRoleByHeaderText(rawText: string): "server" | "world" | null {
-  const normalized = rawText
-    .replace(/\s+/g, "")
-    .replace(/[：:]/g, "")
-    .toLocaleLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  const worldHints = ["世界", "world"];
-  const serverHints = ["伺服器", "服务器", "本服", "server"];
-  const worldHit = worldHints.some((hint) => normalized.includes(hint));
-  const serverHit = serverHints.some((hint) => normalized.includes(hint));
-
-  if (worldHit && serverHit) {
-    return null;
-  }
-  if (worldHit) {
-    return "world";
-  }
-  if (serverHit) {
-    return "server";
-  }
-  return null;
 }
 
 async function resolveDualPriceRolesByHeader(
@@ -2500,7 +2353,10 @@ async function extractPriceRowsForRect(
       throw new Error(`${warningPrefix}OCR 失败：${extract.errorMessage ?? "未知错误"}`);
     }
     const rowsFromWordsWarnings: string[] = [];
-    const rowsFromWords = buildPriceRowsFromWords(extract.words, rowCount, column, rowsFromWordsWarnings);
+    const rowsFromWords = buildPriceRowsFromWords(extract.words, rowCount, column, rowsFromWordsWarnings, {
+      clamp,
+      numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+    });
     const fallbackWarnings: string[] = [];
     const fallbackRows = parseNonEmptyLines(extract.rawText)
       .slice(0, rowCount)
@@ -2553,8 +2409,14 @@ async function extractDualPriceRowsForRect(
     const rightWords = extract.words.filter((word) => word.left + word.width / 2 > splitX);
     const leftWarnings: string[] = [];
     const rightWarnings: string[] = [];
-    const leftValues = buildPriceRowsFromWords(leftWords, rowCount, "left", leftWarnings);
-    const rightValues = buildPriceRowsFromWords(rightWords, rowCount, "left", rightWarnings);
+    const leftValues = buildPriceRowsFromWords(leftWords, rowCount, "left", leftWarnings, {
+      clamp,
+      numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+    });
+    const rightValues = buildPriceRowsFromWords(rightWords, rowCount, "left", rightWarnings, {
+      clamp,
+      numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
+    });
     const leftValid = leftValues.filter((entry): entry is number => entry !== null).length;
     const rightValid = rightValues.filter((entry): entry is number => entry !== null).length;
     const minValid = Math.max(2, Math.floor(rowCount * 0.5));
@@ -2634,16 +2496,19 @@ export async function extractWorkshopOcrTextCore(
       if (!namesExtract.ok) {
         throw new Error(`名称区 OCR 失败：${formatPaddleOcrError(namesExtract.errorMessage)}`);
       }
-      const effectiveRowCount = resolveTradeBoardRowCount(
-        tradeBoardPreset.rowCount,
-        namesExtract.words,
-        namesExtract.rawText,
-        warnings,
-      );
+      const effectiveRowCount = resolveTradeBoardRowCount(tradeBoardPreset.rowCount, namesExtract.words, namesExtract.rawText, warnings, {
+        sanitizeOcrLineItemName,
+        clamp,
+      });
       const nameRowsFromTsv = buildNameRowsFromWords(
         namesExtract.words,
         effectiveRowCount,
         Math.floor(tradeBoardPreset.namesRect.height * namesScale),
+        {
+          sanitizeOcrLineItemName,
+          clamp,
+          nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
+        },
       );
       const nameRowsTsvSanitized = nameRowsFromTsv.map((row) => {
         const cleaned = sanitizeOcrLineItemName(row ?? "");
