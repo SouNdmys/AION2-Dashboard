@@ -574,4 +574,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.38：核心第十八刀：抽离图标缓存与推断工具到 `src/main/workshop-store/icon-cache.ts`。
+  - 变更点：
+    - `sanitize/normalize/resolve/cache alias` 图标工具组从 core 下沉；
+    - core 保持 `normalizeIconCache / resolveItemIconWithCache` 兼容导出，并改为组合新模块。
+  - 新增：
+    - `src/main/workshop-store/icon-cache.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
