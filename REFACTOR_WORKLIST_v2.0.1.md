@@ -356,4 +356,13 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.12：OCR 第二刀：抽离图标抓取与校准链路到 `src/main/workshop-store/ocr-icon-capture.ts`。
+  - 变更点：
+    - `captureOcrLineIcons / buildExpectedIconByLineNumber / calibrateIconCaptureOffset` 从 core 下沉；
+    - `importWorkshopOcrPricesCore` 改为调用新模块，并通过依赖注入复用 core 名称匹配规则。
+  - 提交：`fc662f1` `refactor(ocr): extract icon capture and calibration pipeline`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
