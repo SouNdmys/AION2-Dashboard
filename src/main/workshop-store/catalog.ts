@@ -13,7 +13,6 @@ import type {
 import {
   WORKSHOP_ICON_CACHE_KEY,
   WORKSHOP_STATE_VERSION,
-  applyCatalogDataCore,
   ensureItemExists,
   normalizeIconCache,
   normalizeRecipeInputs,
@@ -23,7 +22,8 @@ import {
   workshopStore,
   writeWorkshopState,
 } from "../workshop-store-core";
-import { parseCatalogCsvText, resolveCatalogImportFilePath } from "./catalog-import-shared";
+import { applyCatalogData } from "./catalog-import-apply";
+import { normalizeCatalogLookupName, parseCatalogCsvText, resolveCatalogImportFilePath } from "./catalog-import-shared";
 
 export function upsertWorkshopItem(payload: UpsertWorkshopItemInput): WorkshopState {
   const state = readWorkshopState();
@@ -164,7 +164,22 @@ export function importWorkshopCatalogFromFile(payload: WorkshopCatalogImportFrom
   const fullPath = resolveCatalogImportFilePath(payload.filePath);
   const text = fs.readFileSync(fullPath, "utf8");
   const parsed = parseCatalogCsvText(text);
-  const result = applyCatalogDataCore(state, parsed, path.basename(fullPath));
+  const result = applyCatalogData(state, parsed, path.basename(fullPath), {
+    stateVersion: WORKSHOP_STATE_VERSION,
+    loadIconCache: () => normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY)),
+    resolveItemIconWithCache,
+    cacheIconByName: (iconCache, name, icon) => {
+      if (!icon) {
+        return;
+      }
+      const key = normalizeCatalogLookupName(name);
+      if (!key) {
+        return;
+      }
+      iconCache.set(key, icon);
+    },
+    normalizeState: (next) => next,
+  });
   return {
     ...result,
     state: writeWorkshopState(result.state),

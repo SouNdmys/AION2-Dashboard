@@ -12,7 +12,7 @@ const {
   mockNormalizeRecipeInputs,
   mockNormalizeIconCache,
   mockResolveItemIconWithCache,
-  mockApplyCatalogDataCore,
+  mockApplyCatalogData,
   mockStoreGet,
 } = vi.hoisted(() => ({
   mockReadFileSync: vi.fn(),
@@ -25,7 +25,7 @@ const {
   mockNormalizeRecipeInputs: vi.fn(),
   mockNormalizeIconCache: vi.fn(),
   mockResolveItemIconWithCache: vi.fn(),
-  mockApplyCatalogDataCore: vi.fn(),
+  mockApplyCatalogData: vi.fn(),
   mockStoreGet: vi.fn(),
 }));
 
@@ -36,6 +36,11 @@ vi.mock("node:fs", () => ({
 vi.mock("./catalog-import-shared", () => ({
   resolveCatalogImportFilePath: mockResolveCatalogImportFilePath,
   parseCatalogCsvText: mockParseCatalogCsvText,
+  normalizeCatalogLookupName: (name: string) => String(name).trim().toLocaleLowerCase().replace(/\s+/g, ""),
+}));
+
+vi.mock("./catalog-import-apply", () => ({
+  applyCatalogData: mockApplyCatalogData,
 }));
 
 vi.mock("../workshop-store-core", () => ({
@@ -48,7 +53,6 @@ vi.mock("../workshop-store-core", () => ({
   normalizeRecipeInputs: mockNormalizeRecipeInputs,
   normalizeIconCache: mockNormalizeIconCache,
   resolveItemIconWithCache: mockResolveItemIconWithCache,
-  applyCatalogDataCore: mockApplyCatalogDataCore,
   workshopStore: { get: mockStoreGet },
 }));
 
@@ -136,13 +140,24 @@ describe("workshop/catalog", () => {
       skippedRecipeCount: 0,
       warnings: [],
     };
-    mockApplyCatalogDataCore.mockReturnValue(applied);
+    mockApplyCatalogData.mockReturnValue(applied);
 
     const result = importWorkshopCatalogFromFile({ filePath: "./catalog.csv" });
 
     expect(mockResolveCatalogImportFilePath).toHaveBeenCalledWith("./catalog.csv");
     expect(mockParseCatalogCsvText).toHaveBeenCalledWith("csv");
-    expect(mockApplyCatalogDataCore).toHaveBeenCalledWith(state, { items: [], recipes: [], warnings: [] }, "catalog.csv");
+    expect(mockApplyCatalogData).toHaveBeenCalledWith(
+      state,
+      { items: [], recipes: [], warnings: [] },
+      "catalog.csv",
+      expect.objectContaining({
+        stateVersion: 6,
+        loadIconCache: expect.any(Function),
+        resolveItemIconWithCache: expect.any(Function),
+        cacheIconByName: expect.any(Function),
+        normalizeState: expect.any(Function),
+      }),
+    );
     expect(mockWriteWorkshopState).toHaveBeenCalledWith(state);
     expect(result.state).toBe(state);
   });
