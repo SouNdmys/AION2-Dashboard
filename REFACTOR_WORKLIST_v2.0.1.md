@@ -29,7 +29,7 @@
 
 任务:
 - [x] 2.1 将 `getAppState()` 从写入型改为纯读取（刷新逻辑与持久化解耦）。
-- [ ] 2.2 优化 `commitMutation`（减少 `structuredClone` / `JSON.stringify` 比较热路径开销）。
+- [x] 2.2 优化 `commitMutation`（减少 `structuredClone` / `JSON.stringify` 比较热路径开销）。
 - [ ] 2.3 历史记录由“全量 before 快照”演进为可控增量（或保留快照但加容量与压缩策略）。
 - [x] 2.4 工坊状态读写增加脏检查，避免无效写盘。
 
@@ -69,6 +69,8 @@
 - `e57d0f9` `refactor(ipc): split handler registration by domain with payload guards`
 - `8290ad8` `refactor(renderer): extract usePersistedState and remove repeated localStorage effects`
 - `31b9bcc` `refactor(renderer): centralize aionApi access via app/workshop action hooks`
+- `368b1b4` `refactor(store): avoid snapshot cloning in commitMutation hot path` (2.2 阶段进展)
+- `e5fc02c` `refactor(store): lazily build history snapshot only when changed` (2.2 阶段进展)
 - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge` (1.3 阶段进展)
 - `82b9bd4` `refactor(main): route workshop consumers through domain store modules` (1.3 阶段进展)
 - `fb0992c` `refactor(dashboard): extract app view models and utility helpers into feature modules` (1.1 阶段进展)
@@ -190,6 +192,13 @@
   - 关键提交:
     - `2d596dd` `refactor(store): split workshop store into domain modules with core bridge`
     - `82b9bd4` `refactor(main): route workshop consumers through domain store modules`
+- `2.2` 已收尾完成:
+  - `commitMutation` 改为签名比较，不再在热路径构建前后快照副本用于差异判断。
+  - 变更草稿改为 history-less draft，避免深拷贝历史快照链。
+  - 历史 `before` 快照改为仅在 `changed && trackHistory` 时构建。
+  - 关键提交:
+    - `368b1b4` `refactor(store): avoid snapshot cloning in commitMutation hot path`
+    - `e5fc02c` `refactor(store): lazily build history snapshot only when changed`
 - 本次改动已通过:
   - `npm run typecheck`
   - `npm run build`
