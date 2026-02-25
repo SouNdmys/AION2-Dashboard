@@ -565,8 +565,22 @@ function createSnapshot(state: AppState): AppStateSnapshot {
   };
 }
 
-function snapshotsEqual(left: AppStateSnapshot, right: AppStateSnapshot): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+function buildMutationSignature(state: AppState): string {
+  return JSON.stringify({
+    selectedAccountId: state.selectedAccountId,
+    selectedCharacterId: state.selectedCharacterId,
+    settings: state.settings,
+    accounts: state.accounts,
+    characters: state.characters,
+  });
+}
+
+function createMutationDraft(state: AppState): AppState {
+  return structuredClone({
+    ...state,
+    // commitMutation never relies on history during mutation; keep draft lean.
+    history: [],
+  });
 }
 
 function commitMutation(
@@ -575,11 +589,11 @@ function commitMutation(
 ): AppState {
   const current = getAppState();
   const before = createSnapshot(current);
-  const draft = structuredClone(current);
+  const beforeSignature = buildMutationSignature(current);
+  const draft = createMutationDraft(current);
   const maybeNext = mutator(draft);
   const normalized = normalizeState(maybeNext ?? draft);
-  const after = createSnapshot(normalized);
-  const changed = !snapshotsEqual(before, after);
+  const changed = beforeSignature !== buildMutationSignature(normalized);
 
   if (meta.trackHistory !== false && changed) {
     const entry: OperationLogEntry = {
