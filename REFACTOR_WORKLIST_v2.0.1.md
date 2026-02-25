@@ -343,4 +343,17 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.10：catalog 残余收尾：抽离 builtin bootstrap/remap 与路径解析后，`core` 中 catalog 相关逻辑收敛为单点桥接（仅通过 `catalog-bootstrap`）。
+  - 提交：
+    - `3cb43d8` `refactor(catalog): extract builtin bootstrap and remap pipeline from core`
+    - `520ac13` `refactor(workshop): move import file-path resolver out of catalog shared`
+- [x] A1-6.11：切换到 OCR 板块第一刀：抽离 OCR 导入 payload 清洗与行解析 helper 到 `src/main/workshop-store/ocr-import-parser.ts`。
+  - 变更点：
+    - `sanitizeOcrImportPayload / parseOcrPriceLines / parseOcrTradeRows` 从 core 下沉；
+    - `importWorkshopOcrPricesCore` 改为依赖注入调用 parser 模块。
+  - 提交：`07feb4f` `refactor(ocr): extract import payload and line parsing helpers`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
