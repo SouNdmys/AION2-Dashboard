@@ -35,6 +35,7 @@ import {
   buildPrimaryOcrTextResult,
   formatPaddleOcrError,
 } from "./workshop-store/ocr-extract-output";
+import { cleanupTempFile, stringifyOcrWords } from "./workshop-store/ocr-extract-io";
 import { runPaddleExtractWithFallback } from "./workshop-store/ocr-extract-runner";
 import { extractWorkshopOcrTextEntry } from "./workshop-store/ocr-extract-entry";
 import { extractTradeBoardOcrText } from "./workshop-store/ocr-tradeboard-extract";
@@ -46,7 +47,7 @@ import {
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
 import { createPaddleOcrRuntime, PADDLE_OCR_PYTHON_SCRIPT } from "./workshop-store/ocr-paddle-runtime";
 import { parsePaddlePayload } from "./workshop-store/ocr-paddle-payload";
-import type { OcrTsvWord, PaddleOcrOutcome } from "./workshop-store/ocr-paddle-payload";
+import type { PaddleOcrOutcome } from "./workshop-store/ocr-paddle-payload";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopOcrExtractTextInput,
@@ -938,12 +939,6 @@ export function cleanupWorkshopOcrEngineCore(): void {
   }
 }
 
-function stringifyOcrWords(words: OcrTsvWord[]): string {
-  return words
-    .map((word) => `${word.left},${word.top},${word.width},${word.height},${word.confidence.toFixed(2)}\t${word.text}`)
-    .join("\n");
-}
-
 function cropImageToTempFile(imagePath: string, rect: WorkshopRect, scale = 1): string {
   const image = nativeImage.createFromPath(imagePath);
   if (image.isEmpty()) {
@@ -977,20 +972,6 @@ function cropImageToTempFile(imagePath: string, rect: WorkshopRect, scale = 1): 
   const filePath = path.join(os.tmpdir(), `aion2-ocr-roi-${Date.now()}-${randomUUID()}.png`);
   fs.writeFileSync(filePath, resized.toPNG());
   return filePath;
-}
-
-function cleanupTempFile(filePath: string | null): void {
-  if (!filePath) {
-    return;
-  }
-  if (!fs.existsSync(filePath)) {
-    return;
-  }
-  try {
-    fs.unlinkSync(filePath);
-  } catch {
-    // ignore
-  }
 }
 
 export async function extractWorkshopOcrTextCore(
