@@ -382,4 +382,13 @@
   - 回归：
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
+- [x] A1-6.15：OCR 第四刀：抽离 trade-board preset 清洗逻辑到 `src/main/workshop-store/ocr-tradeboard-preset.ts`。
+  - 变更点：
+    - `parseIntLike / sanitizeRect / sanitizeTradeBoardPreset` 从 core 下沉；
+    - `extractWorkshopOcrTextCore` 改为调用新模块。
+  - 提交：`5147e58` `refactor(ocr): extract trade-board preset sanitization helpers`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
