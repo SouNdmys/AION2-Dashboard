@@ -9,6 +9,12 @@ import OcrNode, { type Line as OnnxOcrLine } from "@gutenye/ocr-node";
 import { tify } from "chinese-conv";
 import { resolveImportFilePath } from "./workshop-store/import-file-path";
 import { getBuiltinCatalogSignature, rebuildStateWithBuiltinCatalog } from "./workshop-store/catalog-bootstrap";
+import {
+  parseOcrPriceLines,
+  parseOcrTradeRows,
+  sanitizeOcrImportPayload,
+  type ParsedOcrPriceLine,
+} from "./workshop-store/ocr-import-parser";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopOcrExtractTextInput,
@@ -1693,14 +1699,6 @@ function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
   };
 }
 
-interface ParsedOcrPriceLine {
-  lineNumber: number;
-  raw: string;
-  itemName: string;
-  unitPrice: number;
-  market: WorkshopPriceMarket;
-}
-
 interface OcrIconCaptureOutcome {
   iconByLineNumber: Map<number, string>;
   iconCapturedCount: number;
@@ -1713,44 +1711,6 @@ function parseIntLike(raw: unknown): number | null {
     return null;
   }
   return Math.floor(raw);
-}
-
-function sanitizeOcrImportPayload(payload: WorkshopOcrPriceImportInput): {
-  source: "manual" | "import";
-  capturedAt: string;
-  dedupeWithinSeconds: number;
-  autoCreateMissingItems: boolean;
-  strictIconMatch: boolean;
-  defaultCategory: WorkshopItemCategory;
-  text: string;
-  tradeRows: WorkshopOcrPriceImportInput["tradeRows"];
-  iconCapture: WorkshopOcrIconCaptureConfig | null;
-  iconCaptureWarnings: string[];
-} {
-  const source = payload.source === "manual" ? "manual" : "import";
-  const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
-  const dedupeWithinSecondsRaw = parseIntLike(payload.dedupeWithinSeconds);
-  const dedupeWithinSeconds =
-    dedupeWithinSecondsRaw === null ? 0 : clamp(dedupeWithinSecondsRaw, 0, 600);
-  const autoCreateMissingItems = payload.autoCreateMissingItems ?? false;
-  const strictIconMatch = false;
-  const defaultCategory = sanitizeCategory(payload.defaultCategory);
-  const iconCaptureWarnings: string[] = [];
-  if (payload.strictIconMatch === true || payload.iconCapture !== undefined) {
-    iconCaptureWarnings.push("图标识别已停用，当前仅按名称识别。");
-  }
-  return {
-    source,
-    capturedAt,
-    dedupeWithinSeconds,
-    autoCreateMissingItems,
-    strictIconMatch,
-    defaultCategory,
-    text: typeof payload.text === "string" ? payload.text : "",
-    tradeRows: Array.isArray(payload.tradeRows) ? payload.tradeRows : undefined,
-    iconCapture: null,
-    iconCaptureWarnings,
-  };
 }
 
 function captureOcrLineIcons(
@@ -1957,121 +1917,6 @@ function calibrateIconCaptureOffset(
     offsetY: best.offsetY,
     matchedCount: best.matchedCount,
     sampleCount: sampleLines.length,
-  };
-}
-
-function parseOcrPriceLines(rawText: string): { parsedLines: ParsedOcrPriceLine[]; invalidLines: string[] } {
-  const parsedLines: ParsedOcrPriceLine[] = [];
-  const invalidLines: string[] = [];
-  const lines = rawText.split(/\r?\n/);
-
-  lines.forEach((origin, index) => {
-    const lineNumber = index + 1;
-    const raw = origin.trim();
-    if (!raw) {
-      return;
-    }
-    const normalizedLine = raw
-      .replace(/[|丨]/g, " ")
-      .replace(/[，]/g, ",")
-      .replace(/[：]/g, ":")
-      .replace(/\s+/g, " ");
-    const match = normalizedLine.match(/(-?[0-9oOlI|sSbB][0-9oOlI|sSbB,\.\s]*)$/);
-    if (!match || match.index === undefined) {
-      invalidLines.push(`#${lineNumber} ${raw}`);
-      return;
-    }
-    let itemName = normalizedLine.slice(0, match.index).trim();
-    itemName = itemName
-      .replace(/[:=\-–—|]\s*$/g, "")
-      .replace(/^\d+\s*[.)、:：\-]\s*/, "")
-      .trim();
-    itemName = sanitizeOcrLineItemName(itemName);
-    const unitPrice = normalizeNumericToken(match[1]);
-    if (!itemName || unitPrice === null) {
-      invalidLines.push(`#${lineNumber} ${raw}`);
-      return;
-    }
-    parsedLines.push({
-      lineNumber,
-      raw,
-      itemName,
-      unitPrice,
-      market: "single",
-    });
-  });
-
-  return {
-    parsedLines,
-    invalidLines,
-  };
-}
-
-function parseOcrTradeRows(
-  tradeRows: WorkshopOcrPriceImportInput["tradeRows"],
-): { parsedLines: ParsedOcrPriceLine[]; invalidLines: string[] } {
-  if (!Array.isArray(tradeRows) || tradeRows.length === 0) {
-    return {
-      parsedLines: [],
-      invalidLines: [],
-    };
-  }
-  const parsedLines: ParsedOcrPriceLine[] = [];
-  const invalidLines: string[] = [];
-
-  tradeRows.forEach((row, index) => {
-    const lineNumber = Number.isFinite(row.lineNumber) ? Math.max(1, Math.floor(row.lineNumber)) : index + 1;
-    const rawName = typeof row.itemName === "string" ? row.itemName : "";
-    const itemName = sanitizeOcrLineItemName(rawName);
-    const serverPriceRaw = String(row.serverPrice ?? "").trim();
-    const worldPriceRaw = String(row.worldPrice ?? "").trim();
-    const parsedServerPrice = normalizeNumericToken(serverPriceRaw);
-    const parsedWorldPrice = normalizeNumericToken(worldPriceRaw);
-    const serverPrice = parsedServerPrice !== null && parsedServerPrice > 0 ? parsedServerPrice : null;
-    const worldPrice = parsedWorldPrice !== null && parsedWorldPrice > 0 ? parsedWorldPrice : null;
-    if (!itemName) {
-      invalidLines.push(`#${lineNumber} ${rawName || "<空名称>"}`);
-      return;
-    }
-    if (serverPriceRaw && parsedServerPrice === null) {
-      invalidLines.push(`#${lineNumber} ${itemName} <伺服器价格无效: ${serverPriceRaw}>`);
-    } else if (serverPriceRaw && parsedServerPrice !== null && parsedServerPrice <= 0) {
-      invalidLines.push(`#${lineNumber} ${itemName} <伺服器价格无效(<=0): ${serverPriceRaw}>`);
-    }
-    if (worldPriceRaw && parsedWorldPrice === null) {
-      invalidLines.push(`#${lineNumber} ${itemName} <世界价格无效: ${worldPriceRaw}>`);
-    } else if (worldPriceRaw && parsedWorldPrice !== null && parsedWorldPrice <= 0) {
-      invalidLines.push(`#${lineNumber} ${itemName} <世界价格无效(<=0): ${worldPriceRaw}>`);
-    }
-    if (serverPrice === null && worldPrice === null) {
-      if (!serverPriceRaw && !worldPriceRaw) {
-        invalidLines.push(`#${lineNumber} ${itemName} <双价格均为空>`);
-      }
-      return;
-    }
-    if (serverPrice !== null) {
-      parsedLines.push({
-        lineNumber,
-        raw: `${itemName} server=${serverPrice}`,
-        itemName,
-        unitPrice: serverPrice,
-        market: "server",
-      });
-    }
-    if (worldPrice !== null) {
-      parsedLines.push({
-        lineNumber,
-        raw: `${itemName} world=${worldPrice}`,
-        itemName,
-        unitPrice: worldPrice,
-        market: "world",
-      });
-    }
-  });
-
-  return {
-    parsedLines,
-    invalidLines,
   };
 }
 
@@ -3626,15 +3471,27 @@ export async function importWorkshopOcrPricesCore(
   payload: WorkshopOcrPriceImportInput,
 ): Promise<WorkshopOcrPriceImportResult> {
   const state = readWorkshopState();
-  const sanitized = sanitizeOcrImportPayload(payload);
+  const sanitized = sanitizeOcrImportPayload(payload, {
+    asIso,
+    clamp,
+    sanitizeCategory,
+  });
   const hasStructuredTradeRows = Array.isArray(sanitized.tradeRows) && sanitized.tradeRows.length > 0;
   if (!sanitized.text.trim() && !hasStructuredTradeRows) {
     throw new Error("OCR 导入内容为空，请先粘贴文本。");
   }
 
-  const tradeRowsParsed = parseOcrTradeRows(sanitized.tradeRows);
+  const tradeRowsParsed = parseOcrTradeRows(sanitized.tradeRows, {
+    sanitizeOcrLineItemName,
+    normalizeNumericToken,
+  });
   const parsedFromTradeRows = hasStructuredTradeRows;
-  const { parsedLines, invalidLines } = parsedFromTradeRows ? tradeRowsParsed : parseOcrPriceLines(sanitized.text);
+  const { parsedLines, invalidLines } = parsedFromTradeRows
+    ? tradeRowsParsed
+    : parseOcrPriceLines(sanitized.text, {
+        sanitizeOcrLineItemName,
+        normalizeNumericToken,
+      });
   const items = [...state.items];
   const prices = [...state.prices];
   const iconCache = normalizeIconCache(workshopStore.get(WORKSHOP_ICON_CACHE_KEY));
