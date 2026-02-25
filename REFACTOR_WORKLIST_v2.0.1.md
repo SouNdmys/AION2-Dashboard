@@ -484,4 +484,13 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.28：OCR 第十三刀：抽离通用 OCR 输出归一与错误格式化到 `src/main/workshop-store/ocr-extract-output.ts`。
+  - 变更点：
+    - `normalizeOcrText / formatPaddleOcrError` 从 core 下沉；
+    - 普通 OCR 分支结果组装改为 `buildPrimaryOcrTextResult(...)`，`extractWorkshopOcrTextCore` 仅保留流程编排。
+  - 新增：
+    - `src/main/workshop-store/ocr-extract-output.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。

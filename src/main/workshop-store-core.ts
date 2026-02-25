@@ -42,6 +42,10 @@ import {
   resolveDualPriceRolesByHeader,
 } from "./workshop-store/ocr-tradeboard-orchestration";
 import {
+  buildPrimaryOcrTextResult,
+  formatPaddleOcrError,
+} from "./workshop-store/ocr-extract-output";
+import {
   parseOcrPriceLines,
   parseOcrTradeRows,
   sanitizeOcrImportPayload,
@@ -849,15 +853,6 @@ function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
   };
 }
 
-function normalizeOcrText(raw: string): string {
-  return raw
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
-}
-
 interface OnnxOcrEngine {
   detect: (imagePath: string, options?: unknown) => Promise<OnnxOcrLine[]>;
   destroy?: () => void | Promise<void>;
@@ -1009,26 +1004,6 @@ function stringifyOcrWords(words: OcrTsvWord[]): string {
   return words
     .map((word) => `${word.left},${word.top},${word.width},${word.height},${word.confidence.toFixed(2)}\t${word.text}`)
     .join("\n");
-}
-
-function formatPaddleOcrError(raw: string | undefined): string {
-  const message = raw?.trim() || "未知错误";
-  const lower = message.toLocaleLowerCase();
-  if (lower.includes("convertpirattribute2runtimeattribute") || lower.includes("onednn_instruction.cc")) {
-    return `${message}。ONNX 推理初始化失败，请重启后重试。`;
-  }
-  if (
-    lower.includes("no model source is available") ||
-    lower.includes("proxyerror") ||
-    lower.includes("max retries exceeded") ||
-    lower.includes("connecterror")
-  ) {
-    return `${message}。ONNX 模型加载失败，请检查安装包完整性。`;
-  }
-  if (lower.includes("onnx") || lower.includes("inference")) {
-    return `${message}。请确认系统可加载 ONNX Runtime（首次启动可能稍慢）。`;
-  }
-  return message;
 }
 
 function cropImageToTempFile(imagePath: string, rect: WorkshopRect, scale = 1): string {
@@ -1256,21 +1231,13 @@ export async function extractWorkshopOcrTextCore(
       `ONNX OCR 识别失败：${formatPaddleOcrError(primary.errorMessage)}`,
     );
   }
-
-  const rawText = primary.rawText;
-  const text = normalizeOcrText(rawText);
-  const lineCount = text ? text.split(/\n/u).length : 0;
-  if (lineCount === 0) {
-    warnings.push("OCR 返回为空，请检查截图裁切范围、清晰度或语言包。");
-  }
-
-  return {
-    rawText,
-    text,
-    lineCount,
+  return buildPrimaryOcrTextResult({
+    rawText: primary.rawText,
+    detectedLanguage: primary.language,
+    fallbackLanguage: language,
+    psm,
     warnings,
-    engine: `onnx-ocr(${primary.language || language}, psm=${psm})`,
-  };
+  });
 }
 
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
