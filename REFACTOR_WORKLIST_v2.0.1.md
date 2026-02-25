@@ -593,3 +593,9 @@
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
+  - 交接笔记（2026-02-25）：
+    - 今日完成到 `A1-6.39`，并已完成颗粒度提交（最近 4 个）：`7fea3d7`、`c2ee20d`、`d9c9bbb`、`3fc014b`。
+    - 当前状态：工作区干净；`npm run test:unit -- src/main/workshop-store` 与 `npm run typecheck` 均通过。
+    - 明日起手建议（A1-6.40）：
+      - 优先下沉 `workshop-store-core.ts` 中“价格异常与基线评估”相关 helper（`collectBaselinePricesForItem / assessPriceAnomalyWithCategory / formatAnomalyReason`）为独立模块；
+      - 先补新模块单测，再替换 core 调用，最后更新 worklist 并做颗粒度 commit。
