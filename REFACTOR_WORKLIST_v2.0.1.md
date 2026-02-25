@@ -391,4 +391,13 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run build`
+- [x] A1-6.16：OCR 第五刀：抽离行分组与行数估计纯算法到 `src/main/workshop-store/ocr-row-grouping.ts`。
+  - 变更点：
+    - `estimateRowCountFromWords / groupWordsByRow` 从 core 下沉；
+    - 交易行自动识别与价格行分组改为调用新模块。
+  - 提交：`c780f4d` `refactor(ocr): extract row grouping and row-count estimation helpers`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
