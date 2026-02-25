@@ -332,4 +332,15 @@
     - `npm run typecheck`
     - `npm run test:unit -- src/main/workshop-store/catalog.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
+- [x] A1-6.8：抽离 catalog builtin bootstrap 与 runtime remap 流程到专属模块 `src/main/workshop-store/catalog-bootstrap.ts`。
+  - 变更点：
+    - `core#readWorkshopState` 改为调用 `rebuildStateWithBuiltinCatalog(...)`；
+    - `LEGACY_BUILTIN_ITEM_NAME_REDIRECTS` 与 `buildBuiltinCatalogState/remapRuntimeStateToBuiltin` 从 core 移出。
+  - 提交：`3cb43d8` `refactor(catalog): extract builtin bootstrap and remap pipeline from core`
+- [x] A1-6.9：将导入文件路径解析 helper 从 catalog shared 拆为通用模块 `src/main/workshop-store/import-file-path.ts`，消除 core 对 catalog shared 的额外耦合。
+  - 提交：`520ac13` `refactor(workshop): move import file-path resolver out of catalog shared`
+  - 回归：
+    - `npm run typecheck`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run build`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
