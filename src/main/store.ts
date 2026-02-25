@@ -27,6 +27,8 @@ import type {
   AppSettings,
   AppState,
   AppStateSnapshot,
+  AppStateSnapshotDelta,
+  AppStateCharacterSnapshotDelta,
   AccountState,
   ApplyTaskActionInput,
   CharacterState,
@@ -43,6 +45,7 @@ const IMPORT_EXPORT_SCHEMA_VERSION = 1;
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const AUTO_BACKUP_META_KEY = "lastAutoBackupDate";
 const AUTO_BACKUP_FOLDER_NAME = "aion2-dashboard-auto-backups";
+const HISTORY_DELTA_MAX_SIZE_RATIO = 0.92;
 
 const store = new Store<Record<string, unknown>>({
   name: "aion2-dashboard",
@@ -459,6 +462,88 @@ function normalizeSnapshot(raw: unknown): AppStateSnapshot {
   };
 }
 
+function hasOwnProperty(entity: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(entity, key);
+}
+
+function normalizeSnapshotDelta(raw: unknown): AppStateSnapshotDelta | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const entity = raw as Record<string, unknown>;
+  const delta: AppStateSnapshotDelta = {};
+  let hasField = false;
+
+  if (hasOwnProperty(entity, "selectedAccountId")) {
+    const value = entity.selectedAccountId;
+    if (typeof value === "string" || value === null) {
+      delta.selectedAccountId = value;
+      hasField = true;
+    }
+  }
+
+  if (hasOwnProperty(entity, "selectedCharacterId")) {
+    const value = entity.selectedCharacterId;
+    if (typeof value === "string" || value === null) {
+      delta.selectedCharacterId = value;
+      hasField = true;
+    }
+  }
+
+  if (Array.isArray(entity.accounts)) {
+    delta.accounts = entity.accounts.map((item, index) => normalizeAccount(item, index));
+    hasField = true;
+  }
+
+  if (entity.settings && typeof entity.settings === "object") {
+    delta.settings = normalizeSettings(entity.settings);
+    hasField = true;
+  }
+
+  if (Array.isArray(entity.characterChanges)) {
+    const changes: AppStateCharacterSnapshotDelta[] = [];
+    entity.characterChanges.forEach((rawChange) => {
+      if (!rawChange || typeof rawChange !== "object") {
+        return;
+      }
+      const change = rawChange as Record<string, unknown>;
+      if (typeof change.id !== "string" || !change.id.trim()) {
+        return;
+      }
+      if (change.before === null) {
+        changes.push({ id: change.id, before: null });
+        return;
+      }
+      if (!change.before || typeof change.before !== "object") {
+        return;
+      }
+      const rawBefore = change.before as Record<string, unknown>;
+      const fallbackName =
+        typeof rawBefore.name === "string" && rawBefore.name.trim() ? rawBefore.name.trim() : `Character ${change.id.slice(0, 6)}`;
+      const fallbackAccountId = typeof rawBefore.accountId === "string" ? rawBefore.accountId : "";
+      changes.push({
+        id: change.id,
+        before: normalizeCharacter(rawBefore, fallbackName, fallbackAccountId),
+      });
+    });
+    if (changes.length > 0) {
+      delta.characterChanges = changes;
+      hasField = true;
+    }
+  }
+
+  if (Array.isArray(entity.characterOrder)) {
+    const order = entity.characterOrder.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+    if (order.length > 0) {
+      delta.characterOrder = order;
+      hasField = true;
+    }
+  }
+
+  return hasField ? delta : null;
+}
+
 function normalizeHistory(raw: unknown): OperationLogEntry[] {
   if (!Array.isArray(raw)) {
     return [];
@@ -477,6 +562,11 @@ function normalizeHistory(raw: unknown): OperationLogEntry[] {
     const description =
       typeof entity.description === "string" && entity.description.trim() ? entity.description.trim() : undefined;
     const characterId = typeof entity.characterId === "string" ? entity.characterId : null;
+    const before = entity.before === undefined ? undefined : normalizeSnapshot(entity.before);
+    const beforeDelta = normalizeSnapshotDelta(entity.beforeDelta);
+    if (!before && !beforeDelta) {
+      return [];
+    }
     return [
       {
         id: typeof entity.id === "string" && entity.id.trim() ? entity.id : randomUUID(),
@@ -484,7 +574,8 @@ function normalizeHistory(raw: unknown): OperationLogEntry[] {
         action,
         characterId,
         description,
-        before: normalizeSnapshot(entity.before),
+        before,
+        beforeDelta: beforeDelta ?? undefined,
       } satisfies OperationLogEntry,
     ];
   });
@@ -583,6 +674,195 @@ function createMutationDraft(state: AppState): AppState {
   });
 }
 
+function jsonEquals(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function estimateSerializedSize(value: unknown): number {
+  return JSON.stringify(value).length;
+}
+
+function buildCharacterChanges(
+  beforeCharacters: CharacterState[],
+  afterCharacters: CharacterState[],
+): { changes: AppStateCharacterSnapshotDelta[]; order: string[] | undefined } {
+  const beforeById = new Map(beforeCharacters.map((item) => [item.id, item]));
+  const afterById = new Map(afterCharacters.map((item) => [item.id, item]));
+  const changes: AppStateCharacterSnapshotDelta[] = [];
+
+  beforeCharacters.forEach((beforeItem) => {
+    const afterItem = afterById.get(beforeItem.id);
+    if (!afterItem || !jsonEquals(beforeItem, afterItem)) {
+      changes.push({
+        id: beforeItem.id,
+        before: structuredClone(beforeItem),
+      });
+    }
+  });
+
+  afterCharacters.forEach((afterItem) => {
+    if (!beforeById.has(afterItem.id)) {
+      changes.push({
+        id: afterItem.id,
+        before: null,
+      });
+    }
+  });
+
+  const beforeOrder = beforeCharacters.map((item) => item.id);
+  const afterOrder = afterCharacters.map((item) => item.id);
+  const orderChanged = !jsonEquals(beforeOrder, afterOrder);
+  return {
+    changes,
+    order: orderChanged ? beforeOrder : undefined,
+  };
+}
+
+function buildSnapshotDelta(before: AppState, after: AppState): AppStateSnapshotDelta | null {
+  const delta: AppStateSnapshotDelta = {};
+  let hasField = false;
+
+  if (before.selectedAccountId !== after.selectedAccountId) {
+    delta.selectedAccountId = before.selectedAccountId;
+    hasField = true;
+  }
+
+  if (before.selectedCharacterId !== after.selectedCharacterId) {
+    delta.selectedCharacterId = before.selectedCharacterId;
+    hasField = true;
+  }
+
+  if (!jsonEquals(before.settings, after.settings)) {
+    delta.settings = structuredClone(before.settings);
+    hasField = true;
+  }
+
+  if (!jsonEquals(before.accounts, after.accounts)) {
+    delta.accounts = structuredClone(before.accounts);
+    hasField = true;
+  }
+
+  const characterDelta = buildCharacterChanges(before.characters, after.characters);
+  if (characterDelta.changes.length > 0) {
+    delta.characterChanges = characterDelta.changes;
+    hasField = true;
+  }
+  if (characterDelta.order && characterDelta.order.length > 0) {
+    delta.characterOrder = characterDelta.order;
+    hasField = true;
+  }
+
+  return hasField ? delta : null;
+}
+
+function buildRollbackPayload(before: AppState, after: AppState): { before?: AppStateSnapshot; beforeDelta?: AppStateSnapshotDelta } {
+  const delta = buildSnapshotDelta(before, after);
+  if (!delta) {
+    return { before: createSnapshot(before) };
+  }
+
+  const beforeSnapshot = createSnapshot(before);
+  const deltaSize = estimateSerializedSize(delta);
+  const snapshotSize = estimateSerializedSize(beforeSnapshot);
+  if (snapshotSize <= 0) {
+    return { beforeDelta: delta };
+  }
+  if (deltaSize <= Math.floor(snapshotSize * HISTORY_DELTA_MAX_SIZE_RATIO)) {
+    return { beforeDelta: delta };
+  }
+  return { before: beforeSnapshot };
+}
+
+function applyCharacterChanges(
+  currentCharacters: CharacterState[],
+  changes: AppStateCharacterSnapshotDelta[] | undefined,
+  order: string[] | undefined,
+): CharacterState[] {
+  if ((!changes || changes.length === 0) && (!order || order.length === 0)) {
+    return currentCharacters;
+  }
+
+  const currentById = new Map(currentCharacters.map((item) => [item.id, item]));
+  const changedIdSet = new Set<string>();
+  (changes ?? []).forEach((change) => {
+    changedIdSet.add(change.id);
+    if (change.before === null) {
+      currentById.delete(change.id);
+      return;
+    }
+    currentById.set(change.id, structuredClone(change.before));
+  });
+
+  if (!order || order.length === 0) {
+    const restored = currentCharacters
+      .map((item) => currentById.get(item.id))
+      .filter((item): item is CharacterState => item !== undefined);
+    const existingIds = new Set(restored.map((item) => item.id));
+    (changes ?? []).forEach((change) => {
+      if (!change.before || existingIds.has(change.id)) {
+        return;
+      }
+      const restoredItem = currentById.get(change.id);
+      if (restoredItem) {
+        restored.push(restoredItem);
+        existingIds.add(change.id);
+      }
+    });
+    return restored;
+  }
+
+  const ordered: CharacterState[] = [];
+  const visited = new Set<string>();
+  order.forEach((id) => {
+    const item = currentById.get(id);
+    if (!item) {
+      return;
+    }
+    ordered.push(item);
+    visited.add(id);
+  });
+
+  currentCharacters.forEach((item) => {
+    if (visited.has(item.id)) {
+      return;
+    }
+    const restored = currentById.get(item.id);
+    if (!restored) {
+      return;
+    }
+    ordered.push(restored);
+    visited.add(item.id);
+  });
+
+  currentById.forEach((item, id) => {
+    if (visited.has(id)) {
+      return;
+    }
+    ordered.push(item);
+    visited.add(id);
+  });
+
+  return ordered;
+}
+
+function restoreStateByDelta(current: AppState, delta: AppStateSnapshotDelta): AppState {
+  const selectedAccountId = hasOwnProperty(delta as Record<string, unknown>, "selectedAccountId")
+    ? delta.selectedAccountId ?? null
+    : current.selectedAccountId;
+  const selectedCharacterId = hasOwnProperty(delta as Record<string, unknown>, "selectedCharacterId")
+    ? delta.selectedCharacterId ?? null
+    : current.selectedCharacterId;
+
+  return {
+    ...current,
+    selectedAccountId,
+    selectedCharacterId,
+    settings: delta.settings ? structuredClone(delta.settings) : current.settings,
+    accounts: delta.accounts ? structuredClone(delta.accounts) : current.accounts,
+    characters: applyCharacterChanges(current.characters, delta.characterChanges, delta.characterOrder),
+  };
+}
+
 function commitMutation(
   meta: { action: string; characterId?: string | null; description?: string; trackHistory?: boolean },
   mutator: (draft: AppState) => AppState | void,
@@ -595,14 +875,14 @@ function commitMutation(
   const changed = beforeSignature !== buildMutationSignature(normalized);
 
   if (meta.trackHistory !== false && changed) {
-    const before = createSnapshot(current);
+    const rollback = buildRollbackPayload(current, normalized);
     const entry: OperationLogEntry = {
       id: randomUUID(),
       at: new Date().toISOString(),
       action: meta.action,
       characterId: meta.characterId ?? null,
       description: meta.description,
-      before,
+      ...rollback,
     };
     normalized.history = [...current.history, entry].slice(-OPERATION_HISTORY_LIMIT);
   } else {
@@ -1333,11 +1613,15 @@ export function undoOperations(steps: number): AppState {
 
   while (remain > 0 && next.history.length > 0) {
     const last = next.history[next.history.length - 1];
-    next.selectedAccountId = last.before.selectedAccountId;
-    next.selectedCharacterId = last.before.selectedCharacterId;
-    next.settings = last.before.settings;
-    next.accounts = last.before.accounts;
-    next.characters = last.before.characters;
+    if (last.beforeDelta) {
+      next = restoreStateByDelta(next, last.beforeDelta);
+    } else if (last.before) {
+      next.selectedAccountId = last.before.selectedAccountId;
+      next.selectedCharacterId = last.before.selectedCharacterId;
+      next.settings = last.before.settings;
+      next.accounts = last.before.accounts;
+      next.characters = last.before.characters;
+    }
     next.history = next.history.slice(0, -1);
     remain -= 1;
   }

@@ -144,13 +144,28 @@ export interface AppStateSnapshot {
   characters: CharacterState[];
 }
 
+export interface AppStateCharacterSnapshotDelta {
+  id: string;
+  before: CharacterState | null;
+}
+
+export interface AppStateSnapshotDelta {
+  selectedAccountId?: string | null;
+  selectedCharacterId?: string | null;
+  settings?: AppSettings;
+  accounts?: AccountState[];
+  characterChanges?: AppStateCharacterSnapshotDelta[];
+  characterOrder?: string[];
+}
+
 export interface OperationLogEntry {
   id: string;
   at: string;
   action: string;
   characterId: string | null;
   description?: string;
-  before: AppStateSnapshot;
+  before?: AppStateSnapshot;
+  beforeDelta?: AppStateSnapshotDelta;
 }
 
 export interface ExportDataResult {
