@@ -38,6 +38,7 @@ import {
   normalizePriceMarketForCompare,
   resolveSnapshotQualityTag,
 } from "./pricing-anomaly";
+import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 
 function parseOptionalIso(raw: unknown): Date | null {
   if (typeof raw !== "string") {
@@ -234,7 +235,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
   return writeWorkshopState({
     ...state,
     version: WORKSHOP_STATE_VERSION,
-    prices: [...state.prices, nextSnapshot].slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+    prices: appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT),
   });
 }
 

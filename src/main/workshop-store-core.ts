@@ -44,6 +44,7 @@ import {
   collectBaselinePricesForItem,
   formatAnomalyReason,
 } from "./workshop-store/pricing-anomaly";
+import { appendWorkshopPriceSnapshot, trimWorkshopPriceHistory } from "./workshop-store/pricing-history-window";
 import { normalizePriceSnapshot, sanitizePriceMarket } from "./workshop-store/pricing-snapshot-normalize";
 import { sanitizeOcrImportPayload } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
@@ -305,8 +306,8 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
       }),
     )
     .filter((entry): entry is WorkshopPriceSnapshot => entry !== null)
-    .filter((entry) => validItemIds.has(entry.itemId))
-    .slice(-WORKSHOP_PRICE_HISTORY_LIMIT);
+    .filter((entry) => validItemIds.has(entry.itemId));
+  const pricesInWindow = trimWorkshopPriceHistory(prices, WORKSHOP_PRICE_HISTORY_LIMIT);
 
   const inventoryRaw = Array.isArray(entity?.inventory) ? entity?.inventory : [];
   const inventoryMap = new Map<string, WorkshopInventoryItem>();
@@ -322,7 +323,7 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
     version: version > 0 ? WORKSHOP_STATE_VERSION : WORKSHOP_STATE_VERSION,
     items,
     recipes,
-    prices,
+    prices: pricesInWindow,
     inventory: Array.from(inventoryMap.values()).sort((left, right) => left.itemId.localeCompare(right.itemId)),
     signalRule,
   };
@@ -371,7 +372,7 @@ export function writeWorkshopState(next: WorkshopState): WorkshopState {
     version: next.version,
     items: normalizedItems,
     recipes: next.recipes,
-    prices: next.prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+    prices: trimWorkshopPriceHistory(next.prices, WORKSHOP_PRICE_HISTORY_LIMIT),
     inventory: [...next.inventory].sort((left, right) => left.itemId.localeCompare(right.itemId)),
     signalRule: normalizeSignalRule(next.signalRule),
   };
@@ -604,7 +605,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
   return writeWorkshopState({
     ...state,
     version: WORKSHOP_STATE_VERSION,
-    prices: [...state.prices, nextSnapshot].slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+    prices: appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT),
   });
 }
 
@@ -676,7 +677,7 @@ export async function importWorkshopOcrPricesCore(
     ...state,
     version: WORKSHOP_STATE_VERSION,
     items,
-    prices: prices.slice(-WORKSHOP_PRICE_HISTORY_LIMIT),
+    prices: trimWorkshopPriceHistory(prices, WORKSHOP_PRICE_HISTORY_LIMIT),
   });
 
   return {

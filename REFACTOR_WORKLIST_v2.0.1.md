@@ -612,9 +612,19 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-normalize.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.42：核心第二十一刀：抽离价格历史窗口裁剪 helper 到 `src/main/workshop-store/pricing-history-window.ts`。
+  - 变更点：
+    - 新增 `trimWorkshopPriceHistory / appendWorkshopPriceSnapshot`，统一“历史归档窗口”裁剪策略；
+    - `workshop-store-core.ts` 与 `pricing.ts` 的 `slice(-WORKSHOP_PRICE_HISTORY_LIMIT)` 路径改为复用新模块，减少重复逻辑。
+  - 新增：
+    - `src/main/workshop-store/pricing-history-window.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-history-window.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.41`（价格快照归一 helper 已下沉到 pricing 域模块）。
-    - 明日起手建议（A1-6.42）：
-      - 优先下沉 `workshop-store-core.ts` 中“价格历史序列归档/窗口裁剪”相关 helper，进一步收敛到 pricing 域模块；
+    - 今日完成到 `A1-6.42`（价格历史窗口裁剪 helper 已下沉到 pricing 域模块）。
+    - 明日起手建议（A1-6.43）：
+      - 优先下沉 `workshop-store-core.ts` 中“价格快照写入入口（含异常标注）”到 pricing 域模块，进一步收敛核心读写边界；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
