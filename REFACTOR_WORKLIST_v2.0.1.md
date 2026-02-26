@@ -690,9 +690,20 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-history-composer.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.50：pricing 第二十九刀：抽离 signal 行构建/排序/汇总到 `src/main/workshop-store/pricing-signal-row.ts`。
+  - 变更点：
+    - `getWorkshopPriceSignals(...)` 的行级计算（偏离率/触发判定）下沉到 `buildWorkshopPriceSignalRow(...)`；
+    - 行排序与计数统计下沉到 `sortWorkshopPriceSignalRows(...) / summarizeWorkshopPriceSignalRows(...)`；
+    - `pricing.ts` 中 signals 入口改为“history -> row builder -> sort -> summarize”编排。
+  - 新增：
+    - `src/main/workshop-store/pricing-signal-row.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-signal-row.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.49`（历史结果组装 composer 已下沉到 pricing 域模块）。
-    - 明日起手建议（A1-6.50）：
-      - 优先下沉 `pricing.ts` 中 `getWorkshopPriceSignals` 的行级构建逻辑到独立模块（先抽纯计算，再替换入口调用）；
+    - 今日完成到 `A1-6.50`（signal 行构建/排序/汇总已下沉到 pricing 域模块）。
+    - 明日起手建议（A1-6.51）：
+      - 优先下沉 `pricing.ts` 中 `updateWorkshopSignalRule` 的 rule merge 逻辑到 signal-rule 专属 helper，进一步收敛 pricing 入口；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
