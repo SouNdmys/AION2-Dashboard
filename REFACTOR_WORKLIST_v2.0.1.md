@@ -852,9 +852,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-signal-read.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.64：pricing 第四十三刀：抽离价格历史构建 orchestrator 到独立模块，降低 pricing.ts 内聚复杂度。
+  - 变更点：
+    - 新增 `buildWorkshopPriceHistoryResult(...)` 到 `src/main/workshop-store/pricing-history-orchestrator.ts`，统一封装“range resolve -> snapshot select -> quality classify -> series build -> result compose”流程；
+    - `pricing.ts` 删除内联历史构建函数，改为直接复用 orchestrator；
+    - 保持历史读取与信号构建对同一 history orchestrator 的复用，减少入口模块内多段流水细节。
+  - 新增：
+    - `src/main/workshop-store/pricing-history-orchestrator.ts`
+    - `src/main/workshop-store/pricing-history-orchestrator.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-history-orchestrator.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.63`（signal 查询入口已下沉为独立 orchestrator helper，pricing 入口层继续收敛）。
-    - 明日起手建议（A1-6.64）：
-      - 优先将 `buildWorkshopPriceHistoryResult(...)` 从 `pricing.ts` 下沉到独立 orchestrator 模块，保持历史/信号路径对历史构建的复用与分层一致；
+    - 今日完成到 `A1-6.64`（价格历史构建流水已下沉到独立 orchestrator，pricing.ts 进一步瘦身）。
+    - 明日起手建议（A1-6.65）：
+      - 优先评估并下沉 `simulation.ts` 中可复用的入口编排样板（read/ensure/query/compose）到独立 helper，开始从 pricing 拆分扩展到 simulation 域；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
