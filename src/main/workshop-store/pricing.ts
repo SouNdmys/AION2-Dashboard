@@ -37,6 +37,7 @@ import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
 import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
+import { runWorkshopPriceMutation } from "./pricing-snapshot-mutation";
 import {
   sortWorkshopPriceSignalRows,
   summarizeWorkshopPriceSignalRows,
@@ -75,52 +76,60 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
 }
 
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
-  const state = readWorkshopState();
-  ensureItemExists(state, payload.itemId);
-  const item = state.items.find((entry) => entry.id === payload.itemId);
-  const unitPrice = toNonNegativeInt(payload.unitPrice, -1);
-  if (unitPrice <= 0) {
-    throw new Error("价格必须是大于 0 的整数。");
-  }
+  return runWorkshopPriceMutation(
+    (state) => {
+      ensureItemExists(state, payload.itemId);
+      const item = state.items.find((entry) => entry.id === payload.itemId);
+      const unitPrice = toNonNegativeInt(payload.unitPrice, -1);
+      if (unitPrice <= 0) {
+        throw new Error("价格必须是大于 0 的整数。");
+      }
 
-  const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
-  const source = payload.source === "import" ? "import" : "manual";
-  const market = sanitizePriceMarket(payload.market);
-  const baselinePrices = collectBaselinePricesForItem(state.prices, payload.itemId, market, capturedAt);
-  const anomaly = assessPriceAnomalyWithCategory(unitPrice, baselinePrices, item?.category ?? "other");
-  let note = payload.note?.trim() || undefined;
-  if (anomaly.kind === "hard") {
-    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_HARD);
-  } else if (anomaly.kind === "suspect") {
-    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
-  }
-  const nextSnapshot: WorkshopPriceSnapshot = {
-    id: randomUUID(),
-    itemId: payload.itemId,
-    unitPrice,
-    capturedAt,
-    source,
-    market,
-    note,
-  };
+      const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
+      const source = payload.source === "import" ? "import" : "manual";
+      const market = sanitizePriceMarket(payload.market);
+      const baselinePrices = collectBaselinePricesForItem(state.prices, payload.itemId, market, capturedAt);
+      const anomaly = assessPriceAnomalyWithCategory(unitPrice, baselinePrices, item?.category ?? "other");
+      let note = payload.note?.trim() || undefined;
+      if (anomaly.kind === "hard") {
+        note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_HARD);
+      } else if (anomaly.kind === "suspect") {
+        note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
+      }
+      const nextSnapshot: WorkshopPriceSnapshot = {
+        id: randomUUID(),
+        itemId: payload.itemId,
+        unitPrice,
+        capturedAt,
+        source,
+        market,
+        note,
+      };
 
-  return writeWorkshopState({
-    ...state,
-    version: WORKSHOP_STATE_VERSION,
-    prices: appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT),
-  });
+      return appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT);
+    },
+    {
+      readState: readWorkshopState,
+      writeState: writeWorkshopState,
+      stateVersion: WORKSHOP_STATE_VERSION,
+    },
+  );
 }
 
 export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
-  const state = readWorkshopState();
-  if (!state.prices.some((entry) => entry.id === snapshotId)) {
-    return state;
-  }
-  return writeWorkshopState({
-    ...state,
-    version: WORKSHOP_STATE_VERSION,
-    prices: state.prices.filter((entry) => entry.id !== snapshotId),
-  });
+  return runWorkshopPriceMutation(
+    (state) => {
+      if (!state.prices.some((entry) => entry.id === snapshotId)) {
+        return null;
+      }
+      return state.prices.filter((entry) => entry.id !== snapshotId);
+    },
+    {
+      readState: readWorkshopState,
+      writeState: writeWorkshopState,
+      stateVersion: WORKSHOP_STATE_VERSION,
+    },
+  );
 }
 
 export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {

@@ -733,9 +733,19 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-signal-orchestrator.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.54：pricing 第三十三刀：抽离价格快照增删共享编排到 `src/main/workshop-store/pricing-snapshot-mutation.ts`。
+  - 变更点：
+    - 新增 `runWorkshopPriceMutation(...)`，统一“read state -> build next prices -> write state”流程；
+    - `addWorkshopPriceSnapshot / deleteWorkshopPriceSnapshot` 改为复用共享编排，仅保留各自业务差异（校验/构建/筛选）。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-mutation.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-mutation.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.53`（signals 循环调度 orchestrator 已下沉到 pricing 域模块）。
-    - 明日起手建议（A1-6.54）：
-      - 优先下沉 `pricing.ts` 中价格快照增删入口的共享编排（state read + validation + state write）到专属 helper，继续压缩入口函数；
+    - 今日完成到 `A1-6.54`（价格快照增删共享编排已下沉到 pricing 域模块）。
+    - 明日起手建议（A1-6.55）：
+      - 优先下沉 `pricing.ts` 中价格快照新增入口的“异常标记 + note 合并”构建逻辑到专属 helper，继续收敛入口函数；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
