@@ -840,9 +840,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-signal-rule-mutation.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.63：pricing 第四十二刀：抽离 signal 查询入口 orchestrator helper，继续压缩 pricing 入口层。
+  - 变更点：
+    - 新增 `getWorkshopPriceSignalsByQuery(...)` 到 `src/main/workshop-store/pricing-signal-read.ts`，统一封装“read + query normalize + rows build + sort/summarize + result compose”异步流程；
+    - `pricing.ts` 新增 `WORKSHOP_PRICE_SIGNALS_QUERY_DEPS`，`getWorkshopPriceSignals(...)` 改为单行委托；
+    - 保持 `pricing.ts` 仅承担依赖装配与对外 API 暴露，信号查询流程下沉到独立 helper。
+  - 新增：
+    - `src/main/workshop-store/pricing-signal-read.ts`
+    - `src/main/workshop-store/pricing-signal-read.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-signal-read.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.62`（signal rule 更新入口已下沉为独立 mutation helper，pricing 入口编排风格进一步统一）。
-    - 明日起手建议（A1-6.63）：
-      - 优先下沉 `getWorkshopPriceSignals(...)` 的入口“read + query normalize + rows build + compose”为独立 orchestrator helper，继续压缩 pricing 入口层；
+    - 今日完成到 `A1-6.63`（signal 查询入口已下沉为独立 orchestrator helper，pricing 入口层继续收敛）。
+    - 明日起手建议（A1-6.64）：
+      - 优先将 `buildWorkshopPriceHistoryResult(...)` 从 `pricing.ts` 下沉到独立 orchestrator 模块，保持历史/信号路径对历史构建的复用与分层一致；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

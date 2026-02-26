@@ -4,7 +4,6 @@ import type {
   WorkshopPriceHistoryResult,
   WorkshopPriceSignalQuery,
   WorkshopPriceSignalResult,
-  WorkshopPriceSignalRow,
   WorkshopPriceSignalRule,
   WorkshopState,
 } from "../../shared/types";
@@ -40,6 +39,7 @@ import {
   summarizeWorkshopPriceSignalRows,
 } from "./pricing-signal-row";
 import { buildWorkshopPriceSignalRows } from "./pricing-signal-orchestrator";
+import { getWorkshopPriceSignalsByQuery } from "./pricing-signal-read";
 import { runWorkshopSignalRuleMutation } from "./pricing-signal-rule-mutation";
 import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
 import { normalizeWorkshopPriceSignalQuery } from "./pricing-signal-query";
@@ -69,6 +69,19 @@ const WORKSHOP_SIGNAL_RULE_MUTATION_DEPS = {
   writeState: writeWorkshopState,
   stateVersion: WORKSHOP_STATE_VERSION,
   mergeRule: mergeWorkshopSignalRule,
+};
+const WORKSHOP_PRICE_SIGNALS_QUERY_DEPS = {
+  readState: readWorkshopState,
+  normalizeQuery: normalizeWorkshopPriceSignalQuery,
+  buildRows: buildWorkshopPriceSignalRows,
+  buildHistoryResult: buildWorkshopPriceHistoryResult,
+  yieldToEventLoop,
+  sortRows: sortWorkshopPriceSignalRows,
+  summarizeRows: summarizeWorkshopPriceSignalRows,
+  composeResult: composeWorkshopPriceSignalResult,
+  minSampleCount: WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT,
+  yieldEvery: WORKSHOP_SIGNAL_YIELD_EVERY,
+  nowIso: () => new Date().toISOString(),
 };
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
@@ -130,40 +143,5 @@ export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRul
 }
 
 export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Promise<WorkshopPriceSignalResult> {
-  const state = readWorkshopState();
-  const { lookbackDays, thresholdRatio, targetMarket, effectiveThresholdRatio } = normalizeWorkshopPriceSignalQuery(
-    state.signalRule,
-    payload,
-  );
-  const rows: WorkshopPriceSignalRow[] = await buildWorkshopPriceSignalRows(
-    {
-      items: state.items,
-      lookbackDays,
-      targetMarket,
-      effectiveThresholdRatio,
-      ruleEnabled: state.signalRule.enabled,
-      minSampleCount: WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT,
-      yieldEvery: WORKSHOP_SIGNAL_YIELD_EVERY,
-    },
-    {
-      buildHistory: (historyPayload) => buildWorkshopPriceHistoryResult(state, historyPayload),
-      yieldToEventLoop,
-    },
-  );
-
-  sortWorkshopPriceSignalRows(rows);
-  const { triggeredCount, buyZoneCount, sellZoneCount } = summarizeWorkshopPriceSignalRows(rows);
-
-  return composeWorkshopPriceSignalResult({
-    generatedAt: new Date().toISOString(),
-    market: targetMarket,
-    lookbackDays,
-    thresholdRatio,
-    effectiveThresholdRatio,
-    ruleEnabled: state.signalRule.enabled,
-    triggeredCount,
-    buyZoneCount,
-    sellZoneCount,
-    rows,
-  });
+  return getWorkshopPriceSignalsByQuery(payload, WORKSHOP_PRICE_SIGNALS_QUERY_DEPS);
 }
