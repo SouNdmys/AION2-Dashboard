@@ -8,9 +8,8 @@ import {
   DEFAULT_SETTINGS,
   MINI_GAME_MAX,
   SPIRIT_INVASION_MAX,
-  createEmptyWeeklyStats,
 } from "../shared/constants";
-import { applyTaskAction, refreshCharacterState } from "../shared/engine";
+import { refreshCharacterState } from "../shared/engine";
 import type {
   AppSettings,
   AppState,
@@ -27,6 +26,11 @@ import {
   createAppStateMutationDraft,
   restoreAppStateByDelta,
 } from "./store-domain-history";
+import {
+  applyTaskActionToCharacters,
+  buildTaskActionDescription,
+  resetWeeklyStatsForCharacters,
+} from "./store-domain-progression";
 import {
   addAccountToRoster,
   addCharacterToRoster,
@@ -379,20 +383,10 @@ export function applyAction(input: ApplyTaskActionInput): AppState {
     {
       action: "任务打卡",
       characterId: input.characterId,
-      description: `${input.taskId} x${Math.max(1, Math.floor(input.amount ?? 1))}`,
+      description: buildTaskActionDescription(input),
     },
     (draft) => {
-      const index = draft.characters.findIndex((item) => item.id === input.characterId);
-      if (index < 0) {
-        throw new Error("角色不存在");
-      }
-
-      const result = applyTaskAction(draft.characters[index], draft.settings, input);
-      if (!result.success) {
-        throw new Error(result.message);
-      }
-
-      draft.characters[index] = result.next;
+      draft.characters = applyTaskActionToCharacters(draft.characters, draft.settings, input);
       return draft;
     },
   );
@@ -693,11 +687,7 @@ export function resetWeeklyStats(): AppState {
   return commitMutation(
     { action: "重置周收益统计" },
     (draft) => {
-      const now = new Date().toISOString();
-      draft.characters = draft.characters.map((item) => ({
-        ...item,
-        stats: createEmptyWeeklyStats(now),
-      }));
+      draft.characters = resetWeeklyStatsForCharacters(draft.characters, new Date().toISOString());
       return draft;
     },
   );

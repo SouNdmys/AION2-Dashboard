@@ -1105,5 +1105,17 @@
     - `npm run test:unit -- src/main/store-domain-roster.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-9）：
-    - 抽离任务打卡与周常重置 orchestration（`applyAction/resetWeeklyStats`）到 `store-domain-progression`，把引擎调用与角色批处理从 store I/O 层进一步解耦。
+- [x] A2-9：domain 第八刀：抽离任务打卡与周统计重置 orchestration，继续分离进度规则与 store I/O。
+  - 变更点：
+    - 新增 `src/main/store-domain-progression.ts`，下沉 `buildTaskActionDescription(...)`、`applyTaskActionToCharacters(...)`、`resetWeeklyStatsForCharacters(...)`；
+    - `store.ts` 的 `applyAction(...)` 与 `resetWeeklyStats(...)` 改为调用 progression helper；
+    - 保持既有行为一致（角色不存在/任务校验错误抛错文案、打卡描述格式、周统计重置口径）。
+  - 新增：
+    - `src/main/store-domain-progression.ts`
+    - `src/main/store-domain-progression.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-progression.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-10）：
+    - 抽离活动次数与周统计手动校准规则（`updateRaidCounts/updateWeeklyCompletions`）到 `store-domain-counters`，继续压缩 `store.ts` 的字段级分支逻辑。
