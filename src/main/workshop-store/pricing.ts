@@ -19,9 +19,7 @@ import {
   asIso,
   ensureItemExists,
   readWorkshopState,
-  sanitizeLookbackDays,
   sanitizePriceMarket,
-  sanitizeSignalThresholdRatio,
   toNonNegativeInt,
   writeWorkshopState,
   yieldToEventLoop,
@@ -39,6 +37,7 @@ import {
   resolveSnapshotQualityTag,
 } from "./pricing-anomaly";
 import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
+import { sanitizeLookbackDays, sanitizeSignalThresholdRatio } from "./pricing-signal-rule";
 
 function parseOptionalIso(raw: unknown): Date | null {
   if (typeof raw !== "string") {

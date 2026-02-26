@@ -44,6 +44,10 @@ import {
   formatAnomalyReason,
 } from "./workshop-store/pricing-anomaly";
 import { trimWorkshopPriceHistory } from "./workshop-store/pricing-history-window";
+import {
+  DEFAULT_WORKSHOP_SIGNAL_RULE,
+  normalizeSignalRule,
+} from "./workshop-store/pricing-signal-rule";
 import { normalizePriceSnapshot } from "./workshop-store/pricing-snapshot-normalize";
 import { sanitizeOcrImportPayload } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
@@ -60,7 +64,6 @@ import type {
   WorkshopInventoryItem,
   WorkshopItem,
   WorkshopItemCategory,
-  WorkshopPriceSignalRule,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopRecipeInput,
@@ -80,14 +83,18 @@ export {
   resolveSnapshotQualityTag,
 } from "./workshop-store/pricing-anomaly";
 export { sanitizePriceMarket } from "./workshop-store/pricing-snapshot-normalize";
+export {
+  WORKSHOP_HISTORY_DEFAULT_DAYS,
+  WORKSHOP_HISTORY_MAX_DAYS,
+  WORKSHOP_SIGNAL_THRESHOLD_DEFAULT,
+  WORKSHOP_SIGNAL_THRESHOLD_MIN,
+  WORKSHOP_SIGNAL_THRESHOLD_MAX,
+  sanitizeLookbackDays,
+  sanitizeSignalThresholdRatio,
+} from "./workshop-store/pricing-signal-rule";
 
 export const WORKSHOP_STATE_VERSION = 6;
 export const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
-export const WORKSHOP_HISTORY_DEFAULT_DAYS = 30;
-export const WORKSHOP_HISTORY_MAX_DAYS = 365;
-export const WORKSHOP_SIGNAL_THRESHOLD_DEFAULT = 0.15;
-export const WORKSHOP_SIGNAL_THRESHOLD_MIN = 0.15;
-export const WORKSHOP_SIGNAL_THRESHOLD_MAX = 0.5;
 export const WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT = 5;
 export const WORKSHOP_ICON_CACHE_KEY = "iconCache";
 const WORKSHOP_OCR_IMPORT_YIELD_EVERY = 40;
@@ -102,12 +109,6 @@ const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_ENABLE_PYTHON_FALLBACK = false;
-
-const DEFAULT_WORKSHOP_SIGNAL_RULE: WorkshopPriceSignalRule = {
-  enabled: true,
-  lookbackDays: WORKSHOP_HISTORY_DEFAULT_DAYS,
-  dropBelowWeekdayAverageRatio: WORKSHOP_SIGNAL_THRESHOLD_DEFAULT,
-};
 
 export const workshopStore = new Store<Record<string, unknown>>({
   name: "aion2-dashboard-workshop",
@@ -432,30 +433,6 @@ export function ensureItemExists(state: WorkshopState, itemId: string): void {
   if (!state.items.some((item) => item.id === itemId)) {
     throw new Error("物品不存在，请先创建物品。");
   }
-}
-
-export function sanitizeLookbackDays(raw: unknown): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return WORKSHOP_HISTORY_DEFAULT_DAYS;
-  }
-  return clamp(Math.floor(raw), 1, WORKSHOP_HISTORY_MAX_DAYS);
-}
-
-export function sanitizeSignalThresholdRatio(raw: unknown): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return WORKSHOP_SIGNAL_THRESHOLD_DEFAULT;
-  }
-  return clamp(raw, WORKSHOP_SIGNAL_THRESHOLD_MIN, WORKSHOP_SIGNAL_THRESHOLD_MAX);
-}
-
-function normalizeSignalRule(raw: unknown): WorkshopPriceSignalRule {
-  const entity = raw as Record<string, unknown> | undefined;
-  const enabled = typeof entity?.enabled === "boolean" ? entity.enabled : DEFAULT_WORKSHOP_SIGNAL_RULE.enabled;
-  return {
-    enabled,
-    lookbackDays: sanitizeLookbackDays(entity?.lookbackDays),
-    dropBelowWeekdayAverageRatio: sanitizeSignalThresholdRatio(entity?.dropBelowWeekdayAverageRatio),
-  };
 }
 
 const onnxOcrRuntime = createOnnxOcrRuntime({
