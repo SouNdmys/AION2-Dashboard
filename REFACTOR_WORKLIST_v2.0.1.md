@@ -972,9 +972,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-context.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.74：store 第一刀（本轮）：抽离样例 seed 常量与构建流程 helper，压缩 `store.ts` 体量。
+  - 变更点：
+    - 新增 `buildWorkshopSampleSeedState(...)` 到 `src/main/workshop-store/store-sample-seed.ts`，下沉样例物品/配方/价格/库存常量与 seed 组装流程；
+    - `store.ts` 的 `seedWorkshopSampleData(...)` 改为“readState -> helper 组装 -> writeState”三段式入口；
+    - 保持既有行为不变（已有同价最新快照不重复追加、价格历史按上限裁剪、样例库存覆盖写入）。
+  - 新增：
+    - `src/main/workshop-store/store-sample-seed.ts`
+    - `src/main/workshop-store/store-sample-seed.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/store-sample-seed.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.73`（simulation 上下文索引构建已下沉 helper，主流程初始化样板进一步降低）。
-    - 明日起手建议（A1-6.74）：
-      - 优先下沉 `store.ts` 的样例 seed 常量与构建流程到独立 helper（`store-sample-seed`），继续压缩 store 域入口文件体量；
+    - 今日完成到 `A1-6.74`（store 样例 seed 构建已下沉 helper，store 入口编排进一步轻量化）。
+    - 明日起手建议（A1-6.75）：
+      - 优先下沉 `upsertWorkshopInventory(...)` 的库存更新/排序逻辑为独立 helper（`store-inventory-upsert`），让 store 入口结构与 pricing/simulation 统一；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
