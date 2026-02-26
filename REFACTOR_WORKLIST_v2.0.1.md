@@ -1183,3 +1183,12 @@
     - `npm run typecheck`
     - `npm run build`
     - `npm run test:unit`
+  - 补充收敛（2026-02-26）：
+    - `WorkshopSidebarHistoryCard` 移除本地重复分类推断逻辑，复用 `features/workshop/workshop-view-helpers.ts`；
+    - `WorkshopSidebarHistoryCard` 改为 `useWorkshopActions()` 统一入口，消除组件内 `window.aionApi` 直连调用；
+    - OCR 快捷键契约对齐：移除 `WorkshopOcrHotkeyConfig/WorkshopOcrHotkeyState` 中未生效字段（`iconCapture` / `strictIconMatch` / `iconCaptureEnabled`），并同步清理主进程与 renderer 配置透传样板。
+  - 补充回归（本地）：
+    - `npm run typecheck`
+    - `npm run test:unit`
+    - `npm run build`
+    - `npm run smoke:ui`
