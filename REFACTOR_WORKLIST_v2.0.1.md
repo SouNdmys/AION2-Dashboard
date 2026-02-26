@@ -780,9 +780,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-item.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.58：pricing 第三十七刀：抽离价格快照新增“build + append”组合编排 helper。
+  - 变更点：
+    - 新增 `buildWorkshopPricesWithAddedSnapshot(...)` 到 `src/main/workshop-store/pricing-snapshot-add.ts`，统一封装“resolve item category -> build snapshot -> append history”流程；
+    - `addWorkshopPriceSnapshot(...)` 改为直接调用该 helper，入口函数进一步收敛为单层 mutation 编排；
+    - helper 采用可注入 deps 设计，便于独立单测覆盖编排调用与异常透传。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-add.ts`
+    - `src/main/workshop-store/pricing-snapshot-add.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-add.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.57`（价格快照新增入口的 item 分类解析已下沉为独立 helper）。
-    - 明日起手建议（A1-6.58）：
-      - 优先将 `addWorkshopPriceSnapshot(...)` 中“snapshot build + append”组合下沉为单一 helper（输入 state/payload，输出 nextPrices），继续压缩入口流程到一层编排；
+    - 今日完成到 `A1-6.58`（价格快照新增入口的“build + append”组合已下沉为独立编排 helper）。
+    - 明日起手建议（A1-6.59）：
+      - 优先将 `deleteWorkshopPriceSnapshot(...)` 的删除判定与过滤流程下沉为独立 helper，保持增删路径在 pricing 域内对称编排；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

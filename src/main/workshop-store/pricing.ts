@@ -6,7 +6,6 @@ import type {
   WorkshopPriceSignalResult,
   WorkshopPriceSignalRow,
   WorkshopPriceSignalRule,
-  WorkshopPriceSnapshot,
   WorkshopState,
 } from "../../shared/types";
 import {
@@ -24,15 +23,13 @@ import {
 import { buildWeekdayAverages } from "./pricing-analytics";
 import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
 import { composeWorkshopPriceHistoryResult } from "./pricing-history-composer";
-import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
+import { buildWorkshopPricesWithAddedSnapshot } from "./pricing-snapshot-add";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
 import {
-  buildWorkshopPriceSnapshotWithAnomaly,
   createWorkshopPriceSnapshotWithAnomalyDeps,
 } from "./pricing-snapshot-create";
-import { resolveWorkshopPriceSnapshotItemCategory } from "./pricing-snapshot-item";
 import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
 import { runWorkshopPriceMutation } from "./pricing-snapshot-mutation";
 import {
@@ -83,17 +80,13 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
   return runWorkshopPriceMutation(
     (state) => {
-      const itemCategory = resolveWorkshopPriceSnapshotItemCategory(state, payload.itemId, WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS);
-      const nextSnapshot: WorkshopPriceSnapshot = buildWorkshopPriceSnapshotWithAnomaly(
-        {
-          payload,
-          prices: state.prices,
-          itemCategory,
-        },
-        WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
-      );
-
-      return appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT);
+      return buildWorkshopPricesWithAddedSnapshot({
+        state,
+        payload,
+        historyLimit: WORKSHOP_PRICE_HISTORY_LIMIT,
+        snapshotCreateDeps: WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
+        snapshotItemDeps: WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS,
+      });
     },
     {
       readState: readWorkshopState,
