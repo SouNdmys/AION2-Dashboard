@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { WorkshopItemCategory, WorkshopPriceMarket, WorkshopState } from "../../shared/types";
+import type { WorkshopPriceMarket, WorkshopState } from "../../shared/types";
+import { useWorkshopActions } from "./features/workshop/actions/useWorkshopActions";
+import {
+  inferMainCategoryByContext,
+  inferRecipeSubCategory,
+  parseItemMainCategory,
+  parseItemRawCategory,
+  parseItemSourceTag,
+  sortCategoryText,
+  sortMainCategoryText,
+} from "./features/workshop/workshop-view-helpers";
 
 const goldFormatter = new Intl.NumberFormat("zh-CN");
 
@@ -32,186 +42,6 @@ function toInt(raw: string): number | null {
   return value;
 }
 
-const CATEGORY_SUB_ORDER = [
-  "巨劍",
-  "長劍",
-  "短劍",
-  "釘錘",
-  "弓",
-  "法杖",
-  "法書",
-  "法珠",
-  "臂甲",
-  "頭盔",
-  "肩甲",
-  "上衣",
-  "下衣",
-  "手套",
-  "鞋子",
-  "披風",
-  "項鍊",
-  "耳環",
-  "戒指",
-  "手鐲",
-  "藥水",
-  "咒文書",
-  "魔石",
-  "材料",
-] as const;
-
-function parseItemRawCategory(notes?: string): string {
-  if (!notes) {
-    return "";
-  }
-  const match = notes.match(/分類:\s*([^;]+)/u);
-  return match?.[1]?.trim() ?? "";
-}
-
-function parseItemSourceTag(notes?: string): string {
-  if (!notes) {
-    return "";
-  }
-  const match = notes.match(/來源:\s*([^;]+)/u);
-  return match?.[1]?.trim() ?? "";
-}
-
-function parseItemMainCategory(notes?: string): string {
-  if (!notes) {
-    return "";
-  }
-  const match = notes.match(/大類:\s*([^;]+)/u);
-  return match?.[1]?.trim() ?? "";
-}
-
-function normalizeMainCategoryLabel(raw: string): string {
-  const value = raw.trim();
-  if (!value) {
-    return "";
-  }
-  if (value === "铁匠") return "鐵匠";
-  if (value === "手工艺") return "手工藝";
-  if (value === "采集材料") return "採集材料";
-  if (value === "炼金") return "煉金";
-  return value;
-}
-
-function inferRecipeMainCategory(sourceTag: string): string {
-  const normalized = sourceTag.replace(/\.md$/iu, "").trim();
-  if (!normalized) {
-    return "未分類";
-  }
-  const parts = normalized.split(/[、,，\s]+/u).map((part) => part.trim()).filter(Boolean);
-  return parts[parts.length - 1] ?? normalized;
-}
-
-function inferMainCategoryByContext(
-  explicitMainCategory: string,
-  sourceTag: string,
-  subCategory: string,
-  rawCategory: string,
-  itemName: string,
-): string {
-  const normalizedExplicitMainCategory = normalizeMainCategoryLabel(explicitMainCategory);
-  if (normalizedExplicitMainCategory) {
-    return normalizedExplicitMainCategory;
-  }
-  const text = `${rawCategory} ${itemName}`;
-  if (
-    subCategory === "臂甲" ||
-    subCategory === "頭盔" ||
-    subCategory === "肩甲" ||
-    subCategory === "上衣" ||
-    subCategory === "下衣" ||
-    subCategory === "手套" ||
-    subCategory === "鞋子" ||
-    subCategory === "披風" ||
-    text.includes("防具") ||
-    text.includes("盔甲")
-  ) {
-    return "盔甲";
-  }
-  if (
-    subCategory === "弓" ||
-    subCategory === "法杖" ||
-    subCategory === "法書" ||
-    subCategory === "法珠" ||
-    subCategory === "項鍊" ||
-    subCategory === "耳環" ||
-    subCategory === "戒指" ||
-    subCategory === "手鐲" ||
-    subCategory === "藥水" ||
-    subCategory === "咒文書" ||
-    subCategory === "魔石" ||
-    text.includes("飾品")
-  ) {
-    if (subCategory === "藥水" || subCategory === "咒文書" || subCategory === "魔石" || text.includes("消耗品")) {
-      return "煉金";
-    }
-    return "手工藝";
-  }
-  if (subCategory === "巨劍" || subCategory === "長劍" || subCategory === "短劍" || subCategory === "釘錘") {
-    return "鐵匠";
-  }
-  return inferRecipeMainCategory(sourceTag);
-}
-
-function inferRecipeSubCategory(rawCategory: string, itemName: string, itemCategory: WorkshopItemCategory): string {
-  const text = `${rawCategory} ${itemName}`;
-  if (text.includes("巨劍") || text.includes("巨剑")) return "巨劍";
-  if (text.includes("長劍") || text.includes("长剑")) return "長劍";
-  if (text.includes("短劍") || text.includes("短剑")) return "短劍";
-  if (text.includes("釘錘") || text.includes("钉锤")) return "釘錘";
-  if (text.includes("弓")) return "弓";
-  if (text.includes("法杖")) return "法杖";
-  if (text.includes("法書") || text.includes("法书")) return "法書";
-  if (text.includes("法珠")) return "法珠";
-  if (text.includes("臂甲")) return "臂甲";
-  if (text.includes("頭盔") || text.includes("头盔")) return "頭盔";
-  if (text.includes("肩甲")) return "肩甲";
-  if (text.includes("上衣") || text.includes("胸甲")) return "上衣";
-  if (text.includes("下衣") || text.includes("腿甲")) return "下衣";
-  if (text.includes("手套")) return "手套";
-  if (text.includes("鞋子") || text.includes("長靴") || text.includes("长靴") || text.includes("靴")) return "鞋子";
-  if (text.includes("披風") || text.includes("披风")) return "披風";
-  if (text.includes("項鍊") || text.includes("项链")) return "項鍊";
-  if (text.includes("耳環") || text.includes("耳环")) return "耳環";
-  if (text.includes("戒指")) return "戒指";
-  if (text.includes("手鐲") || text.includes("手镯")) return "手鐲";
-  if (text.includes("藥水") || text.includes("药水") || text.includes("祕藥") || text.includes("秘药")) return "藥水";
-  if (text.includes("咒文書") || text.includes("咒文书")) return "咒文書";
-  if (text.includes("魔石") || text.includes("靈石") || text.includes("灵石")) return "魔石";
-  if (
-    text.includes("材料") ||
-    text.includes("消耗") ||
-    text.includes("採集") ||
-    text.includes("采集") ||
-    itemCategory === "material" ||
-    itemCategory === "component"
-  ) {
-    return "材料";
-  }
-  return "其他";
-}
-
-function sortCategoryText(left: string, right: string): number {
-  const leftIndex = CATEGORY_SUB_ORDER.indexOf(left as (typeof CATEGORY_SUB_ORDER)[number]);
-  const rightIndex = CATEGORY_SUB_ORDER.indexOf(right as (typeof CATEGORY_SUB_ORDER)[number]);
-  if (leftIndex >= 0 || rightIndex >= 0) {
-    if (leftIndex < 0) return 1;
-    if (rightIndex < 0) return -1;
-    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
-  }
-  if (left === "其他") return 1;
-  if (right === "其他") return -1;
-  return left.localeCompare(right, "zh-CN");
-}
-
-function sortMainCategoryText(left: string, right: string): number {
-  if (left === "鐵匠" && right !== "鐵匠") return -1;
-  if (right === "鐵匠" && left !== "鐵匠") return 1;
-  return left.localeCompare(right, "zh-CN");
-}
-
 interface WorkshopSidebarHistoryCardProps {
   focusItemId?: string | null;
   focusSnapshotId?: string | null;
@@ -221,6 +51,7 @@ interface WorkshopSidebarHistoryCardProps {
 
 export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProps = {}): JSX.Element {
   const { focusItemId = null, focusSnapshotId = null, focusNonce = 0, onPriceDataChanged } = props;
+  const workshopActions = useWorkshopActions();
   const [state, setState] = useState<WorkshopState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,7 +268,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
     setBusy(true);
     setError(null);
     try {
-      const next = await window.aionApi.getWorkshopState();
+      const next = await workshopActions.getWorkshopState();
       setState(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "历史价格加载失败");
@@ -456,7 +287,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
     setError(null);
     setMessage(null);
     try {
-      const next = await window.aionApi.deleteWorkshopPriceSnapshot(snapshotId);
+      const next = await workshopActions.deleteWorkshopPriceSnapshot(snapshotId);
       setState(next);
       if (highlightSnapshotId === snapshotId) {
         setHighlightSnapshotId(null);
