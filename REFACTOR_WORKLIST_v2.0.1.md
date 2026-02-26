@@ -1069,5 +1069,17 @@
     - `npm run test:unit -- src/main/store-domain-aode.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-6）：
-    - 抽离导入/导出流程 orchestrator（`buildExportPayload/resolveImportedState/importDataFromFile`）到 `store-domain-transfer`，继续分离状态规则与 I/O 边界。
+- [x] A2-6：domain 第五刀：抽离导入/导出 transfer orchestrator，分离状态合成与文件 I/O。
+  - 变更点：
+    - 新增 `src/main/store-domain-transfer.ts`，下沉 `buildExportPayload(...)`、`resolveImportedState(...)`、`parseImportPayload(...)`、`buildImportedState(...)`；
+    - `store.ts` 的 `importDataFromFile(...)` 仅保留文件选择/读取与 `persistState(...)`，导入历史拼装与 JSON 解析错误处理转交 domain 模块；
+    - 保持既有行为一致（导入 JSON 错误提示、导入历史 action/description 与 before snapshot 口径、历史条目上限裁剪）。
+  - 新增：
+    - `src/main/store-domain-transfer.ts`
+    - `src/main/store-domain-transfer.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-transfer.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-7）：
+    - 抽离账号/角色选择与删除后的 selection 纠偏规则（`deleteAccount/selectAccount/deleteCharacter` 共享逻辑）到 `store-domain-selection`，继续削减 `store.ts` 分支密度。

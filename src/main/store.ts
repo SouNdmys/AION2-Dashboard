@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { basename } from "node:path";
 import { app, dialog } from "electron";
 import Store from "electron-store";
 import {
@@ -28,7 +27,6 @@ import {
   buildAppStateMutationSignature,
   buildAppStateRollbackPayload,
   createAppStateMutationDraft,
-  createAppStateSnapshot,
   restoreAppStateByDelta,
 } from "./store-domain-history";
 import {
@@ -37,6 +35,7 @@ import {
   mergeAppSettings,
 } from "./store-domain-settings";
 import { normalizeAppState } from "./store-domain-snapshot";
+import { buildExportPayload, buildImportedState, parseImportPayload } from "./store-domain-transfer";
 import {
   buildDefaultExportPath as buildDefaultExportPathByInfra,
   maybeCreateDailyAutoBackup as maybeCreateDailyAutoBackupByInfra,
@@ -44,7 +43,6 @@ import {
 
 const OPERATION_HISTORY_LIMIT = 200;
 const SETTINGS_MAX_THRESHOLD = 999999;
-const IMPORT_EXPORT_SCHEMA_VERSION = 1;
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const AUTO_BACKUP_META_KEY = "lastAutoBackupDate";
 const HISTORY_DELTA_MAX_SIZE_RATIO = 0.92;
@@ -113,22 +111,6 @@ function commitMutation(
   }
 
   return persistState(normalized);
-}
-
-function buildExportPayload(state: AppState): Record<string, unknown> {
-  return {
-    schemaVersion: IMPORT_EXPORT_SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
-    app: "aion2-dashboard",
-    state,
-  };
-}
-
-function resolveImportedState(raw: unknown): AppState {
-  if (raw && typeof raw === "object" && (raw as { state?: unknown }).state !== undefined) {
-    return normalizeAppState((raw as { state: unknown }).state);
-  }
-  return normalizeAppState(raw);
 }
 
 function buildDefaultExportPath(): string {
@@ -818,30 +800,15 @@ export async function importDataFromFile(): Promise<ImportDataResult> {
 
   const filePath = result.filePaths[0];
   const text = await readFile(filePath, "utf-8");
+  const parsed = parseImportPayload(text);
+  const next = buildImportedState({
+    raw: parsed,
+    currentState: getAppState(),
+    sourcePath: filePath,
+    historyLimit: OPERATION_HISTORY_LIMIT,
+    createEntryId: () => randomUUID(),
+  });
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error("导入文件不是有效的 JSON");
-  }
-
-  const imported = resolveImportedState(parsed);
-  const beforeCurrent = getAppState();
-  const before = createAppStateSnapshot(beforeCurrent);
-  const entry: OperationLogEntry = {
-    id: randomUUID(),
-    at: new Date().toISOString(),
-    action: "导入数据",
-    characterId: null,
-    description: basename(filePath),
-    before,
-  };
-
-  const next: AppState = {
-    ...imported,
-    history: [...imported.history, entry].slice(-OPERATION_HISTORY_LIMIT),
-  };
-  const persisted = persistState(normalizeAppState(next));
+  const persisted = persistState(next);
   return { cancelled: false, path: filePath, state: persisted };
 }
