@@ -43,6 +43,7 @@ import {
   summarizeWorkshopPriceSignalRows,
 } from "./pricing-signal-row";
 import { sanitizeLookbackDays, sanitizeSignalThresholdRatio } from "./pricing-signal-rule";
+import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -129,15 +130,7 @@ export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): Wor
 
 export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRule>): WorkshopState {
   const state = readWorkshopState();
-  const nextRule: WorkshopPriceSignalRule = {
-    enabled: typeof payload.enabled === "boolean" ? payload.enabled : state.signalRule.enabled,
-    lookbackDays:
-      payload.lookbackDays === undefined ? state.signalRule.lookbackDays : sanitizeLookbackDays(payload.lookbackDays),
-    dropBelowWeekdayAverageRatio:
-      payload.dropBelowWeekdayAverageRatio === undefined
-        ? state.signalRule.dropBelowWeekdayAverageRatio
-        : sanitizeSignalThresholdRatio(payload.dropBelowWeekdayAverageRatio),
-  };
+  const nextRule = mergeWorkshopSignalRule(state.signalRule, payload);
 
   return writeWorkshopState({
     ...state,
