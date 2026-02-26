@@ -25,6 +25,7 @@ import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classi
 import { composeWorkshopPriceHistoryResult } from "./pricing-history-composer";
 import { buildWorkshopPricesWithAddedSnapshot } from "./pricing-snapshot-add";
 import { buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
+import { createWorkshopPriceSnapshotMutationContext } from "./pricing-snapshot-mutation-config";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
@@ -46,9 +47,16 @@ const WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS = createWorkshopPriceSnapshotWithAnoma
   toNonNegativeInt,
   asIso,
 });
-const WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS = {
-  ensureItemExists,
-};
+const WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT = createWorkshopPriceSnapshotMutationContext({
+  readState: readWorkshopState,
+  writeState: writeWorkshopState,
+  stateVersion: WORKSHOP_STATE_VERSION,
+  historyLimit: WORKSHOP_PRICE_HISTORY_LIMIT,
+  snapshotCreateDeps: WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
+  snapshotItemDeps: {
+    ensureItemExists,
+  },
+});
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -84,27 +92,19 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
       return buildWorkshopPricesWithAddedSnapshot({
         state,
         payload,
-        historyLimit: WORKSHOP_PRICE_HISTORY_LIMIT,
-        snapshotCreateDeps: WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
-        snapshotItemDeps: WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS,
+        historyLimit: WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.addDeps.historyLimit,
+        snapshotCreateDeps: WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.addDeps.snapshotCreateDeps,
+        snapshotItemDeps: WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.addDeps.snapshotItemDeps,
       });
     },
-    {
-      readState: readWorkshopState,
-      writeState: writeWorkshopState,
-      stateVersion: WORKSHOP_STATE_VERSION,
-    },
+    WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.mutationDeps,
   );
 }
 
 export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
   return runWorkshopPriceMutation(
     (state) => buildWorkshopPricesWithDeletedSnapshot(state.prices, snapshotId),
-    {
-      readState: readWorkshopState,
-      writeState: writeWorkshopState,
-      stateVersion: WORKSHOP_STATE_VERSION,
-    },
+    WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.mutationDeps,
   );
 }
 

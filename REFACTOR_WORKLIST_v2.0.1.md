@@ -804,9 +804,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-delete.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.60：pricing 第三十九刀：抽离价格快照增删共享 mutation context 工厂，减少入口样板装配。
+  - 变更点：
+    - 新增 `createWorkshopPriceSnapshotMutationContext(...)` 到 `src/main/workshop-store/pricing-snapshot-mutation-config.ts`，统一装配 `read/write/version + historyLimit + add deps`；
+    - `pricing.ts` 改为复用单一 `WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT`，`add/delete` 两条路径共享 mutation deps，并复用 add 路径参数；
+    - 进一步减少 `pricing.ts` 模块级散落常量与重复对象字面量。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-mutation-config.ts`
+    - `src/main/workshop-store/pricing-snapshot-mutation-config.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-mutation-config.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.59`（价格快照删除入口已下沉为独立 helper，与新增路径形成对称编排）。
-    - 明日起手建议（A1-6.60）：
-      - 优先提炼 `add/delete` 两条路径共享的 mutation 入参装配（deps/historyLimit）为统一工厂，进一步减少 `pricing.ts` 模块级样板；
+    - 今日完成到 `A1-6.60`（价格快照增删共享 mutation context 工厂已完成，pricing 入口样板进一步收敛）。
+    - 明日起手建议（A1-6.61）：
+      - 优先下沉 `getWorkshopPriceHistory(...)` 的“读状态 + ensure + 调用 build”入口编排到独立 query helper，继续压缩 pricing 入口层样板；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
