@@ -40,6 +40,7 @@ import {
   summarizeWorkshopPriceSignalRows,
 } from "./pricing-signal-row";
 import { buildWorkshopPriceSignalRows } from "./pricing-signal-orchestrator";
+import { runWorkshopSignalRuleMutation } from "./pricing-signal-rule-mutation";
 import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
 import { normalizeWorkshopPriceSignalQuery } from "./pricing-signal-query";
 import { composeWorkshopPriceSignalResult } from "./pricing-signal-result";
@@ -62,6 +63,12 @@ const WORKSHOP_PRICE_HISTORY_QUERY_DEPS = {
   readState: readWorkshopState,
   ensureItemExists,
   buildHistoryResult: buildWorkshopPriceHistoryResult,
+};
+const WORKSHOP_SIGNAL_RULE_MUTATION_DEPS = {
+  readState: readWorkshopState,
+  writeState: writeWorkshopState,
+  stateVersion: WORKSHOP_STATE_VERSION,
+  mergeRule: mergeWorkshopSignalRule,
 };
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
@@ -119,14 +126,7 @@ export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): Wor
 }
 
 export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRule>): WorkshopState {
-  const state = readWorkshopState();
-  const nextRule = mergeWorkshopSignalRule(state.signalRule, payload);
-
-  return writeWorkshopState({
-    ...state,
-    version: WORKSHOP_STATE_VERSION,
-    signalRule: nextRule,
-  });
+  return runWorkshopSignalRuleMutation(payload, WORKSHOP_SIGNAL_RULE_MUTATION_DEPS);
 }
 
 export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Promise<WorkshopPriceSignalResult> {

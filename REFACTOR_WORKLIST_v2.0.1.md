@@ -828,9 +828,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-history-read.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.62：pricing 第四十一刀：抽离 signal rule 更新入口 mutation helper，统一入口编排风格。
+  - 变更点：
+    - 新增 `runWorkshopSignalRuleMutation(...)` 到 `src/main/workshop-store/pricing-signal-rule-mutation.ts`，统一封装“read state -> merge rule -> write state(version)”流程；
+    - `pricing.ts` 新增 `WORKSHOP_SIGNAL_RULE_MUTATION_DEPS`，`updateWorkshopSignalRule(...)` 改为单行委托；
+    - 保持 `mergeWorkshopSignalRule(...)` 仅负责规则归一/合并，入口编排职责下沉到 mutation helper。
+  - 新增：
+    - `src/main/workshop-store/pricing-signal-rule-mutation.ts`
+    - `src/main/workshop-store/pricing-signal-rule-mutation.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-signal-rule-mutation.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.61`（价格历史读取入口已下沉为独立 query helper，pricing 入口编排进一步收敛）。
-    - 明日起手建议（A1-6.62）：
-      - 优先下沉 `updateWorkshopSignalRule(...)` 的“read -> merge -> write”入口编排到独立 mutation helper，保持 pricing 域入口风格一致；
+    - 今日完成到 `A1-6.62`（signal rule 更新入口已下沉为独立 mutation helper，pricing 入口编排风格进一步统一）。
+    - 明日起手建议（A1-6.63）：
+      - 优先下沉 `getWorkshopPriceSignals(...)` 的入口“read + query normalize + rows build + compose”为独立 orchestrator helper，继续压缩 pricing 入口层；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
