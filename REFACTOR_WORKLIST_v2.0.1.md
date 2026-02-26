@@ -888,9 +888,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-craft-options.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.67：跨域去重第一刀：抽离 store/simulation 重复 latest-price map 逻辑为共享 helper。
+  - 变更点：
+    - 新增 `buildLatestWorkshopPriceSnapshotMap(...)` 到 `src/main/workshop-store/price-latest-map.ts`，统一封装按时间与 market 优先级的最新价快照选取；
+    - `store.ts` 与 `simulation.ts` 移除重复的 `getLatestPriceMap(...)` 实现，改为复用共享 helper；
+    - 保持既有 tie-break 规则不变（同时间戳下 `server > single > world`）。
+  - 新增：
+    - `src/main/workshop-store/price-latest-map.ts`
+    - `src/main/workshop-store/price-latest-map.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/price-latest-map.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.66`（simulation 域入口编排已拆出两刀，craft 模拟与 options 路径均下沉 helper）。
-    - 明日起手建议（A1-6.67）：
-      - 优先评估并下沉 `store.ts` 中与 `simulation.ts` 重复的 latest-price map 逻辑为共享 helper，消除跨域重复实现；
+    - 今日完成到 `A1-6.67`（store/simulation 重复 latest-price map 逻辑已收敛为共享 helper）。
+    - 明日起手建议（A1-6.68）：
+      - 优先评估并下沉 `simulation.ts` 中 `LatestPriceByMarket + resolveCheapestMaterialPrice` 组合为共享价格选择 helper，继续减少域内复杂度；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

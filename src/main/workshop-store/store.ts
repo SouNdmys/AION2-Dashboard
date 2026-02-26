@@ -3,7 +3,6 @@ import type {
   UpsertWorkshopInventoryInput,
   WorkshopItem,
   WorkshopItemCategory,
-  WorkshopPriceMarket,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopRecipeInput,
@@ -18,6 +17,7 @@ import {
   toNonNegativeInt,
   writeWorkshopState,
 } from "../workshop-store-core";
+import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
 
 interface WorkshopSampleItemSeed {
   name: string;
@@ -88,33 +88,6 @@ const WORKSHOP_SAMPLE_INVENTORY: WorkshopSampleInventorySeed[] = [
   { itemName: "样例-强化锭", quantity: 3 },
   { itemName: "样例-勇者长剑", quantity: 0 },
 ];
-
-function getLatestPriceMap(state: WorkshopState): Map<string, WorkshopPriceSnapshot> {
-  const scoreByMarket = (market: WorkshopPriceMarket | undefined): number => {
-    if (market === "server") return 3;
-    if (market === "single") return 2;
-    if (market === "world") return 1;
-    return 0;
-  };
-  const map = new Map<string, WorkshopPriceSnapshot>();
-  state.prices.forEach((snapshot) => {
-    const previous = map.get(snapshot.itemId);
-    if (!previous) {
-      map.set(snapshot.itemId, snapshot);
-      return;
-    }
-    const prevTs = new Date(previous.capturedAt).getTime();
-    const nextTs = new Date(snapshot.capturedAt).getTime();
-    if (nextTs > prevTs) {
-      map.set(snapshot.itemId, snapshot);
-      return;
-    }
-    if (nextTs === prevTs && scoreByMarket(snapshot.market) > scoreByMarket(previous.market)) {
-      map.set(snapshot.itemId, snapshot);
-    }
-  });
-  return map;
-}
 
 export function getWorkshopState(): WorkshopState {
   return readWorkshopState();
@@ -249,13 +222,7 @@ export function seedWorkshopSampleData(): WorkshopState {
   });
 
   const nextPrices = [...state.prices];
-  const latestPriceMap = getLatestPriceMap({
-    ...state,
-    items,
-    recipes: nextRecipes,
-    prices: nextPrices,
-    inventory: state.inventory,
-  });
+  const latestPriceMap = buildLatestWorkshopPriceSnapshotMap(nextPrices);
   WORKSHOP_SAMPLE_PRICES.forEach((seed) => {
     const itemId = sampleItemIdByName.get(seed.itemName);
     if (!itemId) {

@@ -8,6 +8,7 @@ import type {
   WorkshopState,
 } from "../../shared/types";
 import { clamp, readWorkshopState } from "../workshop-store-core";
+import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 
@@ -22,33 +23,6 @@ interface LatestPriceByMarket {
   server: WorkshopPriceSnapshot | null;
   world: WorkshopPriceSnapshot | null;
   single: WorkshopPriceSnapshot | null;
-}
-
-function getLatestPriceMap(state: WorkshopState): Map<string, WorkshopPriceSnapshot> {
-  const scoreByMarket = (market: WorkshopPriceMarket | undefined): number => {
-    if (market === "server") return 3;
-    if (market === "single") return 2;
-    if (market === "world") return 1;
-    return 0;
-  };
-  const map = new Map<string, WorkshopPriceSnapshot>();
-  state.prices.forEach((snapshot) => {
-    const previous = map.get(snapshot.itemId);
-    if (!previous) {
-      map.set(snapshot.itemId, snapshot);
-      return;
-    }
-    const prevTs = new Date(previous.capturedAt).getTime();
-    const nextTs = new Date(snapshot.capturedAt).getTime();
-    if (nextTs > prevTs) {
-      map.set(snapshot.itemId, snapshot);
-      return;
-    }
-    if (nextTs === prevTs && scoreByMarket(snapshot.market) > scoreByMarket(previous.market)) {
-      map.set(snapshot.itemId, snapshot);
-    }
-  });
-  return map;
 }
 
 function normalizePriceMarketForCompare(market: WorkshopPriceMarket | undefined): WorkshopPriceMarket {
@@ -112,7 +86,7 @@ function buildSimulation(
   const recipeByOutput = new Map(state.recipes.map((entry) => [entry.outputItemId, entry]));
   const itemById = new Map(state.items.map((entry) => [entry.id, entry]));
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
-  const latestPriceByItemId = getLatestPriceMap(state);
+  const latestPriceByItemId = buildLatestWorkshopPriceSnapshotMap(state.prices);
   const latestPriceByItemAndMarket = getLatestPriceByItemAndMarketMap(state);
   const requiredMaterials = new Map<string, number>();
   const craftRuns = new Map<string, number>();
