@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddWorkshopPriceSnapshotInput,
-  WorkshopPriceHistoryPoint,
   WorkshopPriceHistoryQuery,
   WorkshopPriceHistoryResult,
   WorkshopPriceSignalQuery,
@@ -38,6 +37,7 @@ import {
 } from "./pricing-anomaly";
 import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
+import { buildPriceHistorySeries } from "./pricing-history-series";
 import { sanitizeLookbackDays, sanitizeSignalThresholdRatio } from "./pricing-signal-rule";
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
@@ -93,57 +93,8 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     };
   });
 
-  const snapshotsForSeries = includeSuspect ? classifiedSnapshots : classifiedSnapshots.filter((entry) => !entry.isSuspect);
-  let rollingSum = 0;
-  const rollingWindow: number[] = [];
-  const points: WorkshopPriceHistoryPoint[] = snapshotsForSeries.map((entry) => {
-    rollingWindow.push(entry.unitPrice);
-    rollingSum += entry.unitPrice;
-    if (rollingWindow.length > 7) {
-      const popped = rollingWindow.shift();
-      if (popped !== undefined) {
-        rollingSum -= popped;
-      }
-    }
-    const ma7 = rollingWindow.length >= 7 ? rollingSum / rollingWindow.length : null;
-    return {
-      id: entry.id,
-      itemId: entry.itemId,
-      unitPrice: entry.unitPrice,
-      capturedAt: entry.capturedAt,
-      weekday: entry.weekday,
-      ma7,
-      market: entry.market,
-      note: entry.note,
-      isSuspect: entry.isSuspect,
-      suspectReason: entry.suspectReason ?? undefined,
-    };
-  });
-  const pointById = new Map(points.map((point) => [point.id, point]));
-  const suspectPoints: WorkshopPriceHistoryPoint[] = classifiedSnapshots
-    .filter((entry) => entry.isSuspect)
-    .map((entry) => {
-      const inSeries = pointById.get(entry.id);
-      if (inSeries) {
-        return inSeries;
-      }
-      return {
-        id: entry.id,
-        itemId: entry.itemId,
-        unitPrice: entry.unitPrice,
-        capturedAt: entry.capturedAt,
-        weekday: entry.weekday,
-        ma7: null,
-        market: entry.market,
-        note: entry.note,
-        isSuspect: true,
-        suspectReason: entry.suspectReason ?? undefined,
-      };
-    });
-
-  const sampleCount = points.length;
-  const averagePrice = sampleCount > 0 ? points.reduce((acc, point) => acc + point.unitPrice, 0) / sampleCount : null;
-  const latestPoint = points[sampleCount - 1] ?? null;
+  const { points, suspectPoints, sampleCount, suspectCount, latestPrice, latestCapturedAt, averagePrice, ma7Latest } =
+    buildPriceHistorySeries(classifiedSnapshots, includeSuspect);
 
   return {
     itemId: payload.itemId,
@@ -151,11 +102,11 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     fromAt: from.toISOString(),
     toAt: to.toISOString(),
     sampleCount,
-    suspectCount: suspectPoints.length,
-    latestPrice: latestPoint?.unitPrice ?? null,
-    latestCapturedAt: latestPoint?.capturedAt ?? null,
+    suspectCount,
+    latestPrice,
+    latestCapturedAt,
     averagePrice,
-    ma7Latest: latestPoint?.ma7 ?? null,
+    ma7Latest,
     points,
     suspectPoints,
     weekdayAverages: buildWeekdayAverages(points),
