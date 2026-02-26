@@ -147,7 +147,6 @@ export function createWorkshopOcrConfigHandlers(params: CreateWorkshopOcrConfigH
         hideAppBeforeCapture: captureParsed.options?.hideAppBeforeCapture,
         autoCreateMissingItems: false,
         defaultCategory: "material",
-        strictIconMatch: false,
         tradeBoardPreset: tradePresetParsed.preset,
       });
       setOcrHotkeyState(next);

@@ -370,8 +370,6 @@ export interface WorkshopOcrHotkeyConfig {
   hideAppBeforeCapture?: boolean;
   autoCreateMissingItems?: boolean;
   defaultCategory?: WorkshopItemCategory;
-  iconCapture?: WorkshopOcrIconCaptureTemplate | null;
-  strictIconMatch?: boolean;
   tradeBoardPreset?: WorkshopTradeBoardPreset | null;
 }
 
@@ -402,8 +400,6 @@ export interface WorkshopOcrHotkeyState {
   safeMode: boolean;
   autoCreateMissingItems: boolean;
   defaultCategory: WorkshopItemCategory;
-  iconCaptureEnabled: boolean;
-  strictIconMatch: boolean;
   lastResult: WorkshopOcrHotkeyRunResult | null;
 }
 

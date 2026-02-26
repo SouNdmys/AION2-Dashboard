@@ -59,8 +59,6 @@ let currentState: WorkshopOcrHotkeyState = {
   safeMode: true,
   autoCreateMissingItems: false,
   defaultCategory: DEFAULT_CATEGORY,
-  iconCaptureEnabled: false,
-  strictIconMatch: false,
   lastResult: null,
 };
 
@@ -633,7 +631,6 @@ async function runHotkeyFlow(
       dedupeWithinSeconds: triggerMode === "auto" ? AUTO_RUN_DEDUPE_SECONDS : 0,
       autoCreateMissingItems: currentState.autoCreateMissingItems,
       defaultCategory: currentState.defaultCategory,
-      strictIconMatch: false,
     });
     if (expectedLineCount && extracted.lineCount < expectedLineCount) {
       const missing = expectedLineCount - extracted.lineCount;
@@ -816,8 +813,6 @@ export function configureWorkshopOcrHotkey(config: WorkshopOcrHotkeyConfig): Wor
     safeMode: config.safeMode ?? currentState.safeMode ?? true,
     autoCreateMissingItems: config.autoCreateMissingItems ?? false,
     defaultCategory: config.defaultCategory ?? DEFAULT_CATEGORY,
-    iconCaptureEnabled: false,
-    strictIconMatch: false,
   };
   tradeBoardPreset = sanitizeTradeBoardPreset(config.tradeBoardPreset);
   defaultCaptureDelayMs = sanitizeCaptureOptions({ delayMs: config.captureDelayMs }).delayMs;
@@ -856,8 +851,6 @@ export function getWorkshopOcrHotkeyState(): WorkshopOcrHotkeyState {
     safeMode: currentState.safeMode,
     autoCreateMissingItems: currentState.autoCreateMissingItems,
     defaultCategory: currentState.defaultCategory,
-    iconCaptureEnabled: currentState.iconCaptureEnabled,
-    strictIconMatch: currentState.strictIconMatch,
     lastResult: currentState.lastResult,
   };
 }
