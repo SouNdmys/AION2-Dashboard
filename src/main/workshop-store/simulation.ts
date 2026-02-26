@@ -5,7 +5,7 @@ import type {
   WorkshopRecipe,
   WorkshopState,
 } from "../../shared/types";
-import { clamp, readWorkshopState } from "../workshop-store-core";
+import { clamp, readWorkshopState, toPositiveInt } from "../workshop-store-core";
 import { buildWorkshopSimulationContext } from "./simulation-context";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
@@ -13,13 +13,6 @@ import { buildWorkshopSimulationCraftSteps } from "./simulation-craft-steps";
 import { buildWorkshopSimulationMaterialPlan } from "./simulation-material-plan";
 import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
 import { buildWorkshopSimulationOutputMetrics } from "./simulation-output-metrics";
-
-function toPositiveInt(raw: unknown, fallback: number): number {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) {
-    return fallback;
-  }
-  return Math.max(1, Math.floor(raw));
-}
 
 function buildSimulation(
   state: WorkshopState,

@@ -996,9 +996,16 @@
     - `npm run test:unit -- src/main/workshop-store/store-inventory-upsert.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
-- [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
-  - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.75`（store 样例 seed + inventory upsert 已完成 helper 化，store 入口结构与 pricing/simulation 基本对齐）。
-    - 明日起手建议（A1-6.76）：
-      - 收尾清理 simulation 入口参数归一重复（复用 core `toPositiveInt`，减少本地重复 helper），并按完成状态关闭 `A1-6`；
-      - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
+- [x] A1-6.76：simulation 收尾刀：复用 core 参数归一 helper，移除本地重复实现。
+  - 变更点：
+    - `simulation.ts` 改为直接复用 `workshop-store-core` 的 `toPositiveInt`；
+    - 删除 `simulation.ts` 本地重复 `toPositiveInt(...)`，保持 `simulateWorkshopCraft(...)` 入参归一行为一致；
+    - 进一步统一 store/simulation/pricing 入口对 core 公共数值归一工具的依赖方式。
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
+- [x] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
+  - 收尾结论（2026-02-26）：
+    - 本轮已完成到 `A1-6.76`，将 simulation/store 入口剩余高复杂块下沉为独立 helper，并清理入口重复归一逻辑；
+    - `catalog/ocr/pricing/simulation/store` 五域的入口层现已统一为“read/validate -> helper orchestration -> write/return”结构；
+    - `A1-6` 阶段目标达成，后续建议转入下一 workstream 或以缺陷驱动做增量整理。
