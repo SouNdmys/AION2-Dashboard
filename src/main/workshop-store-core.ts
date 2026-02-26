@@ -37,15 +37,14 @@ import {
   serializeIconCache,
 } from "./workshop-store/icon-cache";
 import {
-  WORKSHOP_PRICE_NOTE_TAG_HARD,
   WORKSHOP_PRICE_NOTE_TAG_SUSPECT,
   appendNoteTag,
   assessPriceAnomalyWithCategory,
   collectBaselinePricesForItem,
   formatAnomalyReason,
 } from "./workshop-store/pricing-anomaly";
-import { appendWorkshopPriceSnapshot, trimWorkshopPriceHistory } from "./workshop-store/pricing-history-window";
-import { normalizePriceSnapshot, sanitizePriceMarket } from "./workshop-store/pricing-snapshot-normalize";
+import { trimWorkshopPriceHistory } from "./workshop-store/pricing-history-window";
+import { normalizePriceSnapshot } from "./workshop-store/pricing-snapshot-normalize";
 import { sanitizeOcrImportPayload } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
 import { createOnnxOcrRuntime, type OnnxOcrEngine } from "./workshop-store/ocr-onnx-runtime";
@@ -53,7 +52,6 @@ import { createPaddleOcrRuntime, PADDLE_OCR_PYTHON_SCRIPT } from "./workshop-sto
 import { parsePaddlePayload } from "./workshop-store/ocr-paddle-payload";
 import type { PaddleOcrOutcome } from "./workshop-store/ocr-paddle-payload";
 import type {
-  AddWorkshopPriceSnapshotInput,
   WorkshopOcrExtractTextInput,
   WorkshopOcrExtractTextResult,
   WorkshopOcrPriceImportInput,
@@ -569,55 +567,6 @@ export async function extractWorkshopOcrTextCore(
       nameConfidenceMin: OCR_TSV_NAME_CONFIDENCE_MIN,
       numericConfidenceMin: OCR_TSV_NUMERIC_CONFIDENCE_MIN,
     },
-  });
-}
-
-export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
-  const state = readWorkshopState();
-  ensureItemExists(state, payload.itemId);
-  const item = state.items.find((entry) => entry.id === payload.itemId);
-  const unitPrice = toNonNegativeInt(payload.unitPrice, -1);
-  if (unitPrice <= 0) {
-    throw new Error("价格必须是大于 0 的整数。");
-  }
-
-  const capturedAt = payload.capturedAt ? asIso(payload.capturedAt, new Date().toISOString()) : new Date().toISOString();
-  const source = payload.source === "import" ? "import" : "manual";
-  const market = sanitizePriceMarket(payload.market);
-  const baselinePrices = collectBaselinePricesForItem(state.prices, payload.itemId, market, capturedAt);
-  const anomaly = assessPriceAnomalyWithCategory(unitPrice, baselinePrices, item?.category ?? "other");
-  let note = payload.note?.trim() || undefined;
-  if (anomaly.kind === "hard") {
-    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_HARD);
-  } else if (anomaly.kind === "suspect") {
-    note = appendNoteTag(note, WORKSHOP_PRICE_NOTE_TAG_SUSPECT);
-  }
-  const nextSnapshot: WorkshopPriceSnapshot = {
-    id: randomUUID(),
-    itemId: payload.itemId,
-    unitPrice,
-    capturedAt,
-    source,
-    market,
-    note,
-  };
-
-  return writeWorkshopState({
-    ...state,
-    version: WORKSHOP_STATE_VERSION,
-    prices: appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT),
-  });
-}
-
-export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
-  const state = readWorkshopState();
-  if (!state.prices.some((entry) => entry.id === snapshotId)) {
-    return state;
-  }
-  return writeWorkshopState({
-    ...state,
-    version: WORKSHOP_STATE_VERSION,
-    prices: state.prices.filter((entry) => entry.id !== snapshotId),
   });
 }
 
