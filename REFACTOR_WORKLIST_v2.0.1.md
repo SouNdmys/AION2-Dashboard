@@ -1009,3 +1009,17 @@
     - 本轮已完成到 `A1-6.76`，将 simulation/store 入口剩余高复杂块下沉为独立 helper，并清理入口重复归一逻辑；
     - `catalog/ocr/pricing/simulation/store` 五域的入口层现已统一为“read/validate -> helper orchestration -> write/return”结构；
     - `A1-6` 阶段目标达成，后续建议转入下一 workstream 或以缺陷驱动做增量整理。
+- [x] A2-1：infra adapter 第一刀：抽离 `store.ts` 的导出路径与自动备份 I/O 到独立模块，启动 A2 域/基建分层。
+  - 变更点：
+    - 新增 `src/main/store-infra-io.ts`，下沉 `buildDefaultExportPath/getLocalDateKey/maybeCreateDailyAutoBackup`，并通过 deps 注入隔离 Electron/FS 细节；
+    - `store.ts` 改为调用 infra helper，保留状态领域逻辑在主模块，I/O 细节迁移到 adapter 层；
+    - 自动备份行为保持一致（同日仅一次、失败仅日志、不阻塞主流程）。
+  - 新增：
+    - `src/main/store-infra-io.ts`
+    - `src/main/store-infra-io.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-infra-io.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-2）：
+    - 抽离 `normalize*` 与 `mergeSettings/getAodeLimits` 等纯业务规则到 `store-domain-*` 模块，逐步让 `commitMutation` 只依赖可测 domain 逻辑。

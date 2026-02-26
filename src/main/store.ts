@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { app, dialog } from "electron";
 import Store from "electron-store";
 import {
@@ -37,6 +37,10 @@ import type {
   OperationLogEntry,
   TaskId,
 } from "../shared/types";
+import {
+  buildDefaultExportPath as buildDefaultExportPathByInfra,
+  maybeCreateDailyAutoBackup as maybeCreateDailyAutoBackupByInfra,
+} from "./store-infra-io";
 
 const OPERATION_HISTORY_LIMIT = 200;
 const SETTINGS_MAX_CAP = 9999;
@@ -44,7 +48,6 @@ const SETTINGS_MAX_THRESHOLD = 999999;
 const IMPORT_EXPORT_SCHEMA_VERSION = 1;
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
 const AUTO_BACKUP_META_KEY = "lastAutoBackupDate";
-const AUTO_BACKUP_FOLDER_NAME = "aion2-dashboard-auto-backups";
 const HISTORY_DELTA_MAX_SIZE_RATIO = 0.92;
 
 const store = new Store<Record<string, unknown>>({
@@ -925,35 +928,25 @@ function resolveImportedState(raw: unknown): AppState {
 }
 
 function buildDefaultExportPath(): string {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return join(app.getPath("documents"), `aion2-dashboard-backup-${timestamp}.json`);
-}
-
-function getLocalDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return buildDefaultExportPathByInfra(() => app.getPath("documents"));
 }
 
 function maybeCreateDailyAutoBackup(state: AppState): void {
-  const now = new Date();
-  const todayKey = getLocalDateKey(now);
-  const lastBackupDate = metaStore.get(AUTO_BACKUP_META_KEY);
-  if (typeof lastBackupDate === "string" && lastBackupDate === todayKey) {
-    return;
-  }
-
-  try {
-    const backupDir = join(app.getPath("documents"), AUTO_BACKUP_FOLDER_NAME);
-    mkdirSync(backupDir, { recursive: true });
-    const timestamp = now.toISOString().replace(/[:.]/g, "-");
-    const backupPath = join(backupDir, `aion2-dashboard-auto-${timestamp}.json`);
-    writeFileSync(backupPath, JSON.stringify(buildExportPayload(state), null, 2), "utf-8");
-    metaStore.set(AUTO_BACKUP_META_KEY, todayKey);
-  } catch (error) {
-    console.error("[aion2-dashboard] auto backup failed", error);
-  }
+  maybeCreateDailyAutoBackupByInfra(
+    state,
+    {
+      getDocumentsPath: () => app.getPath("documents"),
+      getLastBackupDate: () => metaStore.get(AUTO_BACKUP_META_KEY),
+      setLastBackupDate: (value) => metaStore.set(AUTO_BACKUP_META_KEY, value),
+      ensureDirectory: (path) => mkdirSync(path, { recursive: true }),
+      writeTextFile: (path, content) => writeFileSync(path, content, "utf-8"),
+      buildExportPayload,
+      onAutoBackupError: (error) => {
+        console.error("[aion2-dashboard] auto backup failed", error);
+      },
+    },
+    new Date(),
+  );
 }
 
 export function getAppState(): AppState {
