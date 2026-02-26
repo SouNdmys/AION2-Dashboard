@@ -18,7 +18,6 @@ import {
   asIso,
   ensureItemExists,
   readWorkshopState,
-  sanitizePriceMarket,
   toNonNegativeInt,
   writeWorkshopState,
   yieldToEventLoop,
@@ -37,13 +36,15 @@ import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
+import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
 import {
   buildWorkshopPriceSignalRow,
   sortWorkshopPriceSignalRows,
   summarizeWorkshopPriceSignalRows,
 } from "./pricing-signal-row";
-import { sanitizeLookbackDays, sanitizeSignalThresholdRatio } from "./pricing-signal-rule";
 import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
+import { normalizeWorkshopPriceSignalQuery } from "./pricing-signal-query";
+import { composeWorkshopPriceSignalResult } from "./pricing-signal-result";
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -141,13 +142,10 @@ export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRul
 
 export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery): Promise<WorkshopPriceSignalResult> {
   const state = readWorkshopState();
-  const lookbackDays = payload?.lookbackDays === undefined ? state.signalRule.lookbackDays : sanitizeLookbackDays(payload.lookbackDays);
-  const thresholdRatio =
-    payload?.thresholdRatio === undefined
-      ? state.signalRule.dropBelowWeekdayAverageRatio
-      : sanitizeSignalThresholdRatio(payload.thresholdRatio);
-  const targetMarket = payload?.market === undefined ? undefined : sanitizePriceMarket(payload.market);
-  const effectiveThresholdRatio = sanitizeSignalThresholdRatio(thresholdRatio);
+  const { lookbackDays, thresholdRatio, targetMarket, effectiveThresholdRatio } = normalizeWorkshopPriceSignalQuery(
+    state.signalRule,
+    payload,
+  );
   const rows: WorkshopPriceSignalRow[] = [];
   for (let index = 0; index < state.items.length; index += 1) {
     const item = state.items[index];
@@ -174,7 +172,7 @@ export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery
   sortWorkshopPriceSignalRows(rows);
   const { triggeredCount, buyZoneCount, sellZoneCount } = summarizeWorkshopPriceSignalRows(rows);
 
-  return {
+  return composeWorkshopPriceSignalResult({
     generatedAt: new Date().toISOString(),
     market: targetMarket,
     lookbackDays,
@@ -185,5 +183,5 @@ export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery
     buyZoneCount,
     sellZoneCount,
     rows,
-  };
+  });
 }
