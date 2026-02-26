@@ -900,9 +900,21 @@
     - `npm run test:unit -- src/main/workshop-store/price-latest-map.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.68：simulation 第三刀：抽离 `LatestPriceByMarket + lowest-price resolve` 组合为共享价格选择 helper。
+  - 变更点：
+    - 新增 `price-market-selection.ts`，下沉 `LatestPriceByMarket` 结构、market 归一、按 item+market 取最新快照、材料最低价选择逻辑；
+    - `simulation.ts` 删除内联 `LatestPriceByMarket/getLatestPriceByItemAndMarketMap/resolveCheapestMaterialPrice`，改为复用共享 helper；
+    - 保持现有行为一致（single 兜底、server/world 最低价优先、同 market 同时间戳按 id 选择较大值）。
+  - 新增：
+    - `src/main/workshop-store/price-market-selection.ts`
+    - `src/main/workshop-store/price-market-selection.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/price-market-selection.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.67`（store/simulation 重复 latest-price map 逻辑已收敛为共享 helper）。
-    - 明日起手建议（A1-6.68）：
-      - 优先评估并下沉 `simulation.ts` 中 `LatestPriceByMarket + resolveCheapestMaterialPrice` 组合为共享价格选择 helper，继续减少域内复杂度；
+    - 今日完成到 `A1-6.68`（simulation 域价格选择组合已下沉为共享 helper，域内复杂度继续下降）。
+    - 明日起手建议（A1-6.69）：
+      - 优先下沉 `simulation.ts` 中 `buildSimulation(...)` 的材料行聚合计算块到独立 helper（输入 requiredMaterials/inventory/prices，输出 materialRows + cost summary），继续拆解超长函数；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

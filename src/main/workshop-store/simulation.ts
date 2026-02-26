@@ -2,13 +2,15 @@ import type {
   WorkshopCraftOption,
   WorkshopCraftSimulationInput,
   WorkshopCraftSimulationResult,
-  WorkshopPriceMarket,
-  WorkshopPriceSnapshot,
   WorkshopRecipe,
   WorkshopState,
 } from "../../shared/types";
 import { clamp, readWorkshopState } from "../workshop-store-core";
 import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
+import {
+  buildLatestWorkshopPriceByItemAndMarketMap,
+  resolveCheapestWorkshopMaterialPrice,
+} from "./price-market-selection";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 
@@ -17,63 +19,6 @@ function toPositiveInt(raw: unknown, fallback: number): number {
     return fallback;
   }
   return Math.max(1, Math.floor(raw));
-}
-
-interface LatestPriceByMarket {
-  server: WorkshopPriceSnapshot | null;
-  world: WorkshopPriceSnapshot | null;
-  single: WorkshopPriceSnapshot | null;
-}
-
-function normalizePriceMarketForCompare(market: WorkshopPriceMarket | undefined): WorkshopPriceMarket {
-  return market === "server" || market === "world" ? market : "single";
-}
-
-function getLatestPriceByItemAndMarketMap(state: WorkshopState): Map<string, LatestPriceByMarket> {
-  const map = new Map<string, LatestPriceByMarket>();
-  state.prices.forEach((snapshot) => {
-    const market = normalizePriceMarketForCompare(snapshot.market);
-    const current = map.get(snapshot.itemId) ?? { server: null, world: null, single: null };
-    const previous = current[market];
-    if (!previous) {
-      current[market] = snapshot;
-      map.set(snapshot.itemId, current);
-      return;
-    }
-    const prevTs = new Date(previous.capturedAt).getTime();
-    const nextTs = new Date(snapshot.capturedAt).getTime();
-    if (nextTs > prevTs || (nextTs === prevTs && snapshot.id.localeCompare(previous.id) > 0)) {
-      current[market] = snapshot;
-      map.set(snapshot.itemId, current);
-    }
-  });
-  return map;
-}
-
-function resolveCheapestMaterialPrice(
-  row: LatestPriceByMarket | undefined,
-): { unitPrice: number | null; market: WorkshopPriceMarket | undefined } {
-  if (!row) {
-    return { unitPrice: null, market: undefined };
-  }
-  const serverPrice = row.server?.unitPrice ?? null;
-  const worldPrice = row.world?.unitPrice ?? null;
-  if (serverPrice !== null && worldPrice !== null) {
-    if (serverPrice <= worldPrice) {
-      return { unitPrice: serverPrice, market: "server" };
-    }
-    return { unitPrice: worldPrice, market: "world" };
-  }
-  if (serverPrice !== null) {
-    return { unitPrice: serverPrice, market: "server" };
-  }
-  if (worldPrice !== null) {
-    return { unitPrice: worldPrice, market: "world" };
-  }
-  if (row.single?.unitPrice !== undefined) {
-    return { unitPrice: row.single.unitPrice, market: "single" };
-  }
-  return { unitPrice: null, market: undefined };
 }
 
 function buildSimulation(
@@ -87,7 +32,7 @@ function buildSimulation(
   const itemById = new Map(state.items.map((entry) => [entry.id, entry]));
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
   const latestPriceByItemId = buildLatestWorkshopPriceSnapshotMap(state.prices);
-  const latestPriceByItemAndMarket = getLatestPriceByItemAndMarketMap(state);
+  const latestPriceByItemAndMarket = buildLatestWorkshopPriceByItemAndMarketMap(state.prices);
   const requiredMaterials = new Map<string, number>();
   const craftRuns = new Map<string, number>();
   const visiting = new Set<string>();
@@ -146,7 +91,7 @@ function buildSimulation(
       const requiredQty = Math.max(0, Math.floor(required));
       const owned = Math.max(0, Math.floor(inventoryByItemId.get(itemId) ?? 0));
       const missing = Math.max(0, requiredQty - owned);
-      const priceChoice = resolveCheapestMaterialPrice(latestPriceByItemAndMarket.get(itemId));
+      const priceChoice = resolveCheapestWorkshopMaterialPrice(latestPriceByItemAndMarket.get(itemId));
       const latestUnitPrice = priceChoice.unitPrice;
       const requiredCost = latestUnitPrice === null ? null : latestUnitPrice * requiredQty;
       const missingCost = latestUnitPrice === null ? null : latestUnitPrice * missing;
