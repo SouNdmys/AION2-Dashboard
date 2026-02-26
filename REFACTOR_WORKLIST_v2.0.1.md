@@ -948,9 +948,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-output-metrics.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.72：simulation 第七刀：抽离材料需求展开与循环检测 helper，继续压缩 `buildSimulation(...)` 分支复杂度。
+  - 变更点：
+    - 新增 `buildWorkshopSimulationMaterialPlan(...)` 到 `src/main/workshop-store/simulation-material-plan.ts`，统一封装 direct/expanded 两种材料需求路径、递归展开与配方环检测；
+    - `simulation.ts` 删除内联 `expandNeededItem + visiting/stack + addMaterial/addCraftRuns` 逻辑，改为调用新 helper；
+    - 保持原行为不变（嵌套配方按 `ceil` 计算 runs、检测到循环时抛出带名称链路的错误）。
+  - 新增：
+    - `src/main/workshop-store/simulation-material-plan.ts`
+    - `src/main/workshop-store/simulation-material-plan.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-material-plan.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.71`（产出收益与利润指标已下沉 helper，`buildSimulation(...)` 进一步收敛为流程组合）。
-    - 明日起手建议（A1-6.72）：
-      - 优先下沉 `buildSimulation(...)` 的材料展开递归与循环检测块（`expandNeededItem + visiting/stack`）为独立 helper，继续压缩主函数分支复杂度；
+    - 今日完成到 `A1-6.72`（材料需求展开与循环检测已下沉 helper，`buildSimulation(...)` 主流程进一步线性化）。
+    - 明日起手建议（A1-6.73）：
+      - 优先下沉 simulation 的 state 索引上下文构建块（`recipeByOutput/itemById/inventoryByItemId/latestPrice*`）为独立 helper，减少主函数初始化样板；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

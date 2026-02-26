@@ -13,6 +13,7 @@ import {
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 import { buildWorkshopSimulationCraftSteps } from "./simulation-craft-steps";
+import { buildWorkshopSimulationMaterialPlan } from "./simulation-material-plan";
 import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
 import { buildWorkshopSimulationOutputMetrics } from "./simulation-output-metrics";
 
@@ -35,58 +36,13 @@ function buildSimulation(
   const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
   const latestPriceByItemId = buildLatestWorkshopPriceSnapshotMap(state.prices);
   const latestPriceByItemAndMarket = buildLatestWorkshopPriceByItemAndMarketMap(state.prices);
-  const requiredMaterials = new Map<string, number>();
-  const craftRuns = new Map<string, number>();
-  const visiting = new Set<string>();
-  const stack: string[] = [];
-
-  const addMaterial = (itemId: string, quantity: number): void => {
-    requiredMaterials.set(itemId, (requiredMaterials.get(itemId) ?? 0) + quantity);
-  };
-
-  const addCraftRuns = (itemId: string, stepRuns: number): void => {
-    craftRuns.set(itemId, (craftRuns.get(itemId) ?? 0) + stepRuns);
-  };
-
-  const expandNeededItem = (itemId: string, neededQuantity: number): void => {
-    if (neededQuantity <= 0) {
-      return;
-    }
-    const nestedRecipe = recipeByOutput.get(itemId);
-    if (!nestedRecipe) {
-      addMaterial(itemId, neededQuantity);
-      return;
-    }
-    if (visiting.has(itemId)) {
-      const loopPath = [...stack, itemId]
-        .map((loopItemId) => itemById.get(loopItemId)?.name ?? loopItemId)
-        .join(" -> ");
-      throw new Error(`检测到配方循环引用: ${loopPath}`);
-    }
-    visiting.add(itemId);
-    stack.push(itemId);
-
-    const nestedRuns = Math.ceil(neededQuantity / nestedRecipe.outputQuantity);
-    addCraftRuns(itemId, nestedRuns);
-
-    nestedRecipe.inputs.forEach((input) => {
-      expandNeededItem(input.itemId, input.quantity * nestedRuns);
-    });
-
-    stack.pop();
-    visiting.delete(itemId);
-  };
-
-  addCraftRuns(recipe.outputItemId, runs);
-  if (materialMode === "direct") {
-    recipe.inputs.forEach((input) => {
-      addMaterial(input.itemId, input.quantity * runs);
-    });
-  } else {
-    recipe.inputs.forEach((input) => {
-      expandNeededItem(input.itemId, input.quantity * runs);
-    });
-  }
+  const { requiredMaterials, craftRuns } = buildWorkshopSimulationMaterialPlan({
+    recipeByOutput,
+    itemById,
+    recipe,
+    runs,
+    materialMode,
+  });
 
   const { materialRows, unknownPriceItemIds, requiredMaterialCost, missingPurchaseCost } =
     buildWorkshopSimulationMaterialSummary({
