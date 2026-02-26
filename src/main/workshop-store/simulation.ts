@@ -9,6 +9,7 @@ import type {
 } from "../../shared/types";
 import { clamp, readWorkshopState } from "../workshop-store-core";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
+import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 
 function toPositiveInt(raw: unknown, fallback: number): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -256,46 +257,7 @@ export function simulateWorkshopCraft(payload: WorkshopCraftSimulationInput): Wo
 export function getWorkshopCraftOptions(payload?: { taxRate?: number }): WorkshopCraftOption[] {
   const state = readWorkshopState();
   const taxRate = sanitizeTaxRate(payload?.taxRate);
-  const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
-
-  const options = state.recipes.map((recipe) => {
-    // Reverse suggestion should reflect direct recipe inputs (not expanded sub-recipes),
-    // so missing/unknown material hints stay aligned with what players see in the recipe.
-    const simulation = buildSimulation(state, recipe, 1, taxRate, "direct");
-    const craftableCountFromInventory =
-      simulation.materialRows.length === 0
-        ? 0
-        : simulation.materialRows.reduce((acc, row) => {
-            if (row.required <= 0) {
-              return acc;
-            }
-            const owned = inventoryByItemId.get(row.itemId) ?? 0;
-            return Math.min(acc, Math.floor(owned / row.required));
-          }, Number.MAX_SAFE_INTEGER);
-
-    const craftableCount = Number.isFinite(craftableCountFromInventory) ? Math.max(0, craftableCountFromInventory) : 0;
-    return {
-      recipeId: recipe.id,
-      outputItemId: recipe.outputItemId,
-      outputItemName: simulation.outputItemName,
-      craftableCount,
-      requiredMaterialCostPerRun: simulation.requiredMaterialCost,
-      estimatedProfitPerRun: simulation.estimatedProfit,
-      unknownPriceItemIds: simulation.unknownPriceItemIds,
-      materialRowsForOneRun: simulation.materialRows,
-      missingRowsForOneRun: simulation.materialRows.filter((row) => row.missing > 0),
-    };
-  });
-
-  return options.sort((left, right) => {
-    if (right.craftableCount !== left.craftableCount) {
-      return right.craftableCount - left.craftableCount;
-    }
-    const rightProfit = right.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
-    const leftProfit = left.estimatedProfitPerRun ?? Number.NEGATIVE_INFINITY;
-    if (rightProfit !== leftProfit) {
-      return rightProfit - leftProfit;
-    }
-    return left.outputItemName.localeCompare(right.outputItemName, "zh-CN");
+  return buildWorkshopCraftOptionsFromState(state, taxRate, {
+    buildSimulation,
   });
 }

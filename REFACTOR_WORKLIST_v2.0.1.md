@@ -876,9 +876,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-craft-entry.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.66：simulation 第二刀：抽离 craft options 构建与排序 helper，继续收敛 simulation 入口层。
+  - 变更点：
+    - 新增 `buildWorkshopCraftOptionsFromState(...)` 到 `src/main/workshop-store/simulation-craft-options.ts`，统一封装 option 构建、可制作次数估算与排序规则；
+    - `getWorkshopCraftOptions(...)` 改为“readState -> sanitizeTaxRate -> helper 委托”三段式；
+    - 入口逻辑从 `simulation.ts` 下沉，保留原排序/优先级行为不变（craftableCount > profit > 名称）。
+  - 新增：
+    - `src/main/workshop-store/simulation-craft-options.ts`
+    - `src/main/workshop-store/simulation-craft-options.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-craft-options.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.65`（已开始拆 simulation 域，craft 模拟入口编排下沉为独立 helper）。
-    - 明日起手建议（A1-6.66）：
-      - 优先下沉 `getWorkshopCraftOptions(...)` 的入口编排与 option 排序输出流程到独立 helper，完成 simulation 域第二刀；
+    - 今日完成到 `A1-6.66`（simulation 域入口编排已拆出两刀，craft 模拟与 options 路径均下沉 helper）。
+    - 明日起手建议（A1-6.67）：
+      - 优先评估并下沉 `store.ts` 中与 `simulation.ts` 重复的 latest-price map 逻辑为共享 helper，消除跨域重复实现；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
