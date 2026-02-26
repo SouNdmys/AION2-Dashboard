@@ -30,11 +30,11 @@ import {
   appendNoteTag,
   assessPriceAnomalyWithCategory,
   collectBaselinePricesForItem,
-  normalizePriceMarketForCompare,
 } from "./pricing-anomaly";
 import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
 import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
+import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
 import { sanitizeLookbackDays, sanitizeSignalThresholdRatio } from "./pricing-signal-rule";
 
@@ -43,18 +43,7 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
   const includeSuspect = payload.includeSuspect === true;
   const targetMarket = payload.market === undefined ? undefined : sanitizePriceMarket(payload.market);
   const itemById = new Map(state.items.map((item) => [item.id, item] as const));
-  const snapshots = state.prices
-    .filter((entry) => entry.itemId === payload.itemId)
-    .filter((entry) =>
-      targetMarket === undefined ? true : normalizePriceMarketForCompare(entry.market) === normalizePriceMarketForCompare(targetMarket),
-    )
-    .map((entry) => ({
-      ...entry,
-      ts: new Date(entry.capturedAt).getTime(),
-    }))
-    .filter((entry) => Number.isFinite(entry.ts))
-    .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
-    .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
+  const snapshots = selectPriceSnapshotsForHistoryQuery(state.prices, payload.itemId, from, to, targetMarket);
 
   const classifiedSnapshots = classifyPriceHistorySnapshotsByQuality(snapshots, itemById);
 
