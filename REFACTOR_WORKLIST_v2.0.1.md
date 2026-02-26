@@ -792,9 +792,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-add.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.59：pricing 第三十八刀：抽离价格快照删除判定与过滤 helper，保持增删路径对称。
+  - 变更点：
+    - 新增 `buildWorkshopPricesWithDeletedSnapshot(...)` 到 `src/main/workshop-store/pricing-snapshot-delete.ts`，统一封装“存在性判定 + 按 id 过滤删除”；
+    - `deleteWorkshopPriceSnapshot(...)` 改为直接复用删除 helper，入口函数收敛为单层 mutation 编排；
+    - 与 `A1-6.58` 的新增编排 helper 形成 add/delete 对称结构，便于后续统一抽象。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-delete.ts`
+    - `src/main/workshop-store/pricing-snapshot-delete.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-delete.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.58`（价格快照新增入口的“build + append”组合已下沉为独立编排 helper）。
-    - 明日起手建议（A1-6.59）：
-      - 优先将 `deleteWorkshopPriceSnapshot(...)` 的删除判定与过滤流程下沉为独立 helper，保持增删路径在 pricing 域内对称编排；
+    - 今日完成到 `A1-6.59`（价格快照删除入口已下沉为独立 helper，与新增路径形成对称编排）。
+    - 明日起手建议（A1-6.60）：
+      - 优先提炼 `add/delete` 两条路径共享的 mutation 入参装配（deps/historyLimit）为统一工厂，进一步减少 `pricing.ts` 模块级样板；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

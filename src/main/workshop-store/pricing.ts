@@ -24,6 +24,7 @@ import { buildWeekdayAverages } from "./pricing-analytics";
 import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
 import { composeWorkshopPriceHistoryResult } from "./pricing-history-composer";
 import { buildWorkshopPricesWithAddedSnapshot } from "./pricing-snapshot-add";
+import { buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
@@ -98,12 +99,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
 
 export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
   return runWorkshopPriceMutation(
-    (state) => {
-      if (!state.prices.some((entry) => entry.id === snapshotId)) {
-        return null;
-      }
-      return state.prices.filter((entry) => entry.id !== snapshotId);
-    },
+    (state) => buildWorkshopPricesWithDeletedSnapshot(state.prices, snapshotId),
     {
       readState: readWorkshopState,
       writeState: writeWorkshopState,
