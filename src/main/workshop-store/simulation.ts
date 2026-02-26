@@ -6,10 +6,7 @@ import type {
   WorkshopState,
 } from "../../shared/types";
 import { clamp, readWorkshopState } from "../workshop-store-core";
-import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
-import {
-  buildLatestWorkshopPriceByItemAndMarketMap,
-} from "./price-market-selection";
+import { buildWorkshopSimulationContext } from "./simulation-context";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 import { buildWorkshopSimulationCraftSteps } from "./simulation-craft-steps";
@@ -31,11 +28,8 @@ function buildSimulation(
   taxRate: number,
   materialMode: "expanded" | "direct",
 ): WorkshopCraftSimulationResult {
-  const recipeByOutput = new Map(state.recipes.map((entry) => [entry.outputItemId, entry]));
-  const itemById = new Map(state.items.map((entry) => [entry.id, entry]));
-  const inventoryByItemId = new Map(state.inventory.map((entry) => [entry.itemId, entry.quantity]));
-  const latestPriceByItemId = buildLatestWorkshopPriceSnapshotMap(state.prices);
-  const latestPriceByItemAndMarket = buildLatestWorkshopPriceByItemAndMarketMap(state.prices);
+  const { recipeByOutput, itemById, inventoryByItemId, latestPriceByItemId, latestPriceByItemAndMarket } =
+    buildWorkshopSimulationContext(state);
   const { requiredMaterials, craftRuns } = buildWorkshopSimulationMaterialPlan({
     recipeByOutput,
     itemById,

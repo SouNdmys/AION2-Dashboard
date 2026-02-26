@@ -960,9 +960,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-material-plan.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.73：simulation 第八刀：抽离 state 索引上下文构建 helper，减少 `buildSimulation(...)` 初始化样板。
+  - 变更点：
+    - 新增 `buildWorkshopSimulationContext(...)` 到 `src/main/workshop-store/simulation-context.ts`，统一封装 `recipeByOutput/itemById/inventoryByItemId/latestPrice*` 映射构建；
+    - `simulation.ts` 改为通过 context helper 获取索引与价格快照映射，继续收敛主流程为“plan -> summary -> metrics -> return”；
+    - 保持既有价格快照选取规则不变（复用 `price-latest-map` 与 `price-market-selection`）。
+  - 新增：
+    - `src/main/workshop-store/simulation-context.ts`
+    - `src/main/workshop-store/simulation-context.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-context.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.72`（材料需求展开与循环检测已下沉 helper，`buildSimulation(...)` 主流程进一步线性化）。
-    - 明日起手建议（A1-6.73）：
-      - 优先下沉 simulation 的 state 索引上下文构建块（`recipeByOutput/itemById/inventoryByItemId/latestPrice*`）为独立 helper，减少主函数初始化样板；
+    - 今日完成到 `A1-6.73`（simulation 上下文索引构建已下沉 helper，主流程初始化样板进一步降低）。
+    - 明日起手建议（A1-6.74）：
+      - 优先下沉 `store.ts` 的样例 seed 常量与构建流程到独立 helper（`store-sample-seed`），继续压缩 store 域入口文件体量；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
