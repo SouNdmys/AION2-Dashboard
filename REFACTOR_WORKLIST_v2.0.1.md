@@ -984,9 +984,21 @@
     - `npm run test:unit -- src/main/workshop-store/store-sample-seed.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.75：store 第二刀：抽离库存 upsert 构建 helper，统一入口“校验 + 组装 + 持久化”结构。
+  - 变更点：
+    - 新增 `buildWorkshopInventoryAfterUpsert(...)` 到 `src/main/workshop-store/store-inventory-upsert.ts`，统一封装库存条目增删与按 `itemId` 排序；
+    - `store.ts` 的 `upsertWorkshopInventory(...)` 删除内联分支，改为调用 helper 后写回状态；
+    - 保持既有行为不变（`quantity === 0` 删除行，`quantity > 0` 覆盖并更新时间）。
+  - 新增：
+    - `src/main/workshop-store/store-inventory-upsert.ts`
+    - `src/main/workshop-store/store-inventory-upsert.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/store-inventory-upsert.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.74`（store 样例 seed 构建已下沉 helper，store 入口编排进一步轻量化）。
-    - 明日起手建议（A1-6.75）：
-      - 优先下沉 `upsertWorkshopInventory(...)` 的库存更新/排序逻辑为独立 helper（`store-inventory-upsert`），让 store 入口结构与 pricing/simulation 统一；
+    - 今日完成到 `A1-6.75`（store 样例 seed + inventory upsert 已完成 helper 化，store 入口结构与 pricing/simulation 基本对齐）。
+    - 明日起手建议（A1-6.76）：
+      - 收尾清理 simulation 入口参数归一重复（复用 core `toPositiveInt`，减少本地重复 helper），并按完成状态关闭 `A1-6`；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

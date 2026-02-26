@@ -12,6 +12,7 @@ import {
   toNonNegativeInt,
   writeWorkshopState,
 } from "../workshop-store-core";
+import { buildWorkshopInventoryAfterUpsert } from "./store-inventory-upsert";
 import { buildWorkshopSampleSeedState } from "./store-sample-seed";
 
 export function getWorkshopState(): WorkshopState {
@@ -26,18 +27,12 @@ export function upsertWorkshopInventory(payload: UpsertWorkshopInventoryInput): 
   if (quantity < 0) {
     throw new Error("库存必须是大于等于 0 的整数。");
   }
-
-  const nextInventory =
-    quantity === 0
-      ? state.inventory.filter((row) => row.itemId !== payload.itemId)
-      : [
-          ...state.inventory.filter((row) => row.itemId !== payload.itemId),
-          {
-            itemId: payload.itemId,
-            quantity,
-            updatedAt: new Date().toISOString(),
-          },
-        ].sort((left, right) => left.itemId.localeCompare(right.itemId));
+  const nextInventory = buildWorkshopInventoryAfterUpsert({
+    inventory: state.inventory,
+    itemId: payload.itemId,
+    quantity,
+    nowIso: new Date().toISOString(),
+  });
 
   return writeWorkshopState({
     ...state,
