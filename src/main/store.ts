@@ -13,11 +13,8 @@ import {
   DEFAULT_SETTINGS,
   ENERGY_BASE_CAP,
   ENERGY_BONUS_CAP,
-  EXPEDITION_REWARD_MAX,
   MINI_GAME_MAX,
-  NIGHTMARE_MAX,
   SPIRIT_INVASION_MAX,
-  TRANSCENDENCE_REWARD_MAX,
   createDefaultAccount,
   createDefaultCharacter,
   createEmptyWeeklyStats,
@@ -38,12 +35,17 @@ import type {
   TaskId,
 } from "../shared/types";
 import {
+  applyConfiguredActivityCaps,
+  getEffectiveActivityCap,
+  mergeAppSettings,
+  normalizeAppSettings,
+} from "./store-domain-settings";
+import {
   buildDefaultExportPath as buildDefaultExportPathByInfra,
   maybeCreateDailyAutoBackup as maybeCreateDailyAutoBackupByInfra,
 } from "./store-infra-io";
 
 const OPERATION_HISTORY_LIMIT = 200;
-const SETTINGS_MAX_CAP = 9999;
 const SETTINGS_MAX_THRESHOLD = 999999;
 const IMPORT_EXPORT_SCHEMA_VERSION = 1;
 const MAX_CHARACTERS_PER_ACCOUNT = 8;
@@ -74,95 +76,6 @@ const metaStore = new Store<Record<string, unknown>>({
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function toOptionalCap(value: unknown, fallback: number | null): number | null {
-  if (value === null) {
-    return null;
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return clamp(Math.floor(value), 1, SETTINGS_MAX_CAP);
-  }
-  return fallback;
-}
-
-function toPositiveNumber(value: unknown, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
-  return Math.max(0, value);
-}
-
-function toPositiveInteger(value: unknown, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
-  return clamp(Math.floor(value), 1, SETTINGS_MAX_THRESHOLD);
-}
-
-function toPriorityWeight(value: unknown, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
-  return clamp(Math.floor(value), 1, 5);
-}
-
-function normalizeSettings(raw: unknown): AppSettings {
-  const entity = raw as Record<string, unknown> | undefined;
-  return {
-    expeditionGoldPerRun: toPositiveNumber(entity?.expeditionGoldPerRun, DEFAULT_SETTINGS.expeditionGoldPerRun),
-    transcendenceGoldPerRun: toPositiveNumber(entity?.transcendenceGoldPerRun, DEFAULT_SETTINGS.transcendenceGoldPerRun),
-    expeditionRunCap: toOptionalCap(entity?.expeditionRunCap, DEFAULT_SETTINGS.expeditionRunCap),
-    transcendenceRunCap: toOptionalCap(entity?.transcendenceRunCap, DEFAULT_SETTINGS.transcendenceRunCap),
-    nightmareRunCap: toOptionalCap(entity?.nightmareRunCap, DEFAULT_SETTINGS.nightmareRunCap),
-    awakeningRunCap: toOptionalCap(entity?.awakeningRunCap, DEFAULT_SETTINGS.awakeningRunCap),
-    suppressionRunCap: toOptionalCap(entity?.suppressionRunCap, DEFAULT_SETTINGS.suppressionRunCap),
-    expeditionWarnThreshold: toPositiveInteger(entity?.expeditionWarnThreshold, DEFAULT_SETTINGS.expeditionWarnThreshold),
-    transcendenceWarnThreshold: toPositiveInteger(
-      entity?.transcendenceWarnThreshold,
-      DEFAULT_SETTINGS.transcendenceWarnThreshold,
-    ),
-    priorityWeightAode: toPriorityWeight(entity?.priorityWeightAode, DEFAULT_SETTINGS.priorityWeightAode),
-    priorityWeightSanctum: toPriorityWeight(entity?.priorityWeightSanctum, DEFAULT_SETTINGS.priorityWeightSanctum),
-    priorityWeightCorridor: toPriorityWeight(entity?.priorityWeightCorridor, DEFAULT_SETTINGS.priorityWeightCorridor),
-    priorityWeightDungeon: toPriorityWeight(entity?.priorityWeightDungeon, DEFAULT_SETTINGS.priorityWeightDungeon),
-    priorityWeightWeekly: toPriorityWeight(entity?.priorityWeightWeekly, DEFAULT_SETTINGS.priorityWeightWeekly),
-    priorityWeightMission: toPriorityWeight(entity?.priorityWeightMission, DEFAULT_SETTINGS.priorityWeightMission),
-    priorityWeightLeisure: toPriorityWeight(entity?.priorityWeightLeisure, DEFAULT_SETTINGS.priorityWeightLeisure),
-  };
-}
-
-function getEffectiveCap(override: number | null, baseCap: number): number {
-  if (typeof override !== "number" || !Number.isFinite(override)) {
-    return baseCap;
-  }
-  return clamp(Math.floor(override), 1, baseCap);
-}
-
-function applyConfiguredActivityCaps(character: CharacterState, settings: AppSettings): CharacterState {
-  return {
-    ...character,
-    activities: {
-      ...character.activities,
-      expeditionRemaining: clamp(
-        character.activities.expeditionRemaining,
-        0,
-        getEffectiveCap(settings.expeditionRunCap, EXPEDITION_REWARD_MAX),
-      ),
-      transcendenceRemaining: clamp(
-        character.activities.transcendenceRemaining,
-        0,
-        getEffectiveCap(settings.transcendenceRunCap, TRANSCENDENCE_REWARD_MAX),
-      ),
-      nightmareRemaining: clamp(
-        character.activities.nightmareRemaining,
-        0,
-        getEffectiveCap(settings.nightmareRunCap, NIGHTMARE_MAX),
-      ),
-      awakeningRemaining: clamp(character.activities.awakeningRemaining, 0, getEffectiveCap(settings.awakeningRunCap, 3)),
-      suppressionRemaining: clamp(character.activities.suppressionRemaining, 0, getEffectiveCap(settings.suppressionRunCap, 3)),
-    },
-  };
 }
 
 function normalizeCompletions(raw: unknown): Record<TaskId, number> {
@@ -423,7 +336,7 @@ function alignAccountExtraAodeCharacter(accounts: AccountState[], characters: Ch
 
 function normalizeSnapshot(raw: unknown): AppStateSnapshot {
   const entity = (raw ?? {}) as Record<string, unknown>;
-  const settings = normalizeSettings(entity.settings);
+  const settings = normalizeAppSettings(entity.settings);
   const rawAccounts = Array.isArray(entity.accounts) ? entity.accounts : [];
   let accounts = rawAccounts.length > 0 ? rawAccounts.map((item, index) => normalizeAccount(item, index)) : [];
   const rawCharacters = Array.isArray(entity.characters) ? entity.characters : [];
@@ -500,7 +413,7 @@ function normalizeSnapshotDelta(raw: unknown): AppStateSnapshotDelta | null {
   }
 
   if (entity.settings && typeof entity.settings === "object") {
-    delta.settings = normalizeSettings(entity.settings);
+    delta.settings = normalizeAppSettings(entity.settings);
     hasField = true;
   }
 
@@ -589,7 +502,7 @@ function normalizeHistory(raw: unknown): OperationLogEntry[] {
 function normalizeState(raw: unknown): AppState {
   const entity = (raw ?? {}) as Record<string, unknown>;
   const sourceVersion = typeof entity.version === "number" ? Math.floor(entity.version) : 0;
-  const settings = normalizeSettings(entity.settings);
+  const settings = normalizeAppSettings(entity.settings);
   const rawAccounts = Array.isArray(entity.accounts) ? entity.accounts : [];
   let accounts = rawAccounts.length > 0 ? rawAccounts.map((item, index) => normalizeAccount(item, index)) : [];
   const rawCharacters = Array.isArray(entity.characters) ? entity.characters : [];
@@ -893,13 +806,6 @@ function commitMutation(
   }
 
   return persistState(normalized);
-}
-
-function mergeSettings(current: AppSettings, payload: Partial<AppSettings>): AppSettings {
-  return normalizeSettings({
-    ...current,
-    ...payload,
-  });
 }
 
 function getAodeLimitsForCharacter(state: AppState, character: CharacterState): { purchaseLimit: number; convertLimit: number } {
@@ -1373,11 +1279,11 @@ export function updateRaidCounts(
   return commitMutation(
     { action: "手动设定次数", characterId },
     (draft) => {
-      const expeditionCap = getEffectiveCap(draft.settings.expeditionRunCap, 21);
-      const transcendenceCap = getEffectiveCap(draft.settings.transcendenceRunCap, 14);
-      const nightmareCap = getEffectiveCap(draft.settings.nightmareRunCap, 14);
-      const awakeningCap = getEffectiveCap(draft.settings.awakeningRunCap, 3);
-      const suppressionCap = getEffectiveCap(draft.settings.suppressionRunCap, 3);
+      const expeditionCap = getEffectiveActivityCap(draft.settings.expeditionRunCap, 21);
+      const transcendenceCap = getEffectiveActivityCap(draft.settings.transcendenceRunCap, 14);
+      const nightmareCap = getEffectiveActivityCap(draft.settings.nightmareRunCap, 14);
+      const awakeningCap = getEffectiveActivityCap(draft.settings.awakeningRunCap, 3);
+      const suppressionCap = getEffectiveActivityCap(draft.settings.suppressionRunCap, 3);
 
       draft.characters = draft.characters.map((item) => {
         if (item.id !== characterId) {
@@ -1588,7 +1494,7 @@ export function updateSettings(payload: Partial<AppSettings>): AppState {
   return commitMutation(
     { action: "更新设置" },
     (draft) => {
-      draft.settings = mergeSettings(draft.settings, payload);
+      draft.settings = mergeAppSettings(draft.settings, payload);
       draft.characters = draft.characters.map((item) => applyConfiguredActivityCaps(item, draft.settings));
       return draft;
     },

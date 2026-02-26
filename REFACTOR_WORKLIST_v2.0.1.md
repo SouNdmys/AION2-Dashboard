@@ -1021,5 +1021,17 @@
     - `npm run test:unit -- src/main/store-infra-io.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-2）：
-    - 抽离 `normalize*` 与 `mergeSettings/getAodeLimits` 等纯业务规则到 `store-domain-*` 模块，逐步让 `commitMutation` 只依赖可测 domain 逻辑。
+- [x] A2-2：domain 第一刀：抽离 settings 归一与活动上限规则到独立模块，降低 `store.ts` 的业务混杂度。
+  - 变更点：
+    - 新增 `src/main/store-domain-settings.ts`，下沉 `normalizeSettings/mergeSettings/getEffectiveCap/applyConfiguredActivityCaps` 相关规则；
+    - `store.ts` 改为复用 `normalizeAppSettings/mergeAppSettings/getEffectiveActivityCap/applyConfiguredActivityCaps`，删除同类内联实现；
+    - 为 domain 规则补单测，确保边界钳制与默认值回退行为不变。
+  - 新增：
+    - `src/main/store-domain-settings.ts`
+    - `src/main/store-domain-settings.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-settings.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-3）：
+    - 继续抽离 `normalizeSnapshot/normalizeState` 链路到 `store-domain-snapshot`，让导入/迁移规则可脱离持久化层独立验证。
