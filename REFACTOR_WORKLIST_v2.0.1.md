@@ -1117,5 +1117,17 @@
     - `npm run test:unit -- src/main/store-domain-progression.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-10）：
-    - 抽离活动次数与周统计手动校准规则（`updateRaidCounts/updateWeeklyCompletions`）到 `store-domain-counters`，继续压缩 `store.ts` 的字段级分支逻辑。
+- [x] A2-10：domain 第九刀：抽离活动次数与周统计手动校准规则，进一步压缩 `store.ts` 字段级分支。
+  - 变更点：
+    - 新增 `src/main/store-domain-counters.ts`，下沉 `applyRaidCountsUpdate(...)` 与 `applyWeeklyCompletionsUpdate(...)`；
+    - `store.ts` 的 `updateRaidCounts(...)` 与 `updateWeeklyCompletions(...)` 改为调用 counters helper；
+    - 保持既有行为一致（各活动上限回钳、设置上限覆写、非目标角色不受影响）。
+  - 新增：
+    - `src/main/store-domain-counters.ts`
+    - `src/main/store-domain-counters.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-counters.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-11）：
+    - 抽离角色资料/排序与回廊/能量手动修正规则（`updateCharacterProfile/reorderCharacters/updateArtifactStatus/applyCorridorCompletion/setCorridorCompleted/updateEnergySegments`）到 `store-domain-character-mutation`，完成 store 业务规则分层收尾。
