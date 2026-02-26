@@ -1081,5 +1081,17 @@
     - `npm run test:unit -- src/main/store-domain-transfer.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-7）：
-    - 抽离账号/角色选择与删除后的 selection 纠偏规则（`deleteAccount/selectAccount/deleteCharacter` 共享逻辑）到 `store-domain-selection`，继续削减 `store.ts` 分支密度。
+- [x] A2-7：domain 第六刀：抽离账号/角色 selection 纠偏规则，进一步收敛 `store.ts` 分支职责。
+  - 变更点：
+    - 新增 `src/main/store-domain-selection.ts`，下沉账号切换、角色切换、账号删除后、角色删除后的 selection 决策 helper；
+    - `store.ts` 的 `deleteAccount(...)`、`selectAccount(...)`、`deleteCharacter(...)`、`selectCharacter(...)` 改为调用 selection helper；
+    - 保持既有行为一致（不存在目标时保持原选中、删除后自动回退到可用角色并同步账号）。
+  - 新增：
+    - `src/main/store-domain-selection.ts`
+    - `src/main/store-domain-selection.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-selection.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-8）：
+    - 抽离账号/角色 roster mutation（新增、重命名、删除约束与 fallback 角色生成）到 `store-domain-roster`，让 `store.ts` 仅保留 mutation orchestration。

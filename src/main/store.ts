@@ -34,6 +34,12 @@ import {
   getEffectiveActivityCap,
   mergeAppSettings,
 } from "./store-domain-settings";
+import {
+  resolveSelectionAfterAccountDeletion,
+  resolveSelectionAfterCharacterDeletion,
+  resolveSelectionForAccount,
+  resolveSelectionForCharacter,
+} from "./store-domain-selection";
 import { normalizeAppState } from "./store-domain-snapshot";
 import { buildExportPayload, buildImportedState, parseImportPayload } from "./store-domain-transfer";
 import {
@@ -198,12 +204,14 @@ export function deleteAccount(accountId: string): AppState {
       }
       draft.accounts = nextAccounts;
       draft.characters = nextCharacters;
-      const selectedStillExists = nextCharacters.some((item) => item.id === draft.selectedCharacterId);
-      draft.selectedCharacterId = selectedStillExists ? draft.selectedCharacterId : nextCharacters[0].id;
-      draft.selectedAccountId =
-        nextAccounts.find((item) => item.id === draft.selectedAccountId)?.id ??
-        nextCharacters.find((item) => item.id === draft.selectedCharacterId)?.accountId ??
-        nextAccounts[0].id;
+      const nextSelection = resolveSelectionAfterAccountDeletion({
+        accounts: nextAccounts,
+        characters: nextCharacters,
+        selectedAccountId: draft.selectedAccountId,
+        selectedCharacterId: draft.selectedCharacterId,
+      });
+      draft.selectedCharacterId = nextSelection.selectedCharacterId;
+      draft.selectedAccountId = nextSelection.selectedAccountId;
       return draft;
     },
   );
@@ -213,14 +221,15 @@ export function selectAccount(accountId: string): AppState {
   return commitMutation(
     { action: "切换账号", description: accountId },
     (draft) => {
-      if (!draft.accounts.some((item) => item.id === accountId)) {
-        return draft;
-      }
-      draft.selectedAccountId = accountId;
-      const charInAccount = draft.characters.find((item) => item.accountId === accountId);
-      if (charInAccount) {
-        draft.selectedCharacterId = charInAccount.id;
-      }
+      const nextSelection = resolveSelectionForAccount({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        accountId,
+        selectedAccountId: draft.selectedAccountId,
+        selectedCharacterId: draft.selectedCharacterId,
+      });
+      draft.selectedAccountId = nextSelection.selectedAccountId;
+      draft.selectedCharacterId = nextSelection.selectedCharacterId;
       return draft;
     },
   );
@@ -303,14 +312,14 @@ export function deleteCharacter(characterId: string): AppState {
         throw new Error("角色不存在");
       }
 
-      const nextSelectedCharacterId =
-        draft.selectedCharacterId === characterId ? (nextCharacters[0]?.id ?? null) : draft.selectedCharacterId;
-      draft.selectedCharacterId = nextSelectedCharacterId;
-      const nextSelectedCharacter =
-        nextCharacters.find((item) => item.id === nextSelectedCharacterId) ?? nextCharacters[0] ?? null;
-      if (nextSelectedCharacter) {
-        draft.selectedAccountId = nextSelectedCharacter.accountId;
-      }
+      const nextSelection = resolveSelectionAfterCharacterDeletion({
+        characters: nextCharacters,
+        deletedCharacterId: characterId,
+        selectedAccountId: draft.selectedAccountId,
+        selectedCharacterId: draft.selectedCharacterId,
+      });
+      draft.selectedCharacterId = nextSelection.selectedCharacterId;
+      draft.selectedAccountId = nextSelection.selectedAccountId;
       draft.accounts = draft.accounts.map((account) => {
         if (account.extraAodeCharacterId !== characterId) {
           return account;
@@ -327,12 +336,14 @@ export function selectCharacter(characterId: string): AppState {
   return commitMutation(
     { action: "切换角色", characterId },
     (draft) => {
-      const target = draft.characters.find((item) => item.id === characterId);
-      if (!target) {
-        return draft;
-      }
-      draft.selectedCharacterId = characterId;
-      draft.selectedAccountId = target.accountId;
+      const nextSelection = resolveSelectionForCharacter({
+        characters: draft.characters,
+        characterId,
+        selectedAccountId: draft.selectedAccountId,
+        selectedCharacterId: draft.selectedCharacterId,
+      });
+      draft.selectedCharacterId = nextSelection.selectedCharacterId;
+      draft.selectedAccountId = nextSelection.selectedAccountId;
       return draft;
     },
   );
