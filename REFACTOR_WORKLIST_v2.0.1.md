@@ -660,9 +660,19 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-history-series.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.47：pricing 第二十六刀：抽离价格历史 baseline/anomaly 分类 helper 到 `src/main/workshop-store/pricing-history-classify.ts`。
+  - 变更点：
+    - 将 `pricing.ts` 中 baseline 窗口维护、可疑价判定、suspect reason 组装逻辑下沉到独立模块；
+    - `buildWorkshopPriceHistoryResult(...)` 改为由 `classifyPriceHistorySnapshotsByQuality(...)` 提供分类输入，进一步收敛主流程。
+  - 新增：
+    - `src/main/workshop-store/pricing-history-classify.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-history-classify.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.46`（价格历史序列组装 helper 已下沉到 pricing 域模块）。
-    - 明日起手建议（A1-6.47）：
-      - 优先下沉 `pricing.ts` 中“历史分类（baseline + anomaly）构建”分支到独立模块，继续收敛 pricing 主函数体积；
+    - 今日完成到 `A1-6.47`（价格历史 baseline/anomaly 分类 helper 已下沉到 pricing 域模块）。
+    - 明日起手建议（A1-6.48）：
+      - 优先下沉 `pricing.ts` 中 `buildWorkshopPriceHistoryResult` 的 snapshot 过滤与 market 归一段落到独立 query 模块，继续压缩入口函数；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

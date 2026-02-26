@@ -25,16 +25,14 @@ import {
 } from "../workshop-store-core";
 import { buildWeekdayAverages, resolvePriceTrendAssessment } from "./pricing-analytics";
 import {
-  WORKSHOP_PRICE_ANOMALY_BASELINE_DAYS,
   WORKSHOP_PRICE_NOTE_TAG_HARD,
   WORKSHOP_PRICE_NOTE_TAG_SUSPECT,
   appendNoteTag,
   assessPriceAnomalyWithCategory,
   collectBaselinePricesForItem,
-  formatAnomalyReason,
   normalizePriceMarketForCompare,
-  resolveSnapshotQualityTag,
 } from "./pricing-anomaly";
+import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
 import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { buildPriceHistorySeries } from "./pricing-history-series";
@@ -58,40 +56,7 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     .filter((entry) => entry.ts >= from.getTime() && entry.ts <= to.getTime())
     .sort((left, right) => left.ts - right.ts || left.id.localeCompare(right.id));
 
-  const anomalyWindowMs = WORKSHOP_PRICE_ANOMALY_BASELINE_DAYS * 24 * 60 * 60 * 1000;
-  const baselineByMarket = new Map<"server" | "world" | "single", Array<{ ts: number; unitPrice: number }>>();
-  const classifiedSnapshots = snapshots.map((entry) => {
-    const market = normalizePriceMarketForCompare(entry.market);
-    const baseline = baselineByMarket.get(market) ?? [];
-    const baselineInWindow = baseline.filter((row) => row.ts >= entry.ts - anomalyWindowMs);
-    const qualityTag = resolveSnapshotQualityTag(entry.note);
-    const itemCategory = itemById.get(entry.itemId)?.category ?? "other";
-    const anomaly = qualityTag.isSuspect
-      ? null
-      : assessPriceAnomalyWithCategory(entry.unitPrice, baselineInWindow.map((row) => row.unitPrice), itemCategory);
-    const isSuspect = qualityTag.isSuspect || (anomaly !== null && anomaly.kind !== "normal");
-    const suspectReason = qualityTag.reason ?? (anomaly ? formatAnomalyReason(anomaly) || null : null);
-    if (!isSuspect) {
-      baselineInWindow.push({
-        ts: entry.ts,
-        unitPrice: entry.unitPrice,
-      });
-      baselineByMarket.set(market, baselineInWindow);
-    } else {
-      baselineByMarket.set(market, baselineInWindow);
-    }
-    return {
-      id: entry.id,
-      itemId: entry.itemId,
-      unitPrice: entry.unitPrice,
-      capturedAt: new Date(entry.ts).toISOString(),
-      weekday: new Date(entry.ts).getDay(),
-      market,
-      note: entry.note,
-      isSuspect,
-      suspectReason,
-    };
-  });
+  const classifiedSnapshots = classifyPriceHistorySnapshotsByQuality(snapshots, itemById);
 
   const { points, suspectPoints, sampleCount, suspectCount, latestPrice, latestCapturedAt, averagePrice, ma7Latest } =
     buildPriceHistorySeries(classifiedSnapshots, includeSuspect);
