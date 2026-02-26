@@ -32,6 +32,7 @@ import {
   buildWorkshopPriceSnapshotWithAnomaly,
   createWorkshopPriceSnapshotWithAnomalyDeps,
 } from "./pricing-snapshot-create";
+import { resolveWorkshopPriceSnapshotItemCategory } from "./pricing-snapshot-item";
 import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
 import { runWorkshopPriceMutation } from "./pricing-snapshot-mutation";
 import {
@@ -47,6 +48,9 @@ const WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS = createWorkshopPriceSnapshotWithAnoma
   toNonNegativeInt,
   asIso,
 });
+const WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS = {
+  ensureItemExists,
+};
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -79,13 +83,12 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
   return runWorkshopPriceMutation(
     (state) => {
-      ensureItemExists(state, payload.itemId);
-      const item = state.items.find((entry) => entry.id === payload.itemId);
+      const itemCategory = resolveWorkshopPriceSnapshotItemCategory(state, payload.itemId, WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS);
       const nextSnapshot: WorkshopPriceSnapshot = buildWorkshopPriceSnapshotWithAnomaly(
         {
           payload,
           prices: state.prices,
-          itemCategory: item?.category ?? "other",
+          itemCategory,
         },
         WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
       );

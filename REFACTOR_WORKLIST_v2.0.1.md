@@ -768,9 +768,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-create.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.57：pricing 第三十六刀：抽离价格快照新增入口 item 分类解析 helper，收敛入口分支逻辑。
+  - 变更点：
+    - 新增 `resolveWorkshopPriceSnapshotItemCategory(...)` 到 `src/main/workshop-store/pricing-snapshot-item.ts`，统一封装 `ensure + item 查找 + category fallback`；
+    - `addWorkshopPriceSnapshot(...)` 改为通过 helper 获取 `itemCategory`，移除入口内联 `ensure/find/fallback` 细节；
+    - `pricing.ts` 新增模块级 `WORKSHOP_PRICE_SNAPSHOT_ITEM_DEPS` 依赖注入，保持 helper 纯函数可测性。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-item.ts`
+    - `src/main/workshop-store/pricing-snapshot-item.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-item.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.56`（价格快照新增入口 deps 装配已收敛为共享 factory + 模块级常量）。
-    - 明日起手建议（A1-6.57）：
-      - 优先下沉 `addWorkshopPriceSnapshot(...)` 的 item 读取与分类兜底（`ensure + find + category fallback`）为独立 helper，继续压缩入口流程分支；
+    - 今日完成到 `A1-6.57`（价格快照新增入口的 item 分类解析已下沉为独立 helper）。
+    - 明日起手建议（A1-6.58）：
+      - 优先将 `addWorkshopPriceSnapshot(...)` 中“snapshot build + append”组合下沉为单一 helper（输入 state/payload，输出 nextPrices），继续压缩入口流程到一层编排；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
