@@ -32,6 +32,7 @@ import {
   collectBaselinePricesForItem,
 } from "./pricing-anomaly";
 import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
+import { composeWorkshopPriceHistoryResult } from "./pricing-history-composer";
 import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
@@ -49,12 +50,11 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
 
   const { points, suspectPoints, sampleCount, suspectCount, latestPrice, latestCapturedAt, averagePrice, ma7Latest } =
     buildPriceHistorySeries(classifiedSnapshots, includeSuspect);
-
-  return {
-    itemId: payload.itemId,
-    market: targetMarket,
-    fromAt: from.toISOString(),
-    toAt: to.toISOString(),
+  return composeWorkshopPriceHistoryResult({
+    payload,
+    targetMarket,
+    from,
+    to,
     sampleCount,
     suspectCount,
     latestPrice,
@@ -64,7 +64,7 @@ function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: Workshop
     points,
     suspectPoints,
     weekdayAverages: buildWeekdayAverages(points),
-  };
+  });
 }
 
 export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput): WorkshopState {
