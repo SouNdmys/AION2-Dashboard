@@ -8,8 +8,6 @@ import {
   DEFAULT_SETTINGS,
   MINI_GAME_MAX,
   SPIRIT_INVASION_MAX,
-  createDefaultAccount,
-  createDefaultCharacter,
   createEmptyWeeklyStats,
 } from "../shared/constants";
 import { applyTaskAction, refreshCharacterState } from "../shared/engine";
@@ -29,6 +27,14 @@ import {
   createAppStateMutationDraft,
   restoreAppStateByDelta,
 } from "./store-domain-history";
+import {
+  addAccountToRoster,
+  addCharacterToRoster,
+  deleteAccountFromRoster,
+  deleteCharacterFromRoster,
+  renameAccountInRoster,
+  renameCharacterInRoster,
+} from "./store-domain-roster";
 import {
   applyConfiguredActivityCaps,
   getEffectiveActivityCap,
@@ -154,16 +160,19 @@ export function addAccount(name: string, regionTag?: string): AppState {
   return commitMutation(
     { action: "新增账号", description: nextName || "未命名账号" },
     (draft) => {
-      const account = createDefaultAccount(nextName || `账号 ${draft.accounts.length + 1}`, randomUUID());
-      if (regionTag?.trim()) {
-        account.regionTag = regionTag.trim();
-      }
-      const now = new Date().toISOString();
-      const created = createDefaultCharacter(`Character ${draft.characters.length + 1}`, now, randomUUID(), account.id);
-      draft.accounts = [...draft.accounts, account];
-      draft.characters = [...draft.characters, created];
-      draft.selectedAccountId = account.id;
-      draft.selectedCharacterId = created.id;
+      const next = addAccountToRoster({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        name,
+        regionTag,
+        accountId: randomUUID(),
+        characterId: randomUUID(),
+        nowIso: new Date().toISOString(),
+      });
+      draft.accounts = next.accounts;
+      draft.characters = next.characters;
+      draft.selectedAccountId = next.selectedAccountId;
+      draft.selectedCharacterId = next.selectedCharacterId;
       return draft;
     },
   );
@@ -177,9 +186,7 @@ export function renameAccount(accountId: string, name: string, regionTag?: strin
   return commitMutation(
     { action: "编辑账号", description: `${nextName}${regionTag ? ` (${regionTag})` : ""}` },
     (draft) => {
-      draft.accounts = draft.accounts.map((item) =>
-        item.id === accountId ? { ...item, name: nextName, regionTag: regionTag?.trim() || undefined } : item,
-      );
+      draft.accounts = renameAccountInRoster(draft.accounts, accountId, nextName, regionTag);
       return draft;
     },
   );
@@ -189,24 +196,18 @@ export function deleteAccount(accountId: string): AppState {
   return commitMutation(
     { action: "删除账号", description: accountId },
     (draft) => {
-      if (draft.accounts.length <= 1) {
-        throw new Error("至少保留 1 个账号");
-      }
-      const nextAccounts = draft.accounts.filter((item) => item.id !== accountId);
-      if (nextAccounts.length === draft.accounts.length) {
-        throw new Error("账号不存在");
-      }
-      let nextCharacters = draft.characters.filter((item) => item.accountId !== accountId);
-      if (nextCharacters.length === 0) {
-        const now = new Date().toISOString();
-        const fallbackAccountId = nextAccounts[0].id;
-        nextCharacters = [createDefaultCharacter("Character 1", now, randomUUID(), fallbackAccountId)];
-      }
-      draft.accounts = nextAccounts;
-      draft.characters = nextCharacters;
+      const nextRoster = deleteAccountFromRoster({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        accountId,
+        fallbackCharacterId: randomUUID(),
+        nowIso: new Date().toISOString(),
+      });
+      draft.accounts = nextRoster.accounts;
+      draft.characters = nextRoster.characters;
       const nextSelection = resolveSelectionAfterAccountDeletion({
-        accounts: nextAccounts,
-        characters: nextCharacters,
+        accounts: nextRoster.accounts,
+        characters: nextRoster.characters,
         selectedAccountId: draft.selectedAccountId,
         selectedCharacterId: draft.selectedCharacterId,
       });
@@ -240,29 +241,19 @@ export function addCharacter(name: string, accountId?: string): AppState {
   return commitMutation(
     { action: "新增角色", description: nextName || "未命名角色" },
     (draft) => {
-      if (draft.accounts.length === 0) {
-        throw new Error("请先新增账号");
-      }
-      const targetAccountId =
-        accountId && draft.accounts.some((item) => item.id === accountId)
-          ? accountId
-          : draft.selectedAccountId && draft.accounts.some((item) => item.id === draft.selectedAccountId)
-            ? draft.selectedAccountId
-            : draft.accounts[0].id;
-      const currentCount = draft.characters.filter((item) => item.accountId === targetAccountId).length;
-      if (currentCount >= MAX_CHARACTERS_PER_ACCOUNT) {
-        throw new Error(`每个账号最多 ${MAX_CHARACTERS_PER_ACCOUNT} 个角色`);
-      }
-      const now = new Date().toISOString();
-      const created = createDefaultCharacter(
-        nextName || `Character ${draft.characters.length + 1}`,
-        now,
-        randomUUID(),
-        targetAccountId,
-      );
-      draft.selectedAccountId = targetAccountId;
-      draft.selectedCharacterId = created.id;
-      draft.characters = [...draft.characters, created];
+      const next = addCharacterToRoster({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        name,
+        selectedAccountId: draft.selectedAccountId,
+        requestedAccountId: accountId,
+        characterId: randomUUID(),
+        nowIso: new Date().toISOString(),
+        maxCharactersPerAccount: MAX_CHARACTERS_PER_ACCOUNT,
+      });
+      draft.characters = next.characters;
+      draft.selectedAccountId = next.selectedAccountId;
+      draft.selectedCharacterId = next.selectedCharacterId;
       return draft;
     },
   );
@@ -277,14 +268,7 @@ export function renameCharacter(characterId: string, name: string): AppState {
   return commitMutation(
     { action: "重命名角色", characterId, description: nextName },
     (draft) => {
-      const index = draft.characters.findIndex((item) => item.id === characterId);
-      if (index < 0) {
-        return draft;
-      }
-      draft.characters[index] = {
-        ...draft.characters[index],
-        name: nextName,
-      };
+      draft.characters = renameCharacterInRoster(draft.characters, characterId, nextName);
       return draft;
     },
   );
@@ -294,39 +278,21 @@ export function deleteCharacter(characterId: string): AppState {
   return commitMutation(
     { action: "删除角色", characterId },
     (draft) => {
-      if (draft.characters.length <= 1) {
-        throw new Error("至少保留 1 个角色");
-      }
-
-      const target = draft.characters.find((item) => item.id === characterId);
-      if (!target) {
-        throw new Error("角色不存在");
-      }
-      const accountCharacterCount = draft.characters.filter((item) => item.accountId === target.accountId).length;
-      if (accountCharacterCount <= 1) {
-        throw new Error("每个账号至少保留 1 个角色");
-      }
-
-      const nextCharacters = draft.characters.filter((item) => item.id !== characterId);
-      if (nextCharacters.length === draft.characters.length) {
-        throw new Error("角色不存在");
-      }
-
+      const nextRoster = deleteCharacterFromRoster({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        characterId,
+      });
       const nextSelection = resolveSelectionAfterCharacterDeletion({
-        characters: nextCharacters,
+        characters: nextRoster.characters,
         deletedCharacterId: characterId,
         selectedAccountId: draft.selectedAccountId,
         selectedCharacterId: draft.selectedCharacterId,
       });
       draft.selectedCharacterId = nextSelection.selectedCharacterId;
       draft.selectedAccountId = nextSelection.selectedAccountId;
-      draft.accounts = draft.accounts.map((account) => {
-        if (account.extraAodeCharacterId !== characterId) {
-          return account;
-        }
-        return { ...account, extraAodeCharacterId: undefined };
-      });
-      draft.characters = nextCharacters;
+      draft.accounts = nextRoster.accounts;
+      draft.characters = nextRoster.characters;
       return draft;
     },
   );

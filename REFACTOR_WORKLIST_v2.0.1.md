@@ -1093,5 +1093,17 @@
     - `npm run test:unit -- src/main/store-domain-selection.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-8）：
-    - 抽离账号/角色 roster mutation（新增、重命名、删除约束与 fallback 角色生成）到 `store-domain-roster`，让 `store.ts` 仅保留 mutation orchestration。
+- [x] A2-8：domain 第七刀：抽离账号/角色 roster mutation 规则，继续削减 `store.ts` 业务密度。
+  - 变更点：
+    - 新增 `src/main/store-domain-roster.ts`，下沉账号/角色增删改规则（约束校验、目标账号解析、fallback 角色生成、extraAode 解绑）；
+    - `store.ts` 的 `addAccount/renameAccount/deleteAccount/addCharacter/renameCharacter/deleteCharacter` 改为调用 roster helper；
+    - 保持既有行为一致（错误文案、每账号角色上限、每账号至少 1 角色、删除账号后 fallback 角色创建口径）。
+  - 新增：
+    - `src/main/store-domain-roster.ts`
+    - `src/main/store-domain-roster.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-roster.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-9）：
+    - 抽离任务打卡与周常重置 orchestration（`applyAction/resetWeeklyStats`）到 `store-domain-progression`，把引擎调用与角色批处理从 store I/O 层进一步解耦。
