@@ -9,10 +9,10 @@ import { clamp, readWorkshopState } from "../workshop-store-core";
 import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
 import {
   buildLatestWorkshopPriceByItemAndMarketMap,
-  resolveCheapestWorkshopMaterialPrice,
 } from "./price-market-selection";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
+import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
 
 function toPositiveInt(raw: unknown, fallback: number): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -86,34 +86,13 @@ function buildSimulation(
     });
   }
 
-  const materialRows = Array.from(requiredMaterials.entries())
-    .map(([itemId, required]) => {
-      const requiredQty = Math.max(0, Math.floor(required));
-      const owned = Math.max(0, Math.floor(inventoryByItemId.get(itemId) ?? 0));
-      const missing = Math.max(0, requiredQty - owned);
-      const priceChoice = resolveCheapestWorkshopMaterialPrice(latestPriceByItemAndMarket.get(itemId));
-      const latestUnitPrice = priceChoice.unitPrice;
-      const requiredCost = latestUnitPrice === null ? null : latestUnitPrice * requiredQty;
-      const missingCost = latestUnitPrice === null ? null : latestUnitPrice * missing;
-      return {
-        itemId,
-        itemName: itemById.get(itemId)?.name ?? itemId,
-        required: requiredQty,
-        owned,
-        missing,
-        latestUnitPrice,
-        latestPriceMarket: priceChoice.market,
-        requiredCost,
-        missingCost,
-      };
-    })
-    .sort((left, right) => right.missing - left.missing || left.itemName.localeCompare(right.itemName, "zh-CN"));
-
-  const unknownPriceItemIds = materialRows.filter((row) => row.latestUnitPrice === null).map((row) => row.itemId);
-  const requiredMaterialCost =
-    unknownPriceItemIds.length > 0 ? null : materialRows.reduce((acc, row) => acc + (row.requiredCost ?? 0), 0);
-  const missingPurchaseCost =
-    unknownPriceItemIds.length > 0 ? null : materialRows.reduce((acc, row) => acc + (row.missingCost ?? 0), 0);
+  const { materialRows, unknownPriceItemIds, requiredMaterialCost, missingPurchaseCost } =
+    buildWorkshopSimulationMaterialSummary({
+      requiredMaterials,
+      itemById,
+      inventoryByItemId,
+      latestPriceByItemAndMarket,
+    });
 
   const outputUnitPrice = latestPriceByItemId.get(recipe.outputItemId)?.unitPrice ?? null;
   const totalOutputQuantity = recipe.outputQuantity * runs;

@@ -912,9 +912,21 @@
     - `npm run test:unit -- src/main/workshop-store/price-market-selection.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.69：simulation 第四刀：抽离材料行聚合与成本汇总 helper，继续拆解 `buildSimulation(...)` 长函数。
+  - 变更点：
+    - 新增 `buildWorkshopSimulationMaterialSummary(...)` 到 `src/main/workshop-store/simulation-material-summary.ts`，统一封装“materialRows 构建 + unknownPrice 识别 + required/missing cost 汇总”；
+    - `simulation.ts` 删除内联材料聚合大块，改为调用新 helper；
+    - 保持排序与成本规则不变（missing 降序、unknown 时成本汇总为 null）。
+  - 新增：
+    - `src/main/workshop-store/simulation-material-summary.ts`
+    - `src/main/workshop-store/simulation-material-summary.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-material-summary.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.68`（simulation 域价格选择组合已下沉为共享 helper，域内复杂度继续下降）。
-    - 明日起手建议（A1-6.69）：
-      - 优先下沉 `simulation.ts` 中 `buildSimulation(...)` 的材料行聚合计算块到独立 helper（输入 requiredMaterials/inventory/prices，输出 materialRows + cost summary），继续拆解超长函数；
+    - 今日完成到 `A1-6.69`（materials 聚合与成本汇总已下沉 helper，`buildSimulation(...)` 复杂度继续下降）。
+    - 明日起手建议（A1-6.70）：
+      - 优先下沉 `buildSimulation(...)` 的 craftSteps 构建与排序块为独立 helper，继续将函数拆成“materials/output/craft-steps”三段组合；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
