@@ -1057,5 +1057,17 @@
     - `npm run test:unit -- src/main/store-domain-history.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-5）：
-    - 抽离 `getAodeLimitsForCharacter` 与 `updateAodePlan` 的规则计算到 `store-domain-aode`，让账号内配额规则完全脱离 store I/O 层。
+- [x] A2-5：domain 第四刀：抽离 Aode 配额与计划更新规则到独立模块，进一步减少 `store.ts` 业务分支。
+  - 变更点：
+    - 新增 `src/main/store-domain-aode.ts`，下沉 `resolveAodeLimitsForCharacter(...)` 与 `applyAodePlanUpdate(...)` 纯规则逻辑；
+    - `store.ts` 的 `updateAodePlan(...)` 改为调用 domain helper，并删除内联 `getAodeLimitsForCharacter(...)`；
+    - 保持既有行为一致（assignExtra 切换、目标角色 payload 覆盖、同账号角色按限额回钳）。
+  - 新增：
+    - `src/main/store-domain-aode.ts`
+    - `src/main/store-domain-aode.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-aode.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-6）：
+    - 抽离导入/导出流程 orchestrator（`buildExportPayload/resolveImportedState/importDataFromFile`）到 `store-domain-transfer`，继续分离状态规则与 I/O 边界。

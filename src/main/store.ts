@@ -5,10 +5,6 @@ import { basename } from "node:path";
 import { app, dialog } from "electron";
 import Store from "electron-store";
 import {
-  AODE_WEEKLY_BASE_CONVERT_MAX,
-  AODE_WEEKLY_BASE_PURCHASE_MAX,
-  AODE_WEEKLY_EXTRA_CONVERT_MAX,
-  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
   APP_STATE_VERSION,
   DEFAULT_SETTINGS,
   MINI_GAME_MAX,
@@ -27,6 +23,7 @@ import type {
   ImportDataResult,
   OperationLogEntry,
 } from "../shared/types";
+import { applyAodePlanUpdate, type UpdateAodePlanPayload } from "./store-domain-aode";
 import {
   buildAppStateMutationSignature,
   buildAppStateRollbackPayload,
@@ -116,15 +113,6 @@ function commitMutation(
   }
 
   return persistState(normalized);
-}
-
-function getAodeLimitsForCharacter(state: AppState, character: CharacterState): { purchaseLimit: number; convertLimit: number } {
-  const account = state.accounts.find((item) => item.id === character.accountId);
-  const isExtra = account?.extraAodeCharacterId === character.id;
-  return {
-    purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX + (isExtra ? AODE_WEEKLY_EXTRA_PURCHASE_MAX : 0),
-    convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX + (isExtra ? AODE_WEEKLY_EXTRA_CONVERT_MAX : 0),
-  };
 }
 
 function buildExportPayload(state: AppState): Record<string, unknown> {
@@ -724,63 +712,19 @@ export function updateWeeklyCompletions(
 
 export function updateAodePlan(
   characterId: string,
-  payload: {
-    shopAodePurchaseUsed?: number;
-    shopDailyDungeonTicketPurchaseUsed?: number;
-    transformAodeUsed?: number;
-    assignExtra?: boolean;
-  },
+  payload: UpdateAodePlanPayload,
 ): AppState {
   return commitMutation(
     { action: "更新微风商店/变换记录", characterId },
     (draft) => {
-      const target = draft.characters.find((item) => item.id === characterId);
-      if (!target) {
-        throw new Error("角色不存在");
-      }
-
-      if (typeof payload.assignExtra === "boolean") {
-        draft.accounts = draft.accounts.map((account) => {
-          if (account.id !== target.accountId) {
-            return account;
-          }
-          if (payload.assignExtra) {
-            return { ...account, extraAodeCharacterId: characterId };
-          }
-          if (account.extraAodeCharacterId === characterId) {
-            return { ...account, extraAodeCharacterId: undefined };
-          }
-          return account;
-        });
-      }
-
-      draft.characters = draft.characters.map((item) => {
-        if (item.accountId !== target.accountId) {
-          return item;
-        }
-        const limits = getAodeLimitsForCharacter(draft, item);
-        const nextShopAodePurchaseUsed =
-          item.id === characterId && typeof payload.shopAodePurchaseUsed === "number"
-            ? clamp(Math.floor(payload.shopAodePurchaseUsed), 0, limits.purchaseLimit)
-            : clamp(item.aodePlan.shopAodePurchaseUsed, 0, limits.purchaseLimit);
-        const nextShopDailyDungeonTicketPurchaseUsed =
-          item.id === characterId && typeof payload.shopDailyDungeonTicketPurchaseUsed === "number"
-            ? clamp(Math.floor(payload.shopDailyDungeonTicketPurchaseUsed), 0, limits.purchaseLimit)
-            : clamp(item.aodePlan.shopDailyDungeonTicketPurchaseUsed, 0, limits.purchaseLimit);
-        const nextTransformAodeUsed =
-          item.id === characterId && typeof payload.transformAodeUsed === "number"
-            ? clamp(Math.floor(payload.transformAodeUsed), 0, limits.convertLimit)
-            : clamp(item.aodePlan.transformAodeUsed, 0, limits.convertLimit);
-        return {
-          ...item,
-          aodePlan: {
-            shopAodePurchaseUsed: nextShopAodePurchaseUsed,
-            shopDailyDungeonTicketPurchaseUsed: nextShopDailyDungeonTicketPurchaseUsed,
-            transformAodeUsed: nextTransformAodeUsed,
-          },
-        };
+      const next = applyAodePlanUpdate({
+        accounts: draft.accounts,
+        characters: draft.characters,
+        characterId,
+        payload,
       });
-
+      draft.accounts = next.accounts;
+      draft.characters = next.characters;
       return draft;
     },
   );
