@@ -38,10 +38,10 @@ import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
 import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
 import {
-  buildWorkshopPriceSignalRow,
   sortWorkshopPriceSignalRows,
   summarizeWorkshopPriceSignalRows,
 } from "./pricing-signal-row";
+import { buildWorkshopPriceSignalRows } from "./pricing-signal-orchestrator";
 import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
 import { normalizeWorkshopPriceSignalQuery } from "./pricing-signal-query";
 import { composeWorkshopPriceSignalResult } from "./pricing-signal-result";
@@ -146,28 +146,21 @@ export async function getWorkshopPriceSignals(payload?: WorkshopPriceSignalQuery
     state.signalRule,
     payload,
   );
-  const rows: WorkshopPriceSignalRow[] = [];
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    const history = buildWorkshopPriceHistoryResult(state, {
-      itemId: item.id,
-      days: lookbackDays,
-      market: targetMarket,
-    });
-    rows.push(
-      buildWorkshopPriceSignalRow({
-        item,
-        history,
-        targetMarket,
-        effectiveThresholdRatio,
-        ruleEnabled: state.signalRule.enabled,
-        minSampleCount: WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT,
-      }),
-    );
-    if ((index + 1) % WORKSHOP_SIGNAL_YIELD_EVERY === 0) {
-      await yieldToEventLoop();
-    }
-  }
+  const rows: WorkshopPriceSignalRow[] = await buildWorkshopPriceSignalRows(
+    {
+      items: state.items,
+      lookbackDays,
+      targetMarket,
+      effectiveThresholdRatio,
+      ruleEnabled: state.signalRule.enabled,
+      minSampleCount: WORKSHOP_SIGNAL_MIN_SAMPLE_COUNT,
+      yieldEvery: WORKSHOP_SIGNAL_YIELD_EVERY,
+    },
+    {
+      buildHistory: (historyPayload) => buildWorkshopPriceHistoryResult(state, historyPayload),
+      yieldToEventLoop,
+    },
+  );
 
   sortWorkshopPriceSignalRows(rows);
   const { triggeredCount, buyZoneCount, sellZoneCount } = summarizeWorkshopPriceSignalRows(rows);
