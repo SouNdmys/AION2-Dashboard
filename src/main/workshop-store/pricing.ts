@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type {
   AddWorkshopPriceSnapshotInput,
   WorkshopPriceHistoryQuery,
@@ -29,7 +28,10 @@ import { appendWorkshopPriceSnapshot } from "./pricing-history-window";
 import { resolveHistoryRange } from "./pricing-history-range";
 import { selectPriceSnapshotsForHistoryQuery } from "./pricing-history-query";
 import { buildPriceHistorySeries } from "./pricing-history-series";
-import { buildWorkshopPriceSnapshotWithAnomaly } from "./pricing-snapshot-create";
+import {
+  buildWorkshopPriceSnapshotWithAnomaly,
+  createWorkshopPriceSnapshotWithAnomalyDeps,
+} from "./pricing-snapshot-create";
 import { sanitizePriceMarket } from "./pricing-snapshot-normalize";
 import { runWorkshopPriceMutation } from "./pricing-snapshot-mutation";
 import {
@@ -40,6 +42,11 @@ import { buildWorkshopPriceSignalRows } from "./pricing-signal-orchestrator";
 import { mergeWorkshopSignalRule } from "./pricing-signal-rule-update";
 import { normalizeWorkshopPriceSignalQuery } from "./pricing-signal-query";
 import { composeWorkshopPriceSignalResult } from "./pricing-signal-result";
+
+const WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS = createWorkshopPriceSnapshotWithAnomalyDeps({
+  toNonNegativeInt,
+  asIso,
+});
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -80,12 +87,7 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
           prices: state.prices,
           itemCategory: item?.category ?? "other",
         },
-        {
-          toNonNegativeInt,
-          asIso,
-          nowIso: () => new Date().toISOString(),
-          createId: randomUUID,
-        },
+        WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS,
       );
 
       return appendWorkshopPriceSnapshot(state.prices, nextSnapshot, WORKSHOP_PRICE_HISTORY_LIMIT);

@@ -26,19 +26,31 @@ export interface BuildWorkshopPriceSnapshotWithAnomalyDeps {
   createId?: () => string;
 }
 
+export function createWorkshopPriceSnapshotWithAnomalyDeps(
+  deps: BuildWorkshopPriceSnapshotWithAnomalyDeps,
+): Required<BuildWorkshopPriceSnapshotWithAnomalyDeps> {
+  return {
+    toNonNegativeInt: deps.toNonNegativeInt,
+    asIso: deps.asIso,
+    nowIso: deps.nowIso ?? (() => new Date().toISOString()),
+    createId: deps.createId ?? randomUUID,
+  };
+}
+
 export function buildWorkshopPriceSnapshotWithAnomaly(
   input: BuildWorkshopPriceSnapshotWithAnomalyInput,
   deps: BuildWorkshopPriceSnapshotWithAnomalyDeps,
 ): WorkshopPriceSnapshot {
-  const nowIso = deps.nowIso ?? (() => new Date().toISOString());
-  const createId = deps.createId ?? randomUUID;
+  const runtimeDeps = createWorkshopPriceSnapshotWithAnomalyDeps(deps);
 
-  const unitPrice = deps.toNonNegativeInt(input.payload.unitPrice, -1);
+  const unitPrice = runtimeDeps.toNonNegativeInt(input.payload.unitPrice, -1);
   if (unitPrice <= 0) {
     throw new Error("价格必须是大于 0 的整数。");
   }
 
-  const capturedAt = input.payload.capturedAt ? deps.asIso(input.payload.capturedAt, nowIso()) : nowIso();
+  const capturedAt = input.payload.capturedAt
+    ? runtimeDeps.asIso(input.payload.capturedAt, runtimeDeps.nowIso())
+    : runtimeDeps.nowIso();
   const source = input.payload.source === "import" ? "import" : "manual";
   const market = sanitizePriceMarket(input.payload.market);
   const baselinePrices = collectBaselinePricesForItem(input.prices, input.payload.itemId, market, capturedAt);
@@ -52,7 +64,7 @@ export function buildWorkshopPriceSnapshotWithAnomaly(
   }
 
   return {
-    id: createId(),
+    id: runtimeDeps.createId(),
     itemId: input.payload.itemId,
     unitPrice,
     capturedAt,

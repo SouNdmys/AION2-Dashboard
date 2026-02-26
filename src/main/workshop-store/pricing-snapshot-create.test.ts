@@ -4,7 +4,10 @@ import {
   WORKSHOP_PRICE_NOTE_TAG_HARD,
   WORKSHOP_PRICE_NOTE_TAG_SUSPECT,
 } from "./pricing-anomaly";
-import { buildWorkshopPriceSnapshotWithAnomaly } from "./pricing-snapshot-create";
+import {
+  buildWorkshopPriceSnapshotWithAnomaly,
+  createWorkshopPriceSnapshotWithAnomalyDeps,
+} from "./pricing-snapshot-create";
 
 const NOW_ISO = "2026-02-26T08:00:00.000Z";
 
@@ -34,6 +37,33 @@ function buildDeps(overrides?: {
 }
 
 describe("workshop/pricing-snapshot-create", () => {
+  it("fills now/create defaults when building create deps", () => {
+    const deps = createWorkshopPriceSnapshotWithAnomalyDeps({
+      toNonNegativeInt: (raw, fallback) => (typeof raw === "number" ? raw : fallback),
+      asIso: (_raw, fallbackIso) => fallbackIso,
+    });
+
+    expect(typeof deps.nowIso).toBe("function");
+    expect(typeof deps.createId).toBe("function");
+    expect(Number.isFinite(new Date(deps.nowIso()).getTime())).toBe(true);
+    expect(deps.createId()).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it("keeps explicit now/create overrides when building create deps", () => {
+    const nowIso = () => NOW_ISO;
+    const createId = () => "snapshot-custom";
+    const deps = createWorkshopPriceSnapshotWithAnomalyDeps({
+      toNonNegativeInt: (raw, fallback) => (typeof raw === "number" ? raw : fallback),
+      asIso: (_raw, fallbackIso) => fallbackIso,
+      nowIso,
+      createId,
+    });
+
+    expect(deps.nowIso).toBe(nowIso);
+    expect(deps.createId).toBe(createId);
+    expect(deps.createId()).toBe("snapshot-custom");
+  });
+
   it("builds snapshot and appends hard tag for hard anomaly", () => {
     const snapshot = buildWorkshopPriceSnapshotWithAnomaly(
       {

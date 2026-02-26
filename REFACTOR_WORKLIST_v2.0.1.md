@@ -754,9 +754,23 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-create.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.56：pricing 第三十五刀：抽离价格快照新增入口 deps 装配 factory，收敛入口样板参数。
+  - 变更点：
+    - 在 `pricing-snapshot-create.ts` 新增 `createWorkshopPriceSnapshotWithAnomalyDeps(...)`，统一补齐 `nowIso/createId` 默认依赖；
+    - `buildWorkshopPriceSnapshotWithAnomaly(...)` 改为通过 deps factory 获取运行时依赖，减少函数内分散默认值处理；
+    - `pricing.ts` 新增模块级 `WORKSHOP_PRICE_SNAPSHOT_CREATE_DEPS`，`addWorkshopPriceSnapshot(...)` 直接复用，移除入口内联 deps 装配样板。
+  - 变更：
+    - `src/main/workshop-store/pricing-snapshot-create.ts`
+    - `src/main/workshop-store/pricing.ts`
+  - 新增/补强测试：
+    - `src/main/workshop-store/pricing-snapshot-create.test.ts`（新增 deps factory 默认值与 override 行为覆盖）
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-create.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.55`（价格快照新增入口的异常判定与 note 合并已下沉到 pricing 域模块）。
-    - 明日起手建议（A1-6.56）：
-      - 优先下沉 `pricing.ts` 中价格快照新增入口的基础依赖装配（如 `toNonNegativeInt/asIso/nowIso/createId`）为轻量 deps factory，进一步减少入口样板；
+    - 今日完成到 `A1-6.56`（价格快照新增入口 deps 装配已收敛为共享 factory + 模块级常量）。
+    - 明日起手建议（A1-6.57）：
+      - 优先下沉 `addWorkshopPriceSnapshot(...)` 的 item 读取与分类兜底（`ensure + find + category fallback`）为独立 helper，继续压缩入口流程分支；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
