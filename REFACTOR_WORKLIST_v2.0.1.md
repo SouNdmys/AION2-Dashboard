@@ -592,10 +592,19 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.40：核心第十九刀：抽离价格异常与基线评估 helper 到 `src/main/workshop-store/pricing-anomaly.ts`。
+  - 变更点：
+    - `collectBaselinePricesForItem / assessPriceAnomalyWithCategory / formatAnomalyReason` 及相关质量标签工具从 core 下沉；
+    - `workshop-store-core.ts` 改为组合 `pricing-anomaly` 模块，并保留兼容导出；
+    - `pricing.ts` 改为直接依赖 `pricing-anomaly`，减少对 core 的耦合。
+  - 新增：
+    - `src/main/workshop-store/pricing-anomaly.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
-  - 交接笔记（2026-02-25）：
-    - 今日完成到 `A1-6.39`，并已完成颗粒度提交（最近 4 个）：`7fea3d7`、`c2ee20d`、`d9c9bbb`、`3fc014b`。
-    - 当前状态：工作区干净；`npm run test:unit -- src/main/workshop-store` 与 `npm run typecheck` 均通过。
-    - 明日起手建议（A1-6.40）：
-      - 优先下沉 `workshop-store-core.ts` 中“价格异常与基线评估”相关 helper（`collectBaselinePricesForItem / assessPriceAnomalyWithCategory / formatAnomalyReason`）为独立模块；
-      - 先补新模块单测，再替换 core 调用，最后更新 worklist 并做颗粒度 commit。
+  - 交接笔记（2026-02-26）：
+    - 今日完成到 `A1-6.40`（价格异常与基线评估模块已下沉）。
+    - 明日起手建议（A1-6.41）：
+      - 优先下沉 `workshop-store-core.ts` 中“价格快照归一与质量标注”剩余 helper，进一步收敛到 pricing 域模块；
+      - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
