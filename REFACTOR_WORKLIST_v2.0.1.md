@@ -1033,5 +1033,17 @@
     - `npm run test:unit -- src/main/store-domain-settings.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-3）：
-    - 继续抽离 `normalizeSnapshot/normalizeState` 链路到 `store-domain-snapshot`，让导入/迁移规则可脱离持久化层独立验证。
+- [x] A2-3：domain 第二刀：抽离 `normalizeSnapshot/normalizeState` 链路到独立模块，隔离导入与迁移规则。
+  - 变更点：
+    - 新增 `src/main/store-domain-snapshot.ts`，下沉 `normalizeCharacter/normalizeSnapshot/normalizeSnapshotDelta/normalizeHistory/normalizeState` 及相关辅助逻辑；
+    - `store.ts` 改为统一调用 `normalizeAppState(...)`，移除大段快照与历史归一内联实现；
+    - 保持行为一致（v<4 日常副本历史迁移、无账号时角色兜底账号、无效历史条目过滤）。
+  - 新增：
+    - `src/main/store-domain-snapshot.ts`
+    - `src/main/store-domain-snapshot.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-snapshot.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-4）：
+    - 抽离 `commitMutation` 的 delta/rollback 计算链到 `store-domain-history`，将变更记录策略从 store I/O 层进一步剥离。
