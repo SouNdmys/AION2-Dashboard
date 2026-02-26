@@ -283,10 +283,10 @@
 - 对齐最新 review：从“表层分层”推进到“可测试分层”。
 
 执行清单（按优先级）:
-- [ ] A1 拆分 `src/main/workshop-store-core.ts` 为真实域实现（非 re-export），并补域单测。
+- [x] A1 拆分 `src/main/workshop-store-core.ts` 为真实域实现（非 re-export），并补域单测。
 - [x] A2 拆分 `src/main/store.ts` 为 `domain + infra adapter`，使业务规则可脱离 Electron I/O 测试。（已完成，见 A2-1 ~ A2-11）
 - [x] A3 为 renderer 主页面补 CSP（先 production strict baseline，再按需放开）。
-- [ ] A4 继续瘦身 `src/renderer/src/App.tsx` 编排层（状态和副作用下沉到 hook/view-model）。
+- [x] A4 继续瘦身 `src/renderer/src/App.tsx` 编排层（状态和副作用下沉到 hook/view-model）。
 
 本轮推进记录:
 - [x] A1-1：将 `src/main/workshop-store/pricing.ts` 从转发层改为真实实现层（价格快照/历史/信号/规则更新）。
@@ -1009,6 +1009,10 @@
     - 本轮已完成到 `A1-6.76`，将 simulation/store 入口剩余高复杂块下沉为独立 helper，并清理入口重复归一逻辑；
     - `catalog/ocr/pricing/simulation/store` 五域的入口层现已统一为“read/validate -> helper orchestration -> write/return”结构；
     - `A1-6` 阶段目标达成，后续建议转入下一 workstream 或以缺陷驱动做增量整理。
+- [x] A1 收尾验收：
+  - `workshop-store` 主要域入口（`catalog/pricing/simulation/store/ocr`）已由转发层收敛为真实实现层；
+  - `workshop-store-core.ts` 不再承载“对外 API 镜像 re-export”职责，转为基础能力与共享流水线承载；
+  - 对应域拆分模块均已补充单测并纳入 `npm run test:unit` 回归链路。
 - [x] A2-1：infra adapter 第一刀：抽离 `store.ts` 的导出路径与自动备份 I/O 到独立模块，启动 A2 域/基建分层。
   - 变更点：
     - 新增 `src/main/store-infra-io.ts`，下沉 `buildDefaultExportPath/getLocalDateKey/maybeCreateDailyAutoBackup`，并通过 deps 注入隔离 Electron/FS 细节；
@@ -1164,3 +1168,18 @@
     - `npm run build`
   - 下一项（A4）：
     - 继续瘦身 `src/renderer/src/App.tsx` 编排层，把页面态与副作用继续下沉到 feature hook/view-model。
+- [x] A4：dashboard 编排层第二轮瘦身（派生模型下沉到 hook/view-model）。
+  - 变更点：
+    - 新增 `src/renderer/src/features/dashboard/hooks/useDashboardDerivedModels.ts`，集中承载 dashboard 派生模型与排序/优先级计算：
+      - 选中账号/角色解析、Aode 配额派生；
+      - 总览行建模、筛选排序、分区过滤；
+      - 倒计时与优先待办列表计算；
+      - 统计指标聚合（周收益、阈值告警、剩余次数等）。
+    - `src/renderer/src/App.tsx` 删除大段 `useMemo` 业务编排，改为消费 `useDashboardDerivedModels(...)`；
+    - `App.tsx` 体量由 `1123` 行降至 `575` 行，视图层角色进一步聚焦为 UI 组装与交互接线。
+  - 新增：
+    - `src/renderer/src/features/dashboard/hooks/useDashboardDerivedModels.ts`
+  - 回归（本地）：
+    - `npm run typecheck`
+    - `npm run build`
+    - `npm run test:unit`
