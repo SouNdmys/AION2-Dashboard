@@ -924,9 +924,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-material-summary.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.70：simulation 第五刀：抽离 craftSteps 构建与排序 helper，继续压缩 `buildSimulation(...)` 结构复杂度。
+  - 变更点：
+    - 新增 `buildWorkshopSimulationCraftSteps(...)` 到 `src/main/workshop-store/simulation-craft-steps.ts`，统一封装 `craftRuns -> craftSteps` 映射与排序规则；
+    - `simulation.ts` 删除内联 craftSteps 构建块，改为复用新 helper，`buildSimulation(...)` 更聚焦于 orchestration；
+    - 保持原排序行为不变（`runs` 降序，其次 `itemName` 按 `zh-CN` 升序）。
+  - 新增：
+    - `src/main/workshop-store/simulation-craft-steps.ts`
+    - `src/main/workshop-store/simulation-craft-steps.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-craft-steps.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.69`（materials 聚合与成本汇总已下沉 helper，`buildSimulation(...)` 复杂度继续下降）。
-    - 明日起手建议（A1-6.70）：
-      - 优先下沉 `buildSimulation(...)` 的 craftSteps 构建与排序块为独立 helper，继续将函数拆成“materials/output/craft-steps”三段组合；
+    - 今日完成到 `A1-6.70`（craftSteps 构建与排序已下沉 helper，`buildSimulation(...)` 继续收敛为组合器）。
+    - 明日起手建议（A1-6.71）：
+      - 优先下沉 `buildSimulation(...)` 的产出收益与利润指标计算块（`gross/net/profit/profitRate`）为独立 helper，进一步将函数拆成“materials/output-metrics/craft-steps”三段组合；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

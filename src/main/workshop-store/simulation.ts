@@ -12,6 +12,7 @@ import {
 } from "./price-market-selection";
 import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
+import { buildWorkshopSimulationCraftSteps } from "./simulation-craft-steps";
 import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
 
 function toPositiveInt(raw: unknown, fallback: number): number {
@@ -105,13 +106,7 @@ function buildSimulation(
       ? null
       : estimatedProfit / requiredMaterialCost;
 
-  const craftSteps = Array.from(craftRuns.entries())
-    .map(([itemId, itemRuns]) => ({
-      itemId,
-      itemName: itemById.get(itemId)?.name ?? itemId,
-      runs: itemRuns,
-    }))
-    .sort((left, right) => right.runs - left.runs || left.itemName.localeCompare(right.itemName, "zh-CN"));
+  const craftSteps = buildWorkshopSimulationCraftSteps(craftRuns, itemById);
 
   return {
     recipeId: recipe.id,
