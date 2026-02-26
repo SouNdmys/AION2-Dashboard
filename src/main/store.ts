@@ -19,6 +19,17 @@ import type {
 } from "../shared/types";
 import { applyAodePlanUpdate, type UpdateAodePlanPayload } from "./store-domain-aode";
 import {
+  applyCorridorCompletionToCharacter,
+  reorderCharactersByIds,
+  setCorridorCompletedForCharacter,
+  updateArtifactStatusForAccount,
+  updateCharacterProfileInList,
+  updateEnergySegmentsForCharacter,
+  type CorridorLane,
+  type UpdateArtifactStatusPayload,
+  type UpdateCharacterProfilePayload,
+} from "./store-domain-character-mutation";
+import {
   applyRaidCountsUpdate,
   applyWeeklyCompletionsUpdate,
   type UpdateRaidCountsPayload,
@@ -324,33 +335,12 @@ export function selectCharacter(characterId: string): AppState {
 
 export function updateCharacterProfile(
   characterId: string,
-  payload: { classTag?: string | null; gearScore?: number | null },
+  payload: UpdateCharacterProfilePayload,
 ): AppState {
   return commitMutation(
     { action: "更新角色档案", characterId },
     (draft) => {
-      const index = draft.characters.findIndex((item) => item.id === characterId);
-      if (index < 0) {
-        throw new Error("角色不存在");
-      }
-      const target = draft.characters[index];
-      const classTag =
-        payload.classTag === undefined
-          ? target.classTag
-          : typeof payload.classTag === "string" && payload.classTag.trim()
-            ? payload.classTag.trim()
-            : undefined;
-      const gearScore =
-        payload.gearScore === undefined
-          ? target.gearScore
-          : typeof payload.gearScore === "number" && Number.isFinite(payload.gearScore)
-            ? clamp(Math.floor(payload.gearScore), 0, SETTINGS_MAX_THRESHOLD)
-            : undefined;
-      draft.characters[index] = {
-        ...target,
-        classTag,
-        gearScore,
-      };
+      draft.characters = updateCharacterProfileInList(draft.characters, characterId, payload, SETTINGS_MAX_THRESHOLD);
       return draft;
     },
   );
@@ -360,22 +350,7 @@ export function reorderCharacters(characterIds: string[]): AppState {
   return commitMutation(
     { action: "调整角色排序", description: `${characterIds.length} 个角色` },
     (draft) => {
-      if (characterIds.length !== draft.characters.length) {
-        throw new Error("排序数据与角色数量不一致");
-      }
-      const idSet = new Set(characterIds);
-      if (idSet.size !== characterIds.length) {
-        throw new Error("排序数据存在重复角色");
-      }
-      const byId = new Map(draft.characters.map((item) => [item.id, item]));
-      const reordered = characterIds.map((id) => {
-        const found = byId.get(id);
-        if (!found) {
-          throw new Error("排序数据包含未知角色");
-        }
-        return found;
-      });
-      draft.characters = reordered;
+      draft.characters = reorderCharactersByIds(draft.characters, characterIds);
       return draft;
     },
   );
@@ -395,90 +370,34 @@ export function applyAction(input: ApplyTaskActionInput): AppState {
   );
 }
 
-export function updateArtifactStatus(payload: {
-  accountId: string;
-  lowerAvailable: number;
-  lowerNextAt: string | null;
-  middleAvailable: number;
-  middleNextAt: string | null;
-}): AppState {
+export function updateArtifactStatus(payload: UpdateArtifactStatusPayload): AppState {
   return commitMutation(
     {
       action: "同步深渊回廊",
       description: `账号 ${payload.accountId}: 下层 ${payload.lowerAvailable} / 中层 ${payload.middleAvailable}`,
     },
     (draft) => {
-      if (!draft.accounts.some((item) => item.id === payload.accountId)) {
-        throw new Error("账号不存在");
-      }
-      draft.characters = draft.characters.map((item) => {
-        if (item.accountId !== payload.accountId) {
-          return item;
-        }
-        return {
-          ...item,
-          activities: {
-            ...item.activities,
-            corridorLowerAvailable: clamp(payload.lowerAvailable, 0, 3),
-            corridorLowerNextAt: payload.lowerNextAt,
-            corridorMiddleAvailable: clamp(payload.middleAvailable, 0, 3),
-            corridorMiddleNextAt: payload.middleNextAt,
-          },
-        };
-      });
+      draft.characters = updateArtifactStatusForAccount(draft.accounts, draft.characters, payload);
       return draft;
     },
   );
 }
 
-export function applyCorridorCompletion(characterId: string, lane: "lower" | "middle", completed: number): AppState {
+export function applyCorridorCompletion(characterId: string, lane: CorridorLane, completed: number): AppState {
   return commitMutation(
     { action: "录入深渊回廊完成", characterId, description: `${lane === "lower" ? "下层" : "中层"} 完成 ${completed}` },
     (draft) => {
-      const amount = clamp(Math.floor(completed), 0, 999);
-      draft.characters = draft.characters.map((item) => {
-        if (item.id !== characterId) {
-          return item;
-        }
-        return {
-          ...item,
-          activities: {
-            ...item.activities,
-            corridorLowerAvailable:
-              lane === "lower"
-                ? clamp(item.activities.corridorLowerAvailable - amount, 0, 3)
-                : item.activities.corridorLowerAvailable,
-            corridorMiddleAvailable:
-              lane === "middle"
-                ? clamp(item.activities.corridorMiddleAvailable - amount, 0, 3)
-                : item.activities.corridorMiddleAvailable,
-          },
-        };
-      });
+      draft.characters = applyCorridorCompletionToCharacter(draft.characters, characterId, lane, completed);
       return draft;
     },
   );
 }
 
-export function setCorridorCompleted(characterId: string, lane: "lower" | "middle", completed: number): AppState {
+export function setCorridorCompleted(characterId: string, lane: CorridorLane, completed: number): AppState {
   return commitMutation(
     { action: "设置深渊回廊已完成", characterId, description: `${lane === "lower" ? "下层" : "中层"} 已完成 ${completed}` },
     (draft) => {
-      const safeCompleted = clamp(Math.floor(completed), 0, 3);
-      const nextAvailable = clamp(3 - safeCompleted, 0, 3);
-      draft.characters = draft.characters.map((item) => {
-        if (item.id !== characterId) {
-          return item;
-        }
-        return {
-          ...item,
-          activities: {
-            ...item.activities,
-            corridorLowerAvailable: lane === "lower" ? nextAvailable : item.activities.corridorLowerAvailable,
-            corridorMiddleAvailable: lane === "middle" ? nextAvailable : item.activities.corridorMiddleAvailable,
-          },
-        };
-      });
+      draft.characters = setCorridorCompletedForCharacter(draft.characters, characterId, lane, completed);
       return draft;
     },
   );
@@ -488,19 +407,7 @@ export function updateEnergySegments(characterId: string, baseCurrent: number, b
   return commitMutation(
     { action: "手动改能量", characterId, description: `${baseCurrent}(+${bonusCurrent})` },
     (draft) => {
-      draft.characters = draft.characters.map((item) => {
-        if (item.id !== characterId) {
-          return item;
-        }
-        return {
-          ...item,
-          energy: {
-            ...item.energy,
-            baseCurrent: clamp(baseCurrent, 0, item.energy.baseCap),
-            bonusCurrent: clamp(bonusCurrent, 0, item.energy.bonusCap),
-          },
-        };
-      });
+      draft.characters = updateEnergySegmentsForCharacter(draft.characters, characterId, baseCurrent, bonusCurrent);
       return draft;
     },
   );

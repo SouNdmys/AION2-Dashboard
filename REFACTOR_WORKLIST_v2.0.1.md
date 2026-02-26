@@ -284,7 +284,7 @@
 
 执行清单（按优先级）:
 - [ ] A1 拆分 `src/main/workshop-store-core.ts` 为真实域实现（非 re-export），并补域单测。
-- [ ] A2 拆分 `src/main/store.ts` 为 `domain + infra adapter`，使业务规则可脱离 Electron I/O 测试。
+- [x] A2 拆分 `src/main/store.ts` 为 `domain + infra adapter`，使业务规则可脱离 Electron I/O 测试。（已完成，见 A2-1 ~ A2-11）
 - [ ] A3 为 renderer 主页面补 CSP（先 production strict baseline，再按需放开）。
 - [ ] A4 继续瘦身 `src/renderer/src/App.tsx` 编排层（状态和副作用下沉到 hook/view-model）。
 
@@ -1129,5 +1129,21 @@
     - `npm run test:unit -- src/main/store-domain-counters.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-11）：
-    - 抽离角色资料/排序与回廊/能量手动修正规则（`updateCharacterProfile/reorderCharacters/updateArtifactStatus/applyCorridorCompletion/setCorridorCompleted/updateEnergySegments`）到 `store-domain-character-mutation`，完成 store 业务规则分层收尾。
+- [x] A2-11：domain 第十刀：抽离角色资料/排序与回廊/能量手动修正规则，完成 A2 分层收尾。
+  - 变更点：
+    - 新增 `src/main/store-domain-character-mutation.ts`，下沉 `updateCharacterProfileInList(...)`、`reorderCharactersByIds(...)`、`updateArtifactStatusForAccount(...)`、`applyCorridorCompletionToCharacter(...)`、`setCorridorCompletedForCharacter(...)`、`updateEnergySegmentsForCharacter(...)`；
+    - `store.ts` 对应入口全部改为调用 character-mutation helper；
+    - 保持既有行为一致（角色不存在/账号不存在错误文案、排序校验、回廊与能量回钳口径）。
+  - 新增：
+    - `src/main/store-domain-character-mutation.ts`
+    - `src/main/store-domain-character-mutation.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-character-mutation.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+- [x] A2 收尾验收：
+  - `store.ts` 业务规则已按域模块拆分为：
+    - `store-domain-settings/snapshot/history/aode/transfer/selection/roster/progression/counters/character-mutation`
+  - `store.ts` 角色定位已收敛为：
+    - Electron Store + dialog I/O 适配、mutation orchestration、状态持久化与 history 接线；
+  - A2 目标“domain + infra adapter”已达成。
