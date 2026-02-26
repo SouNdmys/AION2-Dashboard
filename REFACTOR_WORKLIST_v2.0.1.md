@@ -602,9 +602,19 @@
   - 回归（本地）：
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.41：核心第二十刀：抽离价格快照归一 helper 到 `src/main/workshop-store/pricing-snapshot-normalize.ts`。
+  - 变更点：
+    - `sanitizePriceMarket / normalizePriceSnapshot` 从 core 下沉；
+    - `workshop-store-core.ts` 改为通过新模块完成价格快照归一，并保留 `sanitizePriceMarket` 兼容导出。
+  - 新增：
+    - `src/main/workshop-store/pricing-snapshot-normalize.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-normalize.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.40`（价格异常与基线评估模块已下沉）。
-    - 明日起手建议（A1-6.41）：
-      - 优先下沉 `workshop-store-core.ts` 中“价格快照归一与质量标注”剩余 helper，进一步收敛到 pricing 域模块；
+    - 今日完成到 `A1-6.41`（价格快照归一 helper 已下沉到 pricing 域模块）。
+    - 明日起手建议（A1-6.42）：
+      - 优先下沉 `workshop-store-core.ts` 中“价格历史序列归档/窗口裁剪”相关 helper，进一步收敛到 pricing 域模块；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

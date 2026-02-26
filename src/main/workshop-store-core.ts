@@ -44,6 +44,7 @@ import {
   collectBaselinePricesForItem,
   formatAnomalyReason,
 } from "./workshop-store/pricing-anomaly";
+import { normalizePriceSnapshot, sanitizePriceMarket } from "./workshop-store/pricing-snapshot-normalize";
 import { sanitizeOcrImportPayload } from "./workshop-store/ocr-import-parser";
 import { buildOnnxOcrOutcome } from "./workshop-store/ocr-onnx-output";
 import { createOnnxOcrRuntime, type OnnxOcrEngine } from "./workshop-store/ocr-onnx-runtime";
@@ -60,7 +61,6 @@ import type {
   WorkshopInventoryItem,
   WorkshopItem,
   WorkshopItemCategory,
-  WorkshopPriceMarket,
   WorkshopPriceSignalRule,
   WorkshopPriceSnapshot,
   WorkshopRecipe,
@@ -80,6 +80,7 @@ export {
   normalizePriceMarketForCompare,
   resolveSnapshotQualityTag,
 } from "./workshop-store/pricing-anomaly";
+export { sanitizePriceMarket } from "./workshop-store/pricing-snapshot-normalize";
 
 export const WORKSHOP_STATE_VERSION = 6;
 export const WORKSHOP_PRICE_HISTORY_LIMIT = 8_000;
@@ -143,13 +144,6 @@ function sanitizeCategory(raw: unknown): WorkshopItemCategory {
     return raw;
   }
   return "material";
-}
-
-export function sanitizePriceMarket(raw: unknown): WorkshopPriceMarket {
-  if (raw === "server" || raw === "world" || raw === "single") {
-    return raw;
-  }
-  return "single";
 }
 
 function sanitizeName(raw: unknown, fallback = ""): string {
@@ -245,39 +239,6 @@ function normalizeRecipe(raw: unknown): WorkshopRecipe | null {
   };
 }
 
-function normalizePriceSnapshot(raw: unknown): WorkshopPriceSnapshot | null {
-  if (!raw || typeof raw !== "object") {
-    return null;
-  }
-
-  const id = typeof (raw as { id?: unknown }).id === "string" ? (raw as { id: string }).id : randomUUID();
-  const itemId = typeof (raw as { itemId?: unknown }).itemId === "string" ? (raw as { itemId: string }).itemId : "";
-  if (!itemId) {
-    return null;
-  }
-
-  const unitPrice = toNonNegativeInt((raw as { unitPrice?: unknown }).unitPrice, -1);
-  if (unitPrice <= 0) {
-    return null;
-  }
-
-  const sourceRaw = (raw as { source?: unknown }).source;
-  const source = sourceRaw === "import" ? "import" : "manual";
-  const market = sanitizePriceMarket((raw as { market?: unknown }).market);
-  const capturedAt = asIso((raw as { capturedAt?: unknown }).capturedAt, new Date().toISOString());
-  const note = sanitizeName((raw as { note?: unknown }).note) || undefined;
-
-  return {
-    id,
-    itemId,
-    unitPrice,
-    capturedAt,
-    source,
-    market,
-    note,
-  };
-}
-
 function normalizeInventoryItem(raw: unknown): WorkshopInventoryItem | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -337,7 +298,12 @@ function normalizeWorkshopState(raw: unknown): WorkshopState {
 
   const pricesRaw = Array.isArray(entity?.prices) ? entity?.prices : [];
   const prices = pricesRaw
-    .map((entry) => normalizePriceSnapshot(entry))
+    .map((entry) =>
+      normalizePriceSnapshot(entry, {
+        asIso,
+        toNonNegativeInt,
+      }),
+    )
     .filter((entry): entry is WorkshopPriceSnapshot => entry !== null)
     .filter((entry) => validItemIds.has(entry.itemId))
     .slice(-WORKSHOP_PRICE_HISTORY_LIMIT);
