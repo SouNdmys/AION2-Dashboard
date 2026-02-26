@@ -936,9 +936,21 @@
     - `npm run test:unit -- src/main/workshop-store/simulation-craft-steps.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.71：simulation 第六刀：抽离产出收益与利润指标 helper，继续收敛 `buildSimulation(...)` 计算职责。
+  - 变更点：
+    - 新增 `buildWorkshopSimulationOutputMetrics(...)` 到 `src/main/workshop-store/simulation-output-metrics.ts`，统一封装 `outputUnitPrice/totalOutputQuantity/gross/net/profit/profitRate` 计算；
+    - `simulation.ts` 删除内联收益计算块，改为通过 helper 获取产出与利润指标；
+    - 保持原计算规则不变（unknown price 或 unknown material cost 时利润指标返回 `null`，material cost `<=0` 时 `profitRate` 为 `null`）。
+  - 新增：
+    - `src/main/workshop-store/simulation-output-metrics.ts`
+    - `src/main/workshop-store/simulation-output-metrics.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-output-metrics.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.70`（craftSteps 构建与排序已下沉 helper，`buildSimulation(...)` 继续收敛为组合器）。
-    - 明日起手建议（A1-6.71）：
-      - 优先下沉 `buildSimulation(...)` 的产出收益与利润指标计算块（`gross/net/profit/profitRate`）为独立 helper，进一步将函数拆成“materials/output-metrics/craft-steps”三段组合；
+    - 今日完成到 `A1-6.71`（产出收益与利润指标已下沉 helper，`buildSimulation(...)` 进一步收敛为流程组合）。
+    - 明日起手建议（A1-6.72）：
+      - 优先下沉 `buildSimulation(...)` 的材料展开递归与循环检测块（`expandNeededItem + visiting/stack`）为独立 helper，继续压缩主函数分支复杂度；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

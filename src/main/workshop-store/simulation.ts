@@ -14,6 +14,7 @@ import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry"
 import { buildWorkshopCraftOptionsFromState } from "./simulation-craft-options";
 import { buildWorkshopSimulationCraftSteps } from "./simulation-craft-steps";
 import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
+import { buildWorkshopSimulationOutputMetrics } from "./simulation-output-metrics";
 
 function toPositiveInt(raw: unknown, fallback: number): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -95,16 +96,15 @@ function buildSimulation(
       latestPriceByItemAndMarket,
     });
 
-  const outputUnitPrice = latestPriceByItemId.get(recipe.outputItemId)?.unitPrice ?? null;
-  const totalOutputQuantity = recipe.outputQuantity * runs;
-  const grossRevenue = outputUnitPrice === null ? null : outputUnitPrice * totalOutputQuantity;
-  const netRevenueAfterTax = grossRevenue === null ? null : grossRevenue * (1 - taxRate);
-  const estimatedProfit =
-    netRevenueAfterTax === null || requiredMaterialCost === null ? null : netRevenueAfterTax - requiredMaterialCost;
-  const estimatedProfitRate =
-    estimatedProfit === null || requiredMaterialCost === null || requiredMaterialCost <= 0
-      ? null
-      : estimatedProfit / requiredMaterialCost;
+  const { totalOutputQuantity, outputUnitPrice, grossRevenue, netRevenueAfterTax, estimatedProfit, estimatedProfitRate } =
+    buildWorkshopSimulationOutputMetrics({
+      latestPriceByItemId,
+      outputItemId: recipe.outputItemId,
+      outputQuantity: recipe.outputQuantity,
+      runs,
+      taxRate,
+      requiredMaterialCost,
+    });
 
   const craftSteps = buildWorkshopSimulationCraftSteps(craftRuns, itemById);
 
