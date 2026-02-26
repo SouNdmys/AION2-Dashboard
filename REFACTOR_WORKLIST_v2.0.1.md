@@ -1045,5 +1045,17 @@
     - `npm run test:unit -- src/main/store-domain-snapshot.test.ts`
     - `npm run test:unit`
     - `npm run typecheck`
-  - 下一刀建议（A2-4）：
-    - 抽离 `commitMutation` 的 delta/rollback 计算链到 `store-domain-history`，将变更记录策略从 store I/O 层进一步剥离。
+- [x] A2-4：domain 第三刀：抽离 mutation history delta/rollback 链路，继续收敛 `store.ts` 变更记录职责。
+  - 变更点：
+    - 新增 `src/main/store-domain-history.ts`，下沉 `mutation signature/draft`、`rollback payload`、`delta restore` 相关逻辑；
+    - `store.ts` 的 `commitMutation(...)` 与 `undoOperations(...)` 改为复用 domain-history helper，移除内联差量算法与角色回放逻辑；
+    - 导入流程 `importDataFromFile(...)` 改为复用 `createAppStateSnapshot(...)`，统一快照生成口径。
+  - 新增：
+    - `src/main/store-domain-history.ts`
+    - `src/main/store-domain-history.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/store-domain-history.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+  - 下一刀建议（A2-5）：
+    - 抽离 `getAodeLimitsForCharacter` 与 `updateAodePlan` 的规则计算到 `store-domain-aode`，让账号内配额规则完全脱离 store I/O 层。
