@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
+import { buildRendererContentSecurityPolicy, withContentSecurityPolicyHeader } from "./security/csp";
 import { cleanupWorkshopOcrHotkey, initializeWorkshopOcrAutomation } from "./workshop-automation";
 import { cleanupWorkshopOcrEngine } from "./workshop-store/ocr";
 
@@ -45,6 +46,7 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  installRendererContentSecurityPolicy(mainWindow, isDev);
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -56,6 +58,20 @@ function createWindow(): void {
     Menu.setApplicationMenu(null);
     mainWindow.setMenuBarVisibility(false);
   }
+}
+
+function installRendererContentSecurityPolicy(mainWindow: BrowserWindow, isDev: boolean): void {
+  const policy = buildRendererContentSecurityPolicy(isDev);
+  mainWindow.webContents.session.webRequest.onHeadersReceived(
+    {
+      urls: ["file://*/*", "http://localhost:*/*", "http://127.0.0.1:*/*"],
+    },
+    (details, callback) => {
+      callback({
+        responseHeaders: withContentSecurityPolicyHeader(details.responseHeaders, policy),
+      });
+    },
+  );
 }
 
 function resolveAppIconPath(): string | undefined {

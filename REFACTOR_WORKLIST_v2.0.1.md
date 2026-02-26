@@ -285,7 +285,7 @@
 执行清单（按优先级）:
 - [ ] A1 拆分 `src/main/workshop-store-core.ts` 为真实域实现（非 re-export），并补域单测。
 - [x] A2 拆分 `src/main/store.ts` 为 `domain + infra adapter`，使业务规则可脱离 Electron I/O 测试。（已完成，见 A2-1 ~ A2-11）
-- [ ] A3 为 renderer 主页面补 CSP（先 production strict baseline，再按需放开）。
+- [x] A3 为 renderer 主页面补 CSP（先 production strict baseline，再按需放开）。
 - [ ] A4 继续瘦身 `src/renderer/src/App.tsx` 编排层（状态和副作用下沉到 hook/view-model）。
 
 本轮推进记录:
@@ -1147,3 +1147,20 @@
   - `store.ts` 角色定位已收敛为：
     - Electron Store + dialog I/O 适配、mutation orchestration、状态持久化与 history 接线；
   - A2 目标“domain + infra adapter”已达成。
+- [x] A3：renderer CSP 基线落地（production strict + dev 放宽）。
+  - 变更点：
+    - 新增 `src/main/security/csp.ts`，集中定义 renderer CSP 策略与响应头注入 helper；
+    - `src/main/index.ts` 在主窗口创建后注入 CSP 响应头：
+      - production：严格基线（`default-src/script-src/connect-src 'self'`，`object-src 'none'`，`frame-ancestors 'none'`）；
+      - development：按需放开 Vite HMR（`localhost/127.0.0.1` 的 `http/ws`，并允许 `unsafe-eval`）。
+    - 新增 `src/main/security/csp.test.ts`，覆盖策略与头注入回归。
+  - 新增：
+    - `src/main/security/csp.ts`
+    - `src/main/security/csp.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/security/csp.test.ts`
+    - `npm run test:unit`
+    - `npm run typecheck`
+    - `npm run build`
+  - 下一项（A4）：
+    - 继续瘦身 `src/renderer/src/App.tsx` 编排层，把页面态与副作用继续下沉到 feature hook/view-model。
