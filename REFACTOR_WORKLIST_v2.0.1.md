@@ -816,9 +816,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-snapshot-mutation-config.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.61：pricing 第四十刀：抽离价格历史读取入口 query helper，继续压缩 pricing 入口编排。
+  - 变更点：
+    - 新增 `getWorkshopPriceHistoryByQuery(...)` 到 `src/main/workshop-store/pricing-history-read.ts`，统一封装“read state -> ensure item -> build history result”流程；
+    - `pricing.ts` 新增模块级 `WORKSHOP_PRICE_HISTORY_QUERY_DEPS`，`getWorkshopPriceHistory(...)` 改为一行委托调用；
+    - 保持 `buildWorkshopPriceHistoryResult(...)` 纯组装职责，不再承担入口读状态细节。
+  - 新增：
+    - `src/main/workshop-store/pricing-history-read.ts`
+    - `src/main/workshop-store/pricing-history-read.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/pricing-history-read.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.60`（价格快照增删共享 mutation context 工厂已完成，pricing 入口样板进一步收敛）。
-    - 明日起手建议（A1-6.61）：
-      - 优先下沉 `getWorkshopPriceHistory(...)` 的“读状态 + ensure + 调用 build”入口编排到独立 query helper，继续压缩 pricing 入口层样板；
+    - 今日完成到 `A1-6.61`（价格历史读取入口已下沉为独立 query helper，pricing 入口编排进一步收敛）。
+    - 明日起手建议（A1-6.62）：
+      - 优先下沉 `updateWorkshopSignalRule(...)` 的“read -> merge -> write”入口编排到独立 mutation helper，保持 pricing 域入口风格一致；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。

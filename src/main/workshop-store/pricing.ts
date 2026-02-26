@@ -23,6 +23,7 @@ import {
 import { buildWeekdayAverages } from "./pricing-analytics";
 import { classifyPriceHistorySnapshotsByQuality } from "./pricing-history-classify";
 import { composeWorkshopPriceHistoryResult } from "./pricing-history-composer";
+import { getWorkshopPriceHistoryByQuery } from "./pricing-history-read";
 import { buildWorkshopPricesWithAddedSnapshot } from "./pricing-snapshot-add";
 import { buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
 import { createWorkshopPriceSnapshotMutationContext } from "./pricing-snapshot-mutation-config";
@@ -57,6 +58,11 @@ const WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT = createWorkshopPriceSnapshotMuta
     ensureItemExists,
   },
 });
+const WORKSHOP_PRICE_HISTORY_QUERY_DEPS = {
+  readState: readWorkshopState,
+  ensureItemExists,
+  buildHistoryResult: buildWorkshopPriceHistoryResult,
+};
 
 function buildWorkshopPriceHistoryResult(state: WorkshopState, payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
   const { from, to } = resolveHistoryRange(payload);
@@ -109,9 +115,7 @@ export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
 }
 
 export function getWorkshopPriceHistory(payload: WorkshopPriceHistoryQuery): WorkshopPriceHistoryResult {
-  const state = readWorkshopState();
-  ensureItemExists(state, payload.itemId);
-  return buildWorkshopPriceHistoryResult(state, payload);
+  return getWorkshopPriceHistoryByQuery(payload, WORKSHOP_PRICE_HISTORY_QUERY_DEPS);
 }
 
 export function updateWorkshopSignalRule(payload: Partial<WorkshopPriceSignalRule>): WorkshopState {
