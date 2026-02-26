@@ -8,6 +8,7 @@ import type {
   WorkshopState,
 } from "../../shared/types";
 import { clamp, readWorkshopState } from "../workshop-store-core";
+import { buildWorkshopCraftSimulationFromState } from "./simulation-craft-entry";
 
 function toPositiveInt(raw: unknown, fallback: number): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
@@ -245,17 +246,11 @@ function sanitizeTaxRate(raw: unknown): number {
 
 export function simulateWorkshopCraft(payload: WorkshopCraftSimulationInput): WorkshopCraftSimulationResult {
   const state = readWorkshopState();
-  const recipe = state.recipes.find((entry) => entry.id === payload.recipeId);
-  if (!recipe) {
-    throw new Error("未找到目标配方。");
-  }
-  const runs = toPositiveInt(payload.runs, 0);
-  if (runs <= 0) {
-    throw new Error("制作次数必须是正整数。");
-  }
-  const taxRate = sanitizeTaxRate(payload.taxRate);
-  const materialMode = payload.materialMode === "expanded" ? "expanded" : "direct";
-  return buildSimulation(state, recipe, runs, taxRate, materialMode);
+  return buildWorkshopCraftSimulationFromState(state, payload, {
+    toPositiveInt,
+    sanitizeTaxRate,
+    buildSimulation,
+  });
 }
 
 export function getWorkshopCraftOptions(payload?: { taxRate?: number }): WorkshopCraftOption[] {

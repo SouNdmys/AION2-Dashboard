@@ -864,9 +864,21 @@
     - `npm run test:unit -- src/main/workshop-store/pricing-history-orchestrator.test.ts`
     - `npm run test:unit -- src/main/workshop-store`
     - `npm run typecheck`
+- [x] A1-6.65：simulation 第一刀（本轮）：抽离 craft 模拟入口编排 helper，开始从 pricing 扩展到 simulation 域。
+  - 变更点：
+    - 新增 `buildWorkshopCraftSimulationFromState(...)` 到 `src/main/workshop-store/simulation-craft-entry.ts`，统一封装“recipe lookup -> runs/tax sanitize -> materialMode resolve -> buildSimulation”入口流程；
+    - `simulateWorkshopCraft(...)` 改为“readState -> 调用入口 helper”两段式，减少 `simulation.ts` 对入口校验细节的内联耦合；
+    - helper 采用纯依赖注入，可在不触达 core I/O 的情况下直接单测。
+  - 新增：
+    - `src/main/workshop-store/simulation-craft-entry.ts`
+    - `src/main/workshop-store/simulation-craft-entry.test.ts`
+  - 回归（本地）：
+    - `npm run test:unit -- src/main/workshop-store/simulation-craft-entry.test.ts`
+    - `npm run test:unit -- src/main/workshop-store`
+    - `npm run typecheck`
 - [ ] A1-6：继续拆 `catalog/ocr/simulation/store` 的剩余 helper，降低 `workshop-store-core.ts` 体量与职责混合度。
   - 交接笔记（2026-02-26）：
-    - 今日完成到 `A1-6.64`（价格历史构建流水已下沉到独立 orchestrator，pricing.ts 进一步瘦身）。
-    - 明日起手建议（A1-6.65）：
-      - 优先评估并下沉 `simulation.ts` 中可复用的入口编排样板（read/ensure/query/compose）到独立 helper，开始从 pricing 拆分扩展到 simulation 域；
+    - 今日完成到 `A1-6.65`（已开始拆 simulation 域，craft 模拟入口编排下沉为独立 helper）。
+    - 明日起手建议（A1-6.66）：
+      - 优先下沉 `getWorkshopCraftOptions(...)` 的入口编排与 option 排序输出流程到独立 helper，完成 simulation 域第二刀；
       - 保持“先补单测 -> 替换 core 调用 -> 回归验证 -> 更新 worklist”的节奏推进。
