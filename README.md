@@ -7,14 +7,22 @@
 
 ## 下载与更新
 
-- 最新版本（v2.1.0）:  
-  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.1.0`
+- 最新版本（v2.1.1）:  
+  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.1.1`
 - 资产说明:
   - `Setup` 安装版（推荐）：支持后续自动更新
   - `Portable` 单文件：即开即用，不走自动安装更新
   - `win.7z` 压缩包：解压即用，不走自动安装更新
 - 升级提示:
   - 建议 `v1.x` 用户手动安装一次 `v2.x Setup`，后续继续使用自动更新链路。
+
+## v2.1.1 发布重点
+
+- OCR ONNX 模型加载兼容修复：
+  - 修复安装版从 `app.asar` 直接读取模型导致“File doesn't exist”的问题。
+  - 增加 `app.asar.unpacked` 路径回退，确保 OCR 在安装版可稳定加载模型。
+- 工坊布局优化：
+  - “做装模拟器”卡片上移到工坊页最上方，减少操作路径。
 
 ## v2.1.0 发布重点
 
