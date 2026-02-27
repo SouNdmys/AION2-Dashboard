@@ -109,6 +109,7 @@ const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_ENABLE_PYTHON_FALLBACK = false;
+const ASAR_SEGMENT_PATTERN = /([\\/])app\.asar([\\/])/i;
 const OCR_ONNX_MODEL_FILES = {
   detectionPath: "ch_PP-OCRv4_det_infer.onnx",
   recognitionPath: "ch_PP-OCRv4_rec_infer.onnx",
@@ -442,22 +443,32 @@ export function ensureItemExists(state: WorkshopState, itemId: string): void {
 
 function resolveOnnxModelAssetDirectory(): string | null {
   const candidates: string[] = [];
+  const pushResolvedCandidate = (candidatePath: string): void => {
+    const normalized = path.resolve(candidatePath);
+    const preferred = normalized.replace(ASAR_SEGMENT_PATTERN, "$1app.asar.unpacked$2");
+    if (!candidates.includes(preferred)) {
+      candidates.push(preferred);
+    }
+    // ONNX Runtime cannot read models from app.asar virtual filesystem.
+    if (!ASAR_SEGMENT_PATTERN.test(normalized) && !candidates.includes(normalized)) {
+      candidates.push(normalized);
+    }
+  };
   const pushCandidate = (baseDir: string | undefined): void => {
     if (!baseDir) {
       return;
     }
-    const normalized = path.resolve(baseDir, "node_modules/@gutenye/ocr-models/assets");
-    if (!candidates.includes(normalized)) {
-      candidates.push(normalized);
-    }
+    pushResolvedCandidate(path.resolve(baseDir, "node_modules/@gutenye/ocr-models/assets"));
   };
 
   pushCandidate(process.cwd());
   pushCandidate(path.resolve(__dirname, "../../"));
-  pushCandidate(path.resolve(__dirname, "../../app.asar.unpacked"));
+  pushCandidate(path.resolve(__dirname, "../../../"));
+  pushCandidate(path.resolve(__dirname, "../../../app.asar.unpacked"));
   if (process.resourcesPath) {
     pushCandidate(process.resourcesPath);
     pushCandidate(path.resolve(process.resourcesPath, "app.asar.unpacked"));
+    pushCandidate(path.resolve(process.resourcesPath, "app.asar.unpacked/node_modules/@gutenye/ocr-node"));
   }
 
   for (const directory of candidates) {
