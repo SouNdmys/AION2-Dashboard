@@ -186,6 +186,21 @@ export interface AppBuildInfo {
   author: string;
 }
 
+export type AppUpdateStatus =
+  | "disabled"
+  | "busy"
+  | "up-to-date"
+  | "update-downloaded"
+  | "error";
+
+export interface AppUpdateCheckResult {
+  status: AppUpdateStatus;
+  currentVersion: string;
+  latestVersion?: string;
+  message: string;
+  installTriggered: boolean;
+}
+
 export type WorkshopItemCategory = "material" | "equipment" | "component" | "other";
 export type WorkshopPriceSource = "manual" | "import";
 export type WorkshopPriceMarket = "single" | "server" | "world";

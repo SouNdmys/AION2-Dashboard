@@ -4,8 +4,10 @@ interface DashboardToolbarProps {
   busy: boolean;
   viewMode: ViewMode;
   dashboardMode: DashboardMode;
+  buildVersion: string | null;
   infoMessage: string | null;
   error: string | null;
+  onCheckAppUpdate: () => void;
   onSwitchOverview: () => void;
   onSwitchCharacter: () => void;
   onSwitchSettings: () => void;
@@ -17,8 +19,10 @@ export function DashboardToolbar(props: DashboardToolbarProps): JSX.Element {
     busy,
     viewMode,
     dashboardMode,
+    buildVersion,
     infoMessage,
     error,
+    onCheckAppUpdate,
     onSwitchOverview,
     onSwitchCharacter,
     onSwitchSettings,
@@ -48,6 +52,12 @@ export function DashboardToolbar(props: DashboardToolbarProps): JSX.Element {
         <button className={`pill-btn ${viewMode === "workshop" ? "bg-white/20" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
           工坊
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="data-pill whitespace-nowrap">版本: {buildVersion ? `v${buildVersion}` : "--"}</div>
+          <button className="pill-btn whitespace-nowrap" onClick={onCheckAppUpdate} disabled={busy}>
+            检查更新
+          </button>
+        </div>
       </div>
       <p className="mt-2 text-xs text-slate-300">中栏为核心操作流，右栏承载日志与辅助信息。</p>
       {infoMessage ? <p className="mt-2 text-xs text-emerald-300">{infoMessage}</p> : null}

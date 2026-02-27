@@ -260,3 +260,30 @@ export async function importDashboardDataAction(params: ImportDashboardDataParam
     onBusyChange(false);
   }
 }
+
+interface CheckAppUpdateParams {
+  appActions: AppActions;
+  onBusyChange: (busy: boolean) => void;
+  onError: (message: string | null) => void;
+  onInfoMessage: (message: string | null) => void;
+}
+
+export async function checkAppUpdateAction(params: CheckAppUpdateParams): Promise<void> {
+  const { appActions, onBusyChange, onError, onInfoMessage } = params;
+  onBusyChange(true);
+  onError(null);
+  onInfoMessage(null);
+  try {
+    const result = await appActions.checkAppUpdate();
+    if (result.status === "error") {
+      onError(result.message);
+      return;
+    }
+    onInfoMessage(result.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "更新检查失败";
+    onError(message);
+  } finally {
+    onBusyChange(false);
+  }
+}

@@ -253,6 +253,7 @@ export function App(): JSX.Element {
     onOverviewCardDragEnd,
     onSwitchToOverview,
     onApplyQuickAction,
+    onCheckAppUpdate,
     onResetWeeklyStats,
     onSaveWeeklyCompletions,
     onUndoSingleStep,
@@ -405,8 +406,10 @@ export function App(): JSX.Element {
             busy={busy}
             viewMode={viewMode}
             dashboardMode={dashboardMode}
+            buildVersion={buildInfo?.version ?? null}
             infoMessage={infoMessage}
             error={error}
+            onCheckAppUpdate={onCheckAppUpdate}
             onSwitchOverview={() => {
               setViewMode("dashboard");
               setDashboardMode("overview");

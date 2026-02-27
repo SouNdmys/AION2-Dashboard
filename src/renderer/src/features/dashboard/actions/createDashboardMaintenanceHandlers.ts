@@ -1,6 +1,7 @@
 import type { AppState } from "../../../../../shared/types";
 import type { SettingsDraft } from "../dashboard-types";
 import {
+  checkAppUpdateAction,
   clearHistoryAction,
   exportDashboardDataAction,
   importDashboardDataAction,
@@ -35,6 +36,7 @@ interface CreateDashboardMaintenanceHandlersParams {
 }
 
 interface MaintenanceHandlers {
+  onCheckAppUpdate: () => void;
   onResetWeeklyStats: () => void;
   onSaveWeeklyCompletions: () => void;
   onUndoSingleStep: () => void;
@@ -67,6 +69,15 @@ export function createDashboardMaintenanceHandlers(params: CreateDashboardMainte
       appActions,
       sync,
       confirm,
+    });
+  }
+
+  function onCheckAppUpdate(): void {
+    void checkAppUpdateAction({
+      appActions,
+      onBusyChange: setBusy,
+      onError: setError,
+      onInfoMessage: setInfoMessage,
     });
   }
 
@@ -137,6 +148,7 @@ export function createDashboardMaintenanceHandlers(params: CreateDashboardMainte
   }
 
   return {
+    onCheckAppUpdate,
     onResetWeeklyStats,
     onSaveWeeklyCompletions,
     onUndoSingleStep,

@@ -1,6 +1,7 @@
 export const IPC_CHANNELS = {
   getState: "app:get-state",
   getBuildInfo: "app:get-build-info",
+  checkAppUpdate: "app:check-update",
   resetWeeklyStats: "app:reset-weekly-stats",
   undoOperations: "app:undo-operations",
   clearHistory: "app:clear-history",
