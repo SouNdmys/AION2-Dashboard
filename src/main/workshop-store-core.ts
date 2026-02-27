@@ -109,6 +109,11 @@ const OCR_TSV_NAME_CONFIDENCE_MIN = 35;
 const OCR_TSV_NUMERIC_CONFIDENCE_MIN = 20;
 const OCR_PADDLE_CONFIDENCE_SCALE = 100;
 const OCR_ENABLE_PYTHON_FALLBACK = false;
+const OCR_ONNX_MODEL_FILES = {
+  detectionPath: "ch_PP-OCRv4_det_infer.onnx",
+  recognitionPath: "ch_PP-OCRv4_rec_infer.onnx",
+  dictionaryPath: "ppocr_keys_v1.txt",
+} as const;
 
 export const workshopStore = new Store<Record<string, unknown>>({
   name: "aion2-dashboard-workshop",
@@ -435,10 +440,68 @@ export function ensureItemExists(state: WorkshopState, itemId: string): void {
   }
 }
 
+function resolveOnnxModelAssetDirectory(): string | null {
+  const candidates: string[] = [];
+  const pushCandidate = (baseDir: string | undefined): void => {
+    if (!baseDir) {
+      return;
+    }
+    const normalized = path.resolve(baseDir, "node_modules/@gutenye/ocr-models/assets");
+    if (!candidates.includes(normalized)) {
+      candidates.push(normalized);
+    }
+  };
+
+  pushCandidate(process.cwd());
+  pushCandidate(path.resolve(__dirname, "../../"));
+  pushCandidate(path.resolve(__dirname, "../../app.asar.unpacked"));
+  if (process.resourcesPath) {
+    pushCandidate(process.resourcesPath);
+    pushCandidate(path.resolve(process.resourcesPath, "app.asar.unpacked"));
+  }
+
+  for (const directory of candidates) {
+    const allFilesExist = Object.values(OCR_ONNX_MODEL_FILES).every((fileName) =>
+      fs.existsSync(path.join(directory, fileName)),
+    );
+    if (allFilesExist) {
+      return directory;
+    }
+  }
+
+  return null;
+}
+
+function resolveOnnxModelPaths():
+  | {
+      detectionPath: string;
+      recognitionPath: string;
+      dictionaryPath: string;
+    }
+  | undefined {
+  const assetDirectory = resolveOnnxModelAssetDirectory();
+  if (!assetDirectory) {
+    return undefined;
+  }
+  return {
+    detectionPath: path.join(assetDirectory, OCR_ONNX_MODEL_FILES.detectionPath),
+    recognitionPath: path.join(assetDirectory, OCR_ONNX_MODEL_FILES.recognitionPath),
+    dictionaryPath: path.join(assetDirectory, OCR_ONNX_MODEL_FILES.dictionaryPath),
+  };
+}
+
+const ONNX_MODEL_PATHS = resolveOnnxModelPaths();
+if (ONNX_MODEL_PATHS) {
+  console.log("[aion2-dashboard] ONNX OCR models path:", ONNX_MODEL_PATHS.detectionPath);
+} else {
+  console.warn("[aion2-dashboard] ONNX OCR models path unresolved; fallback to package default resolver");
+}
+
 const onnxOcrRuntime = createOnnxOcrRuntime({
   confidenceScale: OCR_PADDLE_CONFIDENCE_SCALE,
   createEngine: async () =>
     ((await OcrNode.create({
+      ...(ONNX_MODEL_PATHS ? { models: ONNX_MODEL_PATHS } : {}),
       onnxOptions: {
         executionMode: "sequential",
         graphOptimizationLevel: "all",

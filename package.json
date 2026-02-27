@@ -68,6 +68,9 @@
       }
     ],
     "asar": true,
+    "asarUnpack": [
+      "node_modules/@gutenye/ocr-models/assets/**"
+    ],
     "win": {
       "signAndEditExecutable": false,
       "icon": "build/icon.ico",
