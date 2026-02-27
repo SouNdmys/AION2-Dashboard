@@ -25,9 +25,9 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <WorkshopOverviewHeader state={state} starCount={starCount} message={message} error={error} />
+      <WorkshopSimulationPanel {...simulationPanelProps} />
       <WorkshopOcrPanel {...ocrPanelProps} />
       <WorkshopMarketAnalysisPanel {...marketAnalysisPanelProps} />
-      <WorkshopSimulationPanel {...simulationPanelProps} />
       <WorkshopInventoryPanel {...inventoryPanelProps} />
     </div>
   );
