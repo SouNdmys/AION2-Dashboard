@@ -22,7 +22,7 @@ import {
 import { buildWorkshopPriceHistoryResult } from "./pricing-history-orchestrator";
 import { getWorkshopPriceHistoryByQuery } from "./pricing-history-read";
 import { buildWorkshopPricesWithAddedSnapshot } from "./pricing-snapshot-add";
-import { buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
+import { buildWorkshopPricesWithClearedSnapshots, buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
 import { createWorkshopPriceSnapshotMutationContext } from "./pricing-snapshot-mutation-config";
 import {
   createWorkshopPriceSnapshotWithAnomalyDeps,
@@ -96,6 +96,13 @@ export function addWorkshopPriceSnapshot(payload: AddWorkshopPriceSnapshotInput)
 export function deleteWorkshopPriceSnapshot(snapshotId: string): WorkshopState {
   return runWorkshopPriceMutation(
     (state) => buildWorkshopPricesWithDeletedSnapshot(state.prices, snapshotId),
+    WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.mutationDeps,
+  );
+}
+
+export function clearAllWorkshopPriceSnapshots(): WorkshopState {
+  return runWorkshopPriceMutation(
+    (state) => buildWorkshopPricesWithClearedSnapshots(state.prices),
     WORKSHOP_PRICE_SNAPSHOT_MUTATION_CONTEXT.mutationDeps,
   );
 }

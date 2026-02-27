@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkshopPriceSnapshot } from "../../shared/types";
-import { buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
+import { buildWorkshopPricesWithClearedSnapshots, buildWorkshopPricesWithDeletedSnapshot } from "./pricing-snapshot-delete";
 
 const BASE_PRICES: WorkshopPriceSnapshot[] = [
   {
@@ -29,6 +29,16 @@ describe("workshop/pricing-snapshot-delete", () => {
 
   it("returns null when snapshot id is missing", () => {
     const nextPrices = buildWorkshopPricesWithDeletedSnapshot(BASE_PRICES, "missing");
+    expect(nextPrices).toBeNull();
+  });
+
+  it("clears all snapshots when list is non-empty", () => {
+    const nextPrices = buildWorkshopPricesWithClearedSnapshots(BASE_PRICES);
+    expect(nextPrices).toEqual([]);
+  });
+
+  it("returns null when clearing empty list", () => {
+    const nextPrices = buildWorkshopPricesWithClearedSnapshots([]);
     expect(nextPrices).toBeNull();
   });
 });

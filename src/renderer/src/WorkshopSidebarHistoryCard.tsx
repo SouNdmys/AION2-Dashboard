@@ -301,13 +301,48 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
     }
   }
 
+  async function onClearAllSnapshots(): Promise<void> {
+    const count = state?.prices.length ?? 0;
+    if (count <= 0) {
+      return;
+    }
+    const confirmed = window.confirm(`确认清空全部历史价格记录？当前共 ${count} 条，清空后不可恢复。`);
+    if (!confirmed) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const next = await workshopActions.clearAllWorkshopPriceSnapshots();
+      setState(next);
+      setHighlightSnapshotId(null);
+      setMessage("已清空全部历史价格记录");
+      onPriceDataChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "清空历史价格失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold tracking-wide">历史价格管理</h3>
-        <button className="pill-btn" onClick={() => void refresh()} disabled={busy}>
-          刷新
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="pill-btn text-rose-300"
+            onClick={() => void onClearAllSnapshots()}
+            disabled={busy || (state?.prices.length ?? 0) <= 0}
+          >
+            一键清空全部
+          </button>
+          <button className="pill-btn" onClick={() => void refresh()} disabled={busy}>
+            刷新
+          </button>
+        </div>
       </div>
       <p className="mt-2 text-xs text-slate-300">用于误操作修正。删除后会立即影响行情与制作模拟。</p>
 

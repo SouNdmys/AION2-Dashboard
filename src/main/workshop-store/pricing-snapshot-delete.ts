@@ -9,3 +9,10 @@ export function buildWorkshopPricesWithDeletedSnapshot(
   }
   return prices.filter((entry) => entry.id !== snapshotId);
 }
+
+export function buildWorkshopPricesWithClearedSnapshots(prices: WorkshopPriceSnapshot[]): WorkshopPriceSnapshot[] | null {
+  if (prices.length === 0) {
+    return null;
+  }
+  return [];
+}

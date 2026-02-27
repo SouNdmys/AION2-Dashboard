@@ -33,6 +33,7 @@ import {
 import { extractWorkshopOcrText, importWorkshopOcrPrices } from "../workshop-store/ocr";
 import {
   addWorkshopPriceSnapshot,
+  clearAllWorkshopPriceSnapshots,
   deleteWorkshopPriceSnapshot,
   getWorkshopPriceHistory,
   getWorkshopPriceSignals,
@@ -71,6 +72,7 @@ export function registerWorkshopIpcHandlers(): void {
     const body = readObjectPayload(payload, channel);
     return deleteWorkshopPriceSnapshot(readString(body, "snapshotId", channel));
   });
+  registerIpcHandler(IPC_CHANNELS.clearAllWorkshopPriceSnapshots, () => clearAllWorkshopPriceSnapshots());
   registerIpcHandler(IPC_CHANNELS.extractWorkshopOcrText, async (_event, payload: unknown) =>
     extractWorkshopOcrText(
       readObjectPayload(payload, IPC_CHANNELS.extractWorkshopOcrText) as unknown as WorkshopOcrExtractTextInput,
