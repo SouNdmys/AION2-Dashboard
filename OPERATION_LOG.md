@@ -2,6 +2,17 @@
 
 ## 2026-02-27
 
+### v2.1.2 补丁发布（OCR 安装版二次修复）
+- 发布版本升级至 `v2.1.2`。
+- OCR 路径修复：
+  - 修复模型路径候选在安装版仍可能命中 `app.asar` 的问题。
+  - 模型路径解析改为优先 `app.asar.unpacked` 物理路径，避免 ONNX Runtime 报 `File doesn't exist`。
+- 自动更新一致性修复：
+  - 对齐 `latest.yml` 与安装包 `sha512/size/path`，修复 checksum mismatch 报错。
+- 发布前校验：
+  - `npm run test:smoke` 通过
+  - `npm run dist:win` 通过
+
 ### 发布防回归补充（latest.yml 哈希守卫）
 - 新增发布校验脚本：`scripts/check-release-latest-yml.mjs`。
   - 自动比对 `release/<version>/latest.yml` 的 `path/sha512/size` 与安装包实际值。

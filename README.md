@@ -7,14 +7,22 @@
 
 ## 下载与更新
 
-- 最新版本（v2.1.1）:  
-  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.1.1`
+- 最新版本（v2.1.2）:  
+  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.1.2`
 - 资产说明:
   - `Setup` 安装版（推荐）：支持后续自动更新
   - `Portable` 单文件：即开即用，不走自动安装更新
   - `win.7z` 压缩包：解压即用，不走自动安装更新
 - 升级提示:
   - 建议 `v1.x` 用户手动安装一次 `v2.x Setup`，后续继续使用自动更新链路。
+
+## v2.1.2 发布重点
+
+- OCR 安装版模型路径热修（关键）：
+  - 修复候选模型路径在安装版仍可能落到 `app.asar` 的问题。
+  - 模型路径解析改为优先 `app.asar.unpacked` 物理目录，避免 ONNX Runtime 读取虚拟路径失败。
+- 自动更新元数据一致性修正：
+  - 对齐 `latest.yml` 与安装包的 `sha512/size/path`，修复“检查更新 checksum mismatch”问题。
 
 ## v2.1.1 发布重点
 
