@@ -120,7 +120,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
   } = props;
 
   return (
-      <article className="order-2 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+      <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
         <h4 className="text-sm font-semibold">市场分析器</h4>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
           <select
