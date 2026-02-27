@@ -21,8 +21,7 @@ function buildSimulation(
   taxRate: number,
   materialMode: "expanded" | "direct",
 ): WorkshopCraftSimulationResult {
-  const { recipeByOutput, itemById, inventoryByItemId, latestPriceByItemId, latestPriceByItemAndMarket } =
-    buildWorkshopSimulationContext(state);
+  const { recipeByOutput, itemById, inventoryByItemId, latestPriceByItemId } = buildWorkshopSimulationContext(state);
   const { requiredMaterials, craftRuns } = buildWorkshopSimulationMaterialPlan({
     recipeByOutput,
     itemById,
@@ -36,7 +35,7 @@ function buildSimulation(
       requiredMaterials,
       itemById,
       inventoryByItemId,
-      latestPriceByItemAndMarket,
+      latestPriceByItemId,
     });
 
   const { totalOutputQuantity, outputUnitPrice, grossRevenue, netRevenueAfterTax, estimatedProfit, estimatedProfitRate } =

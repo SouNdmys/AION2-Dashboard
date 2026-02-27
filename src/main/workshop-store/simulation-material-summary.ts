@@ -1,12 +1,10 @@
-import type { WorkshopItem, WorkshopSimulationMaterialRow } from "../../shared/types";
-import type { LatestWorkshopPriceByMarket } from "./price-market-selection";
-import { resolveCheapestWorkshopMaterialPrice } from "./price-market-selection";
+import type { WorkshopItem, WorkshopPriceSnapshot, WorkshopSimulationMaterialRow } from "../../shared/types";
 
 export interface BuildWorkshopSimulationMaterialSummaryInput {
   requiredMaterials: Map<string, number>;
   itemById: Map<string, WorkshopItem>;
   inventoryByItemId: Map<string, number>;
-  latestPriceByItemAndMarket: Map<string, LatestWorkshopPriceByMarket>;
+  latestPriceByItemId: Map<string, WorkshopPriceSnapshot>;
 }
 
 export interface WorkshopSimulationMaterialSummary {
@@ -24,8 +22,8 @@ export function buildWorkshopSimulationMaterialSummary(
       const requiredQty = Math.max(0, Math.floor(required));
       const owned = Math.max(0, Math.floor(input.inventoryByItemId.get(itemId) ?? 0));
       const missing = Math.max(0, requiredQty - owned);
-      const priceChoice = resolveCheapestWorkshopMaterialPrice(input.latestPriceByItemAndMarket.get(itemId));
-      const latestUnitPrice = priceChoice.unitPrice;
+      const latestPrice = input.latestPriceByItemId.get(itemId) ?? null;
+      const latestUnitPrice = latestPrice?.unitPrice ?? null;
       const requiredCost = latestUnitPrice === null ? null : latestUnitPrice * requiredQty;
       const missingCost = latestUnitPrice === null ? null : latestUnitPrice * missing;
       return {
@@ -35,7 +33,7 @@ export function buildWorkshopSimulationMaterialSummary(
         owned,
         missing,
         latestUnitPrice,
-        latestPriceMarket: priceChoice.market,
+        latestPriceMarket: latestPrice?.market,
         requiredCost,
         missingCost,
       };

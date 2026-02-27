@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkshopItem } from "../../shared/types";
-import { buildLatestWorkshopPriceByItemAndMarketMap } from "./price-market-selection";
+import { buildLatestWorkshopPriceSnapshotMap } from "./price-latest-map";
 import { buildWorkshopSimulationMaterialSummary } from "./simulation-material-summary";
 
 function item(id: string, name: string): WorkshopItem {
@@ -14,7 +14,7 @@ function item(id: string, name: string): WorkshopItem {
 }
 
 describe("workshop/simulation-material-summary", () => {
-  it("builds material rows with cheapest price and sorted missing desc", () => {
+  it("builds material rows with latest snapshot price and sorted missing desc", () => {
     const requiredMaterials = new Map<string, number>([
       ["item-a", 10],
       ["item-b", 3],
@@ -27,7 +27,7 @@ describe("workshop/simulation-material-summary", () => {
       ["item-a", 4],
       ["item-b", 3],
     ]);
-    const latestPriceByItemAndMarket = buildLatestWorkshopPriceByItemAndMarketMap([
+    const latestPriceByItemId = buildLatestWorkshopPriceSnapshotMap([
       {
         id: "s1",
         itemId: "item-a",
@@ -39,8 +39,8 @@ describe("workshop/simulation-material-summary", () => {
       {
         id: "w1",
         itemId: "item-a",
-        unitPrice: 100,
-        capturedAt: "2026-02-26T00:00:00.000Z",
+        unitPrice: 150,
+        capturedAt: "2026-02-26T00:01:00.000Z",
         source: "manual",
         market: "world",
       },
@@ -58,15 +58,15 @@ describe("workshop/simulation-material-summary", () => {
       requiredMaterials,
       itemById,
       inventoryByItemId,
-      latestPriceByItemAndMarket,
+      latestPriceByItemId,
     });
 
     expect(summary.materialRows.map((row) => row.itemId)).toEqual(["item-a", "item-b"]);
-    expect(summary.materialRows[0].latestUnitPrice).toBe(100);
+    expect(summary.materialRows[0].latestUnitPrice).toBe(150);
     expect(summary.materialRows[0].latestPriceMarket).toBe("world");
     expect(summary.materialRows[0].missing).toBe(6);
-    expect(summary.requiredMaterialCost).toBe(1_150);
-    expect(summary.missingPurchaseCost).toBe(600);
+    expect(summary.requiredMaterialCost).toBe(1_650);
+    expect(summary.missingPurchaseCost).toBe(900);
     expect(summary.unknownPriceItemIds).toEqual([]);
   });
 
@@ -78,7 +78,7 @@ describe("workshop/simulation-material-summary", () => {
       ]),
       itemById: new Map<string, WorkshopItem>([["item-a", item("item-a", "材料A")]]),
       inventoryByItemId: new Map<string, number>(),
-      latestPriceByItemAndMarket: buildLatestWorkshopPriceByItemAndMarketMap([
+      latestPriceByItemId: buildLatestWorkshopPriceSnapshotMap([
         {
           id: "s1",
           itemId: "item-a",
