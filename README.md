@@ -113,6 +113,7 @@ npm run dev
 
 ```bash
 npm run check:prepackage
+npm run check:release-yml
 ```
 
 该命令会自动执行:
@@ -135,6 +136,8 @@ Windows 本地打包（不发布更新元数据）:
 ```bash
 npm run dist:win
 ```
+
+`dist:win` 完成后会自动校验 `release/<version>/latest.yml` 的 `sha512/size` 与安装包一致性。
 
 Windows 发布（上传到 GitHub Releases，客户端可自动更新）:
 
@@ -176,6 +179,7 @@ npm run test:unit
 npm run typecheck
 npm run build
 npm run check:prepackage
+npm run check:release-yml
 npm run test:smoke
 ```
 

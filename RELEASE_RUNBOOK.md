@@ -49,6 +49,7 @@ npm run typecheck
 npm run build
 npm run check:prepackage
 npm run test:smoke
+npm run check:release-yml
 ```
 
 通过标准:
@@ -58,6 +59,7 @@ npm run test:smoke
 - `build` 通过（主进程/preload/renderer 产物齐全）
 - `check:prepackage` 通过（关键产物存在性检查）
 - `test:smoke` 通过（UI 关键链路无回归）
+- `check:release-yml` 通过（自动更新元数据与安装包哈希一致）
 
 ### 2.3 产包与发布
 
@@ -67,6 +69,7 @@ npm run test:smoke
    - `npm run dist:win:publish`
 3. 发布后核对:
    - Release 页面版本号与 tag 一致
+   - `latest.yml` 中 `path/sha512/size` 与安装版资产完全一致
    - 资产包含 `Setup` / `Portable` / `win.7z`（若策略未调整）
    - 安装版可正常启动并读取构建信息
    - 自动更新链路（安装版）可检出新版本

@@ -17,9 +17,10 @@
     "smoke:ui": "node scripts/ui-smoke.mjs",
     "test:smoke": "npm run test:unit && npm run build && npm run smoke:ui",
     "check:prepackage": "node scripts/prepackage-check.mjs",
+    "check:release-yml": "node scripts/check-release-latest-yml.mjs",
     "prepare:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-icon.ps1",
-    "dist:win": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish never",
-    "dist:win:publish": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish always"
+    "dist:win": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish never && npm run check:release-yml",
+    "dist:win:publish": "npm run prepare:icon && npm run check:prepackage && electron-builder --win nsis portable --publish always && npm run check:release-yml"
   },
   "dependencies": {
     "@gutenye/ocr-node": "^1.4.8",

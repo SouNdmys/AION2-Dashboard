@@ -2,6 +2,13 @@
 
 ## 2026-02-27
 
+### 发布防回归补充（latest.yml 哈希守卫）
+- 新增发布校验脚本：`scripts/check-release-latest-yml.mjs`。
+  - 自动比对 `release/<version>/latest.yml` 的 `path/sha512/size` 与安装包实际值。
+  - 不一致时阻断流程并打印候选安装包哈希，避免再次出现更新校验失败。
+- 新增 npm 脚本：`npm run check:release-yml`。
+- `dist:win` / `dist:win:publish` 已接入该校验，打包后自动执行。
+
 ### v2.1.1 补丁发布（OCR 安装版修复 + 工坊入口优化）
 - 发布版本升级至 `v2.1.1`（不覆盖 `v2.1.0`）。
 - OCR 热修：
