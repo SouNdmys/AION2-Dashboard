@@ -133,7 +133,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                     填写挑战完成次数
                   </button>
                   <button className="task-btn" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
-                    填写开箱完成次数(40奥德)
+                    填写开箱完成次数(80奥德)
                   </button>
                 </div>
               </div>

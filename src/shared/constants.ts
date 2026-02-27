@@ -140,9 +140,9 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   {
     id: "sanctum_box",
     title: "圣域开箱",
-    description: "每周奖励开箱 2 次，每次消耗 40 奥德。",
+    description: "每周奖励开箱 2 次，每次消耗 80 奥德。",
     category: "副本",
-    energyCost: 40,
+    energyCost: 80,
     goldReward: 0,
     counterTargets: [{ scope: "activities", key: "sanctumBoxRemaining" }],
     allowComplete: true,
