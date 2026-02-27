@@ -1,11 +1,10 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { WorkshopCraftSimulationResult } from "../../../../../shared/types";
+import type { WorkshopCraftSimulationResult, WorkshopPriceMarket } from "../../../../../shared/types";
 import { formatGold, formatMarketLabel, toPercent, type SimulationRecipeOption } from "../workshop-view-helpers";
 
 interface WorkshopSimulationPanelProps {
   busy: boolean;
   simulation: WorkshopCraftSimulationResult | null;
-  onApplySimulationMaterialEdits: () => Promise<void>;
   simulateMainCategory: string;
   setSimulateMainCategory: (value: string) => void;
   simulationMainCategoryOptions: string[];
@@ -22,6 +21,7 @@ interface WorkshopSimulationPanelProps {
   taxMode: "0.1" | "0.2";
   setTaxMode: (value: "0.1" | "0.2") => void;
   onSimulate: () => Promise<void>;
+  onFocusSimulationMaterial: (itemId: string, market?: WorkshopPriceMarket) => void;
   resolveItemName: (itemId: string) => string;
   simulationMaterialDraft: Record<string, { unitPrice: string; owned: string }>;
   setSimulationMaterialDraft: Dispatch<SetStateAction<Record<string, { unitPrice: string; owned: string }>>>;
@@ -31,7 +31,6 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
   const {
     busy,
     simulation,
-    onApplySimulationMaterialEdits,
     simulateMainCategory,
     setSimulateMainCategory,
     simulationMainCategoryOptions,
@@ -48,6 +47,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     taxMode,
     setTaxMode,
     onSimulate,
+    onFocusSimulationMaterial,
     resolveItemName,
     simulationMaterialDraft,
     setSimulationMaterialDraft,
@@ -57,11 +57,6 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold">做装模拟器</h4>
-        {simulation ? (
-          <button className="pill-btn" onClick={() => void onApplySimulationMaterialEdits()} disabled={busy}>
-            保存成品/材料价格与库存并重算
-          </button>
-        ) : null}
       </div>
       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
         <select
@@ -162,13 +157,22 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                   <th className="px-2 py-1">库存(可改)</th>
                   <th className="px-2 py-1">缺口</th>
                   <th className="px-2 py-1">单价(可改)</th>
-                  <th className="px-2 py-1">默认取价</th>
+                  <th className="px-2 py-1">取价来源</th>
                 </tr>
               </thead>
               <tbody>
                 {simulation.materialRows.map((row) => (
                   <tr key={`sim-material-${row.itemId}`} className="border-t border-white/10">
-                    <td className="px-2 py-1">{row.itemName}</td>
+                    <td className="px-2 py-1">
+                      <button
+                        className="text-left text-cyan-200 hover:underline disabled:cursor-not-allowed disabled:text-slate-300"
+                        onClick={() => onFocusSimulationMaterial(row.itemId, row.latestPriceMarket)}
+                        disabled={busy}
+                        title="联动显示该材料的历史价格与市场分析"
+                      >
+                        {row.itemName}
+                      </button>
+                    </td>
                     <td className="px-2 py-1">{row.required}</td>
                     <td className="px-2 py-1">
                       <input

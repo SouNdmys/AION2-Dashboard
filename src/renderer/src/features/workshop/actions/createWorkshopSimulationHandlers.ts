@@ -30,7 +30,6 @@ interface CreateWorkshopSimulationHandlersParams {
 interface WorkshopSimulationHandlers {
   onJumpSimulationRecipe: (recipeId: string) => void;
   onSimulate: () => Promise<void>;
-  onApplySimulationMaterialEdits: () => Promise<void>;
 }
 
 export function createWorkshopSimulationHandlers(params: CreateWorkshopSimulationHandlersParams): WorkshopSimulationHandlers {
@@ -83,6 +82,63 @@ export function createWorkshopSimulationHandlers(params: CreateWorkshopSimulatio
     setError(null);
     setMessage(null);
     try {
+      let hasPersistedEdits = false;
+      if (simulation && simulation.recipeId === simulateRecipeId) {
+        const outputPriceText = simulationOutputPriceDraft.trim();
+        if (outputPriceText) {
+          const outputUnitPrice = toInt(outputPriceText);
+          if (outputUnitPrice === null || outputUnitPrice <= 0) {
+            throw new Error(`成品「${simulation.outputItemName}」售价必须是大于 0 的整数。`);
+          }
+          if (simulation.outputUnitPrice === null || outputUnitPrice !== simulation.outputUnitPrice) {
+            await workshopActions.addWorkshopPriceSnapshot({
+              itemId: simulation.outputItemId,
+              unitPrice: outputUnitPrice,
+              source: "manual",
+              note: "simulate-output-edit",
+            });
+            hasPersistedEdits = true;
+          }
+        }
+
+        for (const row of simulation.materialRows) {
+          const draft = simulationMaterialDraft[row.itemId];
+          if (!draft) {
+            continue;
+          }
+          const owned = toInt(draft.owned);
+          if (owned === null || owned < 0) {
+            throw new Error(`材料「${row.itemName}」库存必须是大于等于 0 的整数。`);
+          }
+          if (owned !== row.owned) {
+            await workshopActions.upsertWorkshopInventory({ itemId: row.itemId, quantity: owned });
+            hasPersistedEdits = true;
+          }
+          const priceText = draft.unitPrice.trim();
+          if (priceText) {
+            const unitPrice = toInt(priceText);
+            if (unitPrice === null || unitPrice <= 0) {
+              throw new Error(`材料「${row.itemName}」单价必须是大于 0 的整数。`);
+            }
+            if (row.latestUnitPrice === null || unitPrice !== row.latestUnitPrice) {
+              await workshopActions.addWorkshopPriceSnapshot({
+                itemId: row.itemId,
+                unitPrice,
+                source: "manual",
+                market: row.latestPriceMarket,
+                note: "simulate-inline-edit",
+              });
+              hasPersistedEdits = true;
+            }
+          }
+        }
+      }
+
+      if (hasPersistedEdits) {
+        const nextState = await workshopActions.getWorkshopState();
+        setState(nextState);
+      }
+
       const result = await workshopActions.simulateWorkshopCraft({
         recipeId: simulateRecipeId,
         runs,
@@ -99,93 +155,14 @@ export function createWorkshopSimulationHandlers(params: CreateWorkshopSimulatio
       });
       setSimulationMaterialDraft(draftMap);
       setSimulationOutputPriceDraft(result.outputUnitPrice === null ? "" : String(result.outputUnitPrice));
-      setMessage("模拟完成");
+      if (hasPersistedEdits) {
+        await Promise.all([loadCraftOptions(), loadSignals()]);
+        setMessage("已保存成品/材料价格与库存，并完成模拟重算。");
+      } else {
+        setMessage("模拟完成");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "模拟失败");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onApplySimulationMaterialEdits(): Promise<void> {
-    if (!simulation) {
-      setError("请先运行一次模拟。");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const outputPriceText = simulationOutputPriceDraft.trim();
-      if (outputPriceText) {
-        const outputUnitPrice = toInt(outputPriceText);
-        if (outputUnitPrice === null || outputUnitPrice <= 0) {
-          throw new Error(`成品「${simulation.outputItemName}」售价必须是大于 0 的整数。`);
-        }
-        if (simulation.outputUnitPrice === null || outputUnitPrice !== simulation.outputUnitPrice) {
-          await workshopActions.addWorkshopPriceSnapshot({
-            itemId: simulation.outputItemId,
-            unitPrice: outputUnitPrice,
-            source: "manual",
-            note: "simulate-output-edit",
-          });
-        }
-      }
-
-      for (const row of simulation.materialRows) {
-        const draft = simulationMaterialDraft[row.itemId];
-        if (!draft) {
-          continue;
-        }
-        const owned = toInt(draft.owned);
-        if (owned === null || owned < 0) {
-          throw new Error(`材料「${row.itemName}」库存必须是大于等于 0 的整数。`);
-        }
-        if (owned !== row.owned) {
-          await workshopActions.upsertWorkshopInventory({ itemId: row.itemId, quantity: owned });
-        }
-        const priceText = draft.unitPrice.trim();
-        if (priceText) {
-          const unitPrice = toInt(priceText);
-          if (unitPrice === null || unitPrice <= 0) {
-            throw new Error(`材料「${row.itemName}」单价必须是大于 0 的整数。`);
-          }
-          if (row.latestUnitPrice === null || unitPrice !== row.latestUnitPrice) {
-            await workshopActions.addWorkshopPriceSnapshot({
-              itemId: row.itemId,
-              unitPrice,
-              source: "manual",
-              market: row.latestPriceMarket,
-              note: "simulate-inline-edit",
-            });
-          }
-        }
-      }
-
-      const [nextState, rerun] = await Promise.all([
-        workshopActions.getWorkshopState(),
-        workshopActions.simulateWorkshopCraft({
-          recipeId: simulation.recipeId,
-          runs: simulation.runs,
-          taxRate,
-          materialMode: "direct",
-        }),
-      ]);
-      setState(nextState);
-      setSimulation(rerun);
-      const nextDraftMap: Record<string, { unitPrice: string; owned: string }> = {};
-      rerun.materialRows.forEach((row) => {
-        nextDraftMap[row.itemId] = {
-          unitPrice: row.latestUnitPrice === null ? "" : String(row.latestUnitPrice),
-          owned: String(row.owned),
-        };
-      });
-      setSimulationMaterialDraft(nextDraftMap);
-      setSimulationOutputPriceDraft(rerun.outputUnitPrice === null ? "" : String(rerun.outputUnitPrice));
-      await Promise.all([loadCraftOptions(), loadSignals()]);
-      setMessage("成品/材料价格与库存已保存，并已按最新数据重算。");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "更新材料参数失败");
     } finally {
       setBusy(false);
     }
@@ -194,6 +171,5 @@ export function createWorkshopSimulationHandlers(params: CreateWorkshopSimulatio
   return {
     onJumpSimulationRecipe,
     onSimulate,
-    onApplySimulationMaterialEdits,
   };
 }

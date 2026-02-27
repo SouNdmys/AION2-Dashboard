@@ -410,7 +410,7 @@ export function useWorkshopViewModel(params: UseWorkshopViewModelParams) {
     setMessage,
     historyChartAnchorRef,
   });
-  const { onJumpSimulationRecipe, onSimulate, onApplySimulationMaterialEdits } = createWorkshopSimulationHandlers({
+  const { onJumpSimulationRecipe, onSimulate } = createWorkshopSimulationHandlers({
     simulateRecipeId,
     simulateRuns,
     taxRate,
@@ -585,7 +585,6 @@ export function useWorkshopViewModel(params: UseWorkshopViewModelParams) {
     },
     simulationPanelProps: {
       simulation,
-      onApplySimulationMaterialEdits,
       simulateMainCategory,
       setSimulateMainCategory,
       simulationMainCategoryOptions,
@@ -602,6 +601,9 @@ export function useWorkshopViewModel(params: UseWorkshopViewModelParams) {
       taxMode,
       setTaxMode,
       onSimulate,
+      onFocusSimulationMaterial: (itemId, market) => {
+        onViewHistoryCurveForItem(itemId, { scroll: false, market });
+      },
       resolveItemName: (itemId) => itemById.get(itemId)?.name ?? itemId,
       simulationMaterialDraft,
       setSimulationMaterialDraft,
