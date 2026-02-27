@@ -2,6 +2,26 @@
 
 ## 2026-02-27
 
+### UI 改造收工笔记（Phase 0 完成，待明日开工）
+- 今日状态：
+  - `v2.1.3` 已发布并确认为当前稳定可用版本。
+  - 已完成 UI 改造 `Phase 0` 基线冻结。
+- Phase 0 产物：
+  - 基线说明：`UI_BASELINE_PHASE0.md`
+  - 截图目录：`artifacts/ui-baseline/phase0/`
+  - 截图脚本：`scripts/ui-baseline-phase0-capture.mjs`
+  - 执行命令：`npm run capture:ui-baseline:phase0`
+- 基线关键数据（工坊首屏）：
+  - 桌面 `1728x1117`：可见交互控件 `66`
+  - 窄屏 `430x932`：可见交互控件 `23`
+  - 说明：当前主要问题是“默认信息暴露过多”，非流程不可用。
+- 明日开工顺序：
+  1. 进入 `Phase 1`（Design Tokens 收敛）
+  2. 统一 `styles.css` 的颜色/间距/圆角/控件高度变量
+  3. 收敛 `.task-btn/.pill-btn/input/select` 风格
+  4. 跑 `npm run typecheck && npm run test:unit`
+  5. 输出第一批前后对比截图
+
 ### v2.1.3 稳定发布（工坊排序修复）
 - 发布版本升级至 `v2.1.3`，作为当前稳定可用版本。
 - 工坊 UI 热修：
