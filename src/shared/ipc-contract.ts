@@ -124,6 +124,10 @@ export const IPC_INVOKE_SPECS = {
     IPC_CHANNELS.selectCharacter,
     (characterId) => ({ characterId }),
   ),
+  setCharacterStar: defineInvokeSpec<[characterId: string, isStarred: boolean], { characterId: string; isStarred: boolean }, AppState>(
+    IPC_CHANNELS.setCharacterStar,
+    (characterId, isStarred) => ({ characterId, isStarred }),
+  ),
   updateCharacterProfile: defineInvokeSpec<
     [characterId: string, payload: { classTag?: string | null; gearScore?: number | null }],
     { characterId: string; classTag?: string | null; gearScore?: number | null },
@@ -258,6 +262,7 @@ export const IPC_INVOKE_SPECS = {
     IPC_CHANNELS.deleteWorkshopPriceSnapshot,
     (snapshotId) => ({ snapshotId }),
   ),
+  clearAllWorkshopPriceSnapshots: noPayloadSpec<WorkshopState>(IPC_CHANNELS.clearAllWorkshopPriceSnapshots),
   extractWorkshopOcrText: passthroughPayloadSpec<WorkshopOcrExtractTextInput, WorkshopOcrExtractTextResult>(IPC_CHANNELS.extractWorkshopOcrText),
   configureWorkshopOcrHotkey: passthroughPayloadSpec<WorkshopOcrHotkeyConfig, WorkshopOcrHotkeyState>(
     IPC_CHANNELS.configureWorkshopOcrHotkey,

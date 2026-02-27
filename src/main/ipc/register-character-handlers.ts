@@ -6,6 +6,7 @@ import {
   deleteCharacter,
   renameCharacter,
   reorderCharacters,
+  setCharacterStar,
   selectCharacter,
   setCorridorCompleted,
   updateAodePlan,
@@ -74,6 +75,15 @@ export function registerCharacterIpcHandlers(): void {
     const channel = IPC_CHANNELS.selectCharacter;
     const body = readObjectPayload(payload, channel);
     return selectCharacter(readString(body, "characterId", channel));
+  });
+  registerIpcHandler(IPC_CHANNELS.setCharacterStar, (_event, payload: unknown) => {
+    const channel = IPC_CHANNELS.setCharacterStar;
+    const body = readObjectPayload(payload, channel);
+    const isStarred = readOptionalBoolean(body, "isStarred", channel);
+    if (isStarred === undefined) {
+      throw new Error(`[${channel}] invalid payload: field "isStarred" is required`);
+    }
+    return setCharacterStar(readString(body, "characterId", channel), isStarred);
   });
   registerIpcHandler(IPC_CHANNELS.updateCharacterProfile, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.updateCharacterProfile;

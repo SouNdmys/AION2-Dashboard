@@ -4,6 +4,7 @@ import type { AccountState, CharacterState } from "../shared/types";
 import {
   applyCorridorCompletionToCharacter,
   reorderCharactersByIds,
+  setCharacterStarInList,
   setCorridorCompletedForCharacter,
   updateArtifactStatusForAccount,
   updateCharacterProfileInList,
@@ -44,6 +45,18 @@ describe("store/store-domain-character-mutation", () => {
     expect(() => reorderCharactersByIds(characters, ["char-a"])).toThrowError("排序数据与角色数量不一致");
     expect(() => reorderCharactersByIds(characters, ["char-a", "char-a", "char-c"])).toThrowError("排序数据存在重复角色");
     expect(() => reorderCharactersByIds(characters, ["char-a", "char-b", "char-x"])).toThrowError("排序数据包含未知角色");
+  });
+
+  it("toggles character star state and validates target existence", () => {
+    const characters = [createCharacter("char-a"), createCharacter("char-b")];
+    const next = setCharacterStarInList(characters, "char-a", { isStarred: true });
+    expect(next[0].isStarred).toBe(true);
+    expect(next[1].isStarred).toBe(false);
+
+    const unchanged = setCharacterStarInList(next, "char-a", { isStarred: true });
+    expect(unchanged).toBe(next);
+
+    expect(() => setCharacterStarInList(characters, "char-x", { isStarred: true })).toThrowError("角色不存在");
   });
 
   it("updates account corridor status and validates account existence", () => {

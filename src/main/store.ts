@@ -22,6 +22,7 @@ import {
   applyCorridorCompletionToCharacter,
   reorderCharactersByIds,
   setCorridorCompletedForCharacter,
+  setCharacterStarInList,
   updateArtifactStatusForAccount,
   updateCharacterProfileInList,
   updateEnergySegmentsForCharacter,
@@ -341,6 +342,19 @@ export function updateCharacterProfile(
     { action: "更新角色档案", characterId },
     (draft) => {
       draft.characters = updateCharacterProfileInList(draft.characters, characterId, payload, SETTINGS_MAX_THRESHOLD);
+      return draft;
+    },
+  );
+}
+
+export function setCharacterStar(characterId: string, isStarred: boolean): AppState {
+  return commitMutation(
+    {
+      action: isStarred ? "星标角色" : "取消角色星标",
+      characterId,
+    },
+    (draft) => {
+      draft.characters = setCharacterStarInList(draft.characters, characterId, { isStarred });
       return draft;
     },
   );

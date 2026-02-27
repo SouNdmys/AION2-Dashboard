@@ -168,6 +168,18 @@ export function selectCharacterAction(params: SelectCharacterParams): void {
   void sync(appActions.selectCharacter(characterId));
 }
 
+interface ToggleCharacterStarParams {
+  characterId: string;
+  isStarred: boolean;
+  appActions: AppActions;
+  sync: SyncRunner;
+}
+
+export function toggleCharacterStarAction(params: ToggleCharacterStarParams): void {
+  const { characterId, isStarred, appActions, sync } = params;
+  void sync(appActions.setCharacterStar(characterId, isStarred), isStarred ? "已星标角色" : "已取消角色星标");
+}
+
 interface ApplyCorridorSettingsParams {
   selectedAccountId: string | null;
   corridorDraft: CorridorDraft;

@@ -106,6 +106,7 @@ export interface CharacterState {
   id: string;
   accountId: string;
   name: string;
+  isStarred: boolean;
   classTag?: string;
   gearScore?: number;
   avatarSeed: string;

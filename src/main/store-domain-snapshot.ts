@@ -90,6 +90,7 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
     id,
     accountId: typeof entity.accountId === "string" ? entity.accountId : fallbackAccountId,
     name: typeof entity.name === "string" ? entity.name : fallbackName,
+    isStarred: typeof entity.isStarred === "boolean" ? entity.isStarred : base.isStarred,
     classTag: typeof entity.classTag === "string" && entity.classTag.trim() ? entity.classTag.trim() : undefined,
     gearScore:
       typeof entity.gearScore === "number" && Number.isFinite(entity.gearScore)

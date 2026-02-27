@@ -317,6 +317,7 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string,
     id,
     accountId,
     name,
+    isStarred: false,
     avatarSeed: id.slice(0, 6),
     energy: {
       baseCurrent: ENERGY_DEFAULT_BASE_START,

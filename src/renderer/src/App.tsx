@@ -270,6 +270,7 @@ export function App(): JSX.Element {
     onSaveCharacterProfile,
     onDeleteCharacter,
     onSelectCharacter,
+    onToggleCharacterStar,
     onApplyCorridorSettings,
     onApplyCorridorCompletionFromSettings,
     onSaveShopPlan,
@@ -396,6 +397,7 @@ export function App(): JSX.Element {
           canAddCharacterInSelectedAccount={canAddCharacterInSelectedAccount}
           accountCharacters={accountCharacters}
           onSelectCharacter={onSelectCharacter}
+          onToggleCharacterStar={onToggleCharacterStar}
         />
 
         <section className="min-w-0 w-full space-y-5">

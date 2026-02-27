@@ -7,6 +7,10 @@ export interface UpdateCharacterProfilePayload {
   gearScore?: number | null;
 }
 
+export interface SetCharacterStarPayload {
+  isStarred: boolean;
+}
+
 export interface UpdateArtifactStatusPayload {
   accountId: string;
   lowerAvailable: number;
@@ -48,6 +52,27 @@ export function updateCharacterProfileInList(
     ...target,
     classTag,
     gearScore,
+  };
+  return next;
+}
+
+export function setCharacterStarInList(
+  characters: CharacterState[],
+  characterId: string,
+  payload: SetCharacterStarPayload,
+): CharacterState[] {
+  const index = characters.findIndex((item) => item.id === characterId);
+  if (index < 0) {
+    throw new Error("角色不存在");
+  }
+  const target = characters[index];
+  if (target.isStarred === payload.isStarred) {
+    return characters;
+  }
+  const next = [...characters];
+  next[index] = {
+    ...target,
+    isStarred: payload.isStarred,
   };
   return next;
 }

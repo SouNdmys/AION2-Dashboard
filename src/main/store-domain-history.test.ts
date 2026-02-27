@@ -13,6 +13,7 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
     id,
     accountId,
     name,
+    isStarred: false,
     avatarSeed: "seed",
     energy: { baseCurrent: 100, bonusCurrent: 0, baseCap: 1000, bonusCap: 2000 },
     aodePlan: { shopAodePurchaseUsed: 0, shopDailyDungeonTicketPurchaseUsed: 0, transformAodeUsed: 0 },

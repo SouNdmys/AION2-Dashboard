@@ -24,6 +24,7 @@ interface DashboardLeftSidebarProps {
   canAddCharacterInSelectedAccount: boolean;
   accountCharacters: CharacterState[];
   onSelectCharacter: (characterId: string) => void;
+  onToggleCharacterStar: (characterId: string, isStarred: boolean) => void;
 }
 
 export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Element {
@@ -50,6 +51,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
     canAddCharacterInSelectedAccount,
     accountCharacters,
     onSelectCharacter,
+    onToggleCharacterStar,
   } = props;
 
   return (
@@ -155,24 +157,32 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
         {accountCharacters.map((item) => {
           const active = item.id === selected.id;
           return (
-            <button
+            <div
               key={item.id}
-              onClick={() => onSelectCharacter(item.id)}
-              className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left transition ${
+              className={`group flex items-center gap-2 rounded-2xl border px-3 py-2 transition ${
                 active ? "border-white/25 bg-white/15" : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
               }`}
-              disabled={busy}
             >
-              <div className="avatar-ring">
-                <span className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</span>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.name}</p>
-                <p className="truncate text-xs text-slate-300">
-                  奥德 {item.energy.baseCurrent}(+{item.energy.bonusCurrent})/{item.energy.baseCap}
-                </p>
-              </div>
-            </button>
+              <button onClick={() => onSelectCharacter(item.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" disabled={busy}>
+                <div className="avatar-ring">
+                  <span className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.name}</p>
+                  <p className="truncate text-xs text-slate-300">
+                    奥德 {item.energy.baseCurrent}(+{item.energy.bonusCurrent})/{item.energy.baseCap}
+                  </p>
+                </div>
+              </button>
+              <button
+                className={`rounded-md px-2 py-1 text-sm ${item.isStarred ? "text-amber-300" : "text-slate-400 hover:text-slate-200"}`}
+                title={item.isStarred ? "取消星标" : "设为星标"}
+                onClick={() => onToggleCharacterStar(item.id, !item.isStarred)}
+                disabled={busy}
+              >
+                {item.isStarred ? "★" : "☆"}
+              </button>
+            </div>
           );
         })}
       </div>

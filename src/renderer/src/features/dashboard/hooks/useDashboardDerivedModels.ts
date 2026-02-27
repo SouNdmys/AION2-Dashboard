@@ -390,12 +390,13 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
       detail: string,
     ): void => {
       const weightFactor = getPriorityWeightFactor(getPriorityWeightLevel(state.settings, weightKey));
+      const starBonus = entry.character.isStarred ? 35 : 0;
       items.push({
         id: `${entry.character.id}-${taskKey}`,
         title,
-        subtitle: `${entry.character.name} · ${entry.account.name}`,
+        subtitle: `${entry.character.isStarred ? "★ " : ""}${entry.character.name} · ${entry.account.name}`,
         detail,
-        score: Math.round(score * weightFactor),
+        score: starBonus + Math.round(score * weightFactor),
         tone,
       });
     };

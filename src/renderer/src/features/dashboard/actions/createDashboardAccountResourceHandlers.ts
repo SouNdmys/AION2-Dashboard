@@ -15,6 +15,7 @@ import {
   saveTransformPlanAction,
   selectAccountAction,
   selectCharacterAction,
+  toggleCharacterStarAction,
 } from "./dashboardAccountResourceActions";
 
 type AppActions = NonNullable<Window["aionApi"]>;
@@ -61,6 +62,7 @@ interface AccountResourceHandlers {
   onSaveCharacterProfile: () => void;
   onDeleteCharacter: () => void;
   onSelectCharacter: (characterId: string) => void;
+  onToggleCharacterStar: (characterId: string, isStarred: boolean) => void;
   onApplyCorridorSettings: () => void;
   onApplyCorridorCompletionFromSettings: () => void;
   onSaveShopPlan: () => void;
@@ -189,6 +191,15 @@ export function createDashboardAccountResourceHandlers(
     });
   }
 
+  function onToggleCharacterStar(characterId: string, isStarred: boolean): void {
+    toggleCharacterStarAction({
+      characterId,
+      isStarred,
+      appActions,
+      sync,
+    });
+  }
+
   function onApplyCorridorSettings(): void {
     void applyCorridorSettingsAction({
       selectedAccountId: selectedAccount?.id ?? null,
@@ -251,6 +262,7 @@ export function createDashboardAccountResourceHandlers(
     onSaveCharacterProfile,
     onDeleteCharacter,
     onSelectCharacter,
+    onToggleCharacterStar,
     onApplyCorridorSettings,
     onApplyCorridorCompletionFromSettings,
     onSaveShopPlan,
