@@ -34,7 +34,7 @@ interface WorkshopHistoryHandlers {
   onToggleStarItem: (itemId: string) => void;
   onJumpHistoryManagerForCurrentItem: () => void;
   onJumpHistoryManagerForSnapshot: (snapshotId: string, capturedAt: string) => void;
-  onViewHistoryCurveForItem: (itemId: string, options?: { scroll?: boolean; market?: WorkshopPriceMarket }) => void;
+  onViewHistoryCurveForItem: (itemId: string, options?: { scroll?: boolean; market?: WorkshopPriceMarket; syncSidebar?: boolean }) => void;
 }
 
 export function createWorkshopHistoryHandlers(params: CreateWorkshopHistoryHandlersParams): WorkshopHistoryHandlers {
@@ -89,7 +89,10 @@ export function createWorkshopHistoryHandlers(params: CreateWorkshopHistoryHandl
     setMessage(`已定位到历史价格管理：${formatDateTime(capturedAt)}`);
   }
 
-  function onViewHistoryCurveForItem(itemId: string, options?: { scroll?: boolean; market?: WorkshopPriceMarket }): void {
+  function onViewHistoryCurveForItem(
+    itemId: string,
+    options?: { scroll?: boolean; market?: WorkshopPriceMarket; syncSidebar?: boolean },
+  ): void {
     const shouldScroll = options?.scroll ?? true;
     if (options?.market === "server" || options?.market === "world") {
       setSelectedItemPriceMarket(options.market);
@@ -106,6 +109,9 @@ export function createWorkshopHistoryHandlers(params: CreateWorkshopHistoryHandl
     const days = toInt(historyDaysInput);
     if (days !== null && days > 0) {
       void onLoadPriceHistory(days, { silent: true });
+    }
+    if (options?.syncSidebar) {
+      onJumpToHistoryManager?.({ itemId });
     }
     if (shouldScroll) {
       window.setTimeout(() => {

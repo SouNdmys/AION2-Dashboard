@@ -602,7 +602,7 @@ export function useWorkshopViewModel(params: UseWorkshopViewModelParams) {
       setTaxMode,
       onSimulate,
       onFocusSimulationMaterial: (itemId, market) => {
-        onViewHistoryCurveForItem(itemId, { scroll: false, market });
+        onViewHistoryCurveForItem(itemId, { scroll: false, market, syncSidebar: true });
       },
       resolveItemName: (itemId) => itemById.get(itemId)?.name ?? itemId,
       simulationMaterialDraft,
