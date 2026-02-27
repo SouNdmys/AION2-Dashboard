@@ -7,14 +7,29 @@
 
 ## 下载与更新
 
-- 最新版本（v2.0.1）:  
-  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.0.1`
+- 最新版本（v2.1.0）:  
+  `https://github.com/SouNdmys/AION2-Dashboard/releases/tag/v2.1.0`
 - 资产说明:
   - `Setup` 安装版（推荐）：支持后续自动更新
   - `Portable` 单文件：即开即用，不走自动安装更新
   - `win.7z` 压缩包：解压即用，不走自动安装更新
 - 升级提示:
   - 建议 `v1.x` 用户手动安装一次 `v2.x Setup`，后续继续使用自动更新链路。
+
+## v2.1.0 发布重点
+
+- 完成大规模架构重构收口（保持功能口径不变）：
+  - renderer 端按 `view / hooks / actions` 分层拆分，App 组合逻辑显著收敛。
+  - main/workshop-store 端按 domain 拆分（catalog / ocr / pricing / simulation / store），降低单文件耦合。
+  - IPC 调用改为 shared contract 驱动，统一错误格式与 payload 守卫。
+  - 补齐 `test:unit + test:smoke` 回归基线，发布链路稳定性提升。
+- 热修功能落地：
+  - 圣域开箱奥德消耗由 `40` 调整为 `80`。
+  - 做装模拟器材料行可点击联动：同步市场分析器与右侧历史价格管理（不跳转、不拉动页面）。
+  - 修复做装模拟器“手动价格被 OCR 价格抢回”的冲突，手动输入可稳定生效。
+  - 合并“运行模拟”与“保存成品/材料价格与库存并重算”为单一“运行模拟”入口。
+  - 新增角色星标（`★`）与待办排序加权。
+  - 新增历史价格管理“一键清空全部”。
 
 ## v2.0.0 发布重点
 
