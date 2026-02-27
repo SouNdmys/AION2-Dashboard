@@ -53,7 +53,7 @@ export function DashboardToolbar(props: DashboardToolbarProps): JSX.Element {
           工坊
         </button>
         <div className="ml-auto flex items-center gap-2">
-          <div className="data-pill whitespace-nowrap">版本: {buildVersion ? `v${buildVersion}` : "--"}</div>
+          <span className="pill-btn inline-flex items-center whitespace-nowrap">版本: {buildVersion ? `v${buildVersion}` : "--"}</span>
           <button className="pill-btn whitespace-nowrap" onClick={onCheckAppUpdate} disabled={busy}>
             检查更新
           </button>
