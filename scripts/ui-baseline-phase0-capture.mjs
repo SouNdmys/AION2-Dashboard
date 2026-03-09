@@ -131,7 +131,7 @@ async function run() {
       }
 
       await clickToolbar(page, "工坊");
-      await waitForVisibleText(page, "装备制作工作台");
+      await waitForVisibleText(page, "做装模拟器");
       await ensureWorkshopSimulationReady(page);
       {
         const filePath = path.join(OUTPUT_DIR, `${viewport.key}-workshop-overview.jpg`);

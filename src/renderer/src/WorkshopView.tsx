@@ -2,7 +2,7 @@ import { useId } from "react";
 import { WorkshopSidebarHistoryCard } from "./WorkshopSidebarHistoryCard";
 import { useWorkshopViewModel } from "./features/workshop/hooks/useWorkshopViewModel";
 import { WorkshopInventoryPanel } from "./features/workshop/views/WorkshopInventoryPanel";
-import { WorkshopLoadingCard, WorkshopOverviewHeader } from "./features/workshop/views/WorkshopOverviewHeader";
+import { WorkshopLoadingCard } from "./features/workshop/views/WorkshopOverviewHeader";
 import { WorkshopMarketAnalysisPanel } from "./features/workshop/views/WorkshopMarketAnalysisPanel";
 import { WorkshopOcrPanel } from "./features/workshop/views/WorkshopOcrPanel";
 import { WorkshopSimulationPanel } from "./features/workshop/views/WorkshopSimulationPanel";
@@ -26,7 +26,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     onPriceDataChanged,
   } = props;
   const expertModeId = useId();
-  const { state, starCount, message, error, ocrPanelProps, marketAnalysisPanelProps, simulationPanelProps, inventoryPanelProps } =
+  const { state, message, error, ocrPanelProps, marketAnalysisPanelProps, simulationPanelProps, inventoryPanelProps } =
     useWorkshopViewModel({
       onJumpToHistoryManager,
       externalPriceChangeNonce,
@@ -38,14 +38,12 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
 
   return (
     <div className="flex flex-col gap-5">
-      <WorkshopOverviewHeader state={state} starCount={starCount} message={message} error={error} />
-      <WorkshopSimulationPanel {...simulationPanelProps} />
+      <WorkshopSimulationPanel {...simulationPanelProps} message={message} error={error} />
       <details className="order-2 group">
         <summary aria-controls={expertModeId} className="details-summary soft-card px-4 py-3">
           <div>
             <p className="panel-kicker">Expert Tools</p>
             <h4 className="panel-title !mt-1 !text-sm">专业工具</h4>
-            <p className="summary-note mt-1">OCR 抓价、市场分析、历史价格管理和库存修正都在这里，默认不打断做装主流程。</p>
           </div>
           <span className="pill-btn group-open:!border-emerald-700/15 group-open:!bg-emerald-700/5 group-open:!text-slate-900">
             <span className="group-open:hidden">展开工具</span>

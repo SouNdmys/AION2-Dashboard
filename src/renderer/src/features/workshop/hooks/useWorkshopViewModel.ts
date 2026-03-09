@@ -584,6 +584,8 @@ export function useWorkshopViewModel(params: UseWorkshopViewModelParams) {
       sellZoneRows,
     },
     simulationPanelProps: {
+      message,
+      error,
       simulation,
       simulateMainCategory,
       setSimulateMainCategory,

@@ -4,6 +4,8 @@ import { formatGold, formatMarketLabel, toPercent, type SimulationRecipeOption }
 
 interface WorkshopSimulationPanelProps {
   busy: boolean;
+  message: string | null;
+  error: string | null;
   simulation: WorkshopCraftSimulationResult | null;
   simulateMainCategory: string;
   setSimulateMainCategory: (value: string) => void;
@@ -30,6 +32,8 @@ interface WorkshopSimulationPanelProps {
 export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JSX.Element {
   const {
     busy,
+    message,
+    error,
     simulation,
     simulateMainCategory,
     setSimulateMainCategory,
@@ -81,10 +85,11 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
         <div>
           <p className="panel-kicker">Craft Assistant</p>
           <h4 className="panel-title !mt-1">做装模拟器</h4>
-          <p className="panel-subtitle">只保留制作目标、售价和税率三个判断入口，先得到结论，再决定要不要展开专业工具。</p>
+          <p className="panel-subtitle">选择配方后直接运行模拟；修改材料价格与库存会立即参与结果计算，点击材料名可联动查看历史价格与市场分析。</p>
         </div>
-        <span className="pill-btn pill-static">装备制作</span>
       </div>
+      {message ? <p className="banner-positive mt-4 rounded-xl px-3 py-2 text-xs">{message}</p> : null}
+      {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
       <div className="section-card mt-4">
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <select
