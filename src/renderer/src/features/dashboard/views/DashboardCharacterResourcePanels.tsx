@@ -56,7 +56,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
   } = props;
 
   return (
-    <div className="mt-3 space-y-3">
+    <div className="mt-2.5 space-y-2.5">
       <section className="toolbar-card">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)] xl:items-center">
           <div>
@@ -69,7 +69,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
                 {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}
               </span>
             </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.06)]">
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.06)]">
               <div
                 className="flex h-full"
                 style={{
@@ -90,7 +90,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
                 />
               </div>
             </div>
-            <div className="toolbar-meta mt-1.5 summary-note">
+            <div className="toolbar-meta mt-1 summary-note">
               <span>基础优先扣除</span>
               <span>补充能量兜底</span>
             </div>
@@ -123,11 +123,11 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               <div className="data-pill !px-2.5 !py-1.5 !text-xs">副本券剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}</div>
             </div>
           </div>
-          <p className="summary-note mt-1">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
+          <p className="summary-note mt-0.5">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
           {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
             <p className="banner-warning mt-1 rounded-lg px-3 py-2 text-xs">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
           ) : null}
-          <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_auto_auto]">
+          <div className="toolbar-grid mt-2.5 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_auto_auto]">
             <select
               className="field-control"
               value={shopAodePurchaseUsedInput}
@@ -177,7 +177,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               <div className="data-pill !px-2.5 !py-1.5 !text-xs">额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次</div>
             </div>
           </div>
-          <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_auto]">
+          <div className="toolbar-grid mt-2.5 md:grid-cols-[minmax(0,0.9fr)_auto]">
             <select
               className="field-control"
               value={transformAodeUsedInput}

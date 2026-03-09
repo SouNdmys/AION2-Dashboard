@@ -72,19 +72,19 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
 
               return (
                 <div key={task.id} className="task-card">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="task-card-header">
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold">{task.title}</h3>
-                      <p className="mt-1 task-meta-line">{task.description}</p>
+                      <p className="mt-1 task-meta-line">{taskSummary.join(" · ")}</p>
                     </div>
                     <span className="task-progress-pill shrink-0">
                       剩余 {getTaskProgressText(selected, task, state.settings)}
                     </span>
                   </div>
 
-                  <div className="task-card-status mt-2 task-meta-line">{taskSummary.join(" | ")}</div>
+                  <p className="task-card-note mt-2">{task.description}</p>
 
-                  <div className="task-card-actions mt-3">
+                  <div className="task-card-actions mt-2.5">
                     <div className="task-action-row">
                     {showSetCompletedOnly ? (
                       <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
@@ -128,7 +128,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
             })}
             {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
               <div className="task-card">
-                <div className="flex items-center justify-between gap-2">
+                <div className="task-card-header">
                   <div>
                     <h3 className="text-sm font-semibold">圣域</h3>
                     <p className="task-meta-line mt-1">
@@ -139,7 +139,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                     手动设定
                   </button>
                 </div>
-                <div className="task-card-actions mt-3">
+                <div className="task-card-actions mt-2.5">
                   <div className="grid gap-2 md:grid-cols-[minmax(0,0.52fr)_minmax(0,0.48fr)]">
                     <div className="grid gap-2">
                       <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>

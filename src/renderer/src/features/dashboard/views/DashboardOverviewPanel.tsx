@@ -79,6 +79,30 @@ const OVERVIEW_GROUP_LABELS: Record<OverviewMetricGroupKey, string> = {
   leisure: "休闲",
 };
 
+const OVERVIEW_GROUP_PANEL_CLASS: Record<OverviewMetricGroupKey, string> = {
+  urgent: "overview-group-panel overview-group-panel-urgent",
+  dungeon: "overview-group-panel overview-group-panel-dungeon",
+  weekly: "overview-group-panel overview-group-panel-weekly",
+  mission: "overview-group-panel overview-group-panel-mission",
+  leisure: "overview-group-panel overview-group-panel-leisure",
+};
+
+const OVERVIEW_GROUP_CHIP_CLASS: Record<OverviewMetricGroupKey, string> = {
+  urgent: "overview-group-chip overview-group-chip-urgent",
+  dungeon: "overview-group-chip overview-group-chip-dungeon",
+  weekly: "overview-group-chip overview-group-chip-weekly",
+  mission: "overview-group-chip overview-group-chip-mission",
+  leisure: "overview-group-chip overview-group-chip-leisure",
+};
+
+const OVERVIEW_ROW_TONE_CLASS: Record<OverviewMetricGroupKey, string> = {
+  urgent: "overview-task-row overview-task-row-tone-urgent",
+  dungeon: "overview-task-row overview-task-row-tone-dungeon",
+  weekly: "overview-task-row overview-task-row-tone-weekly",
+  mission: "overview-task-row overview-task-row-tone-mission",
+  leisure: "overview-task-row overview-task-row-tone-leisure",
+};
+
 function getOverviewMetricGroupKey(metricKey: string): OverviewMetricGroupKey {
   if (["sanctum_raid", "sanctum_box", "corridor_lower", "corridor_middle"].includes(metricKey)) {
     return "urgent";
@@ -363,6 +387,8 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           const dragEnabled = overviewSortKey === "manual" && !busy;
           const dragging = draggingCharacterId === entry.character.id;
           const dragOver = dragOverCharacterId === entry.character.id && draggingCharacterId !== entry.character.id;
+          const spotlightMetric = actionableMetrics[0] ?? null;
+          const spotlightGroupKey = spotlightMetric ? getOverviewMetricGroupKey(spotlightMetric.key) : null;
           return (
             <article
               key={entry.character.id}
@@ -395,16 +421,30 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                 </div>
               </div>
               <div className="mt-3 space-y-3">
+                {spotlightMetric && spotlightGroupKey ? (
+                  <div className="rounded-2xl border border-[rgba(15,23,42,0.06)] bg-white/72 px-3 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={OVERVIEW_GROUP_CHIP_CLASS[spotlightGroupKey]}>{OVERVIEW_GROUP_LABELS[spotlightGroupKey]}</span>
+                      <span className="text-sm font-medium text-slate-900">当前最需要处理：{spotlightMetric.label}</span>
+                      <span className="summary-note">剩余 {formatCounter(spotlightMetric.current, spotlightMetric.total)}</span>
+                    </div>
+                  </div>
+                ) : null}
                 {visibleGroups.length > 0 ? (
                   <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                     {visibleGroups.map((groupKey) => (
-                      <section key={`${entry.character.id}-${groupKey}`} className="subtle-panel">
-                        <p className="overview-group-title">{OVERVIEW_GROUP_LABELS[groupKey]}</p>
+                      <section key={`${entry.character.id}-${groupKey}`} className={OVERVIEW_GROUP_PANEL_CLASS[groupKey]}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="overview-group-title">{OVERVIEW_GROUP_LABELS[groupKey]}</p>
+                          <span className={OVERVIEW_GROUP_CHIP_CLASS[groupKey]}>{groupedMetrics[groupKey].length} 项</span>
+                        </div>
                         <div className="overview-task-list">
                           {groupedMetrics[groupKey].map((metric) => (
-                            <div key={`${entry.character.id}-${groupKey}-${metric.key}`} className="overview-task-row">
+                            <div key={`${entry.character.id}-${groupKey}-${metric.key}`} className={OVERVIEW_ROW_TONE_CLASS[groupKey]}>
                               <span className="overview-task-row-label">{metric.label}</span>
-                              <span className={`overview-task-row-value ${metric.urgent ? "tone-danger" : ""}`}>{formatCounter(metric.current, metric.total)}</span>
+                              <span className={`overview-task-row-value ${metric.urgent ? "overview-task-row-value-urgent" : ""}`}>
+                                {formatCounter(metric.current, metric.total)}
+                              </span>
                             </div>
                           ))}
                         </div>
