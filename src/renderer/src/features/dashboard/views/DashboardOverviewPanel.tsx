@@ -1,4 +1,4 @@
-import { type DragEvent } from "react";
+import { type CSSProperties, type DragEvent } from "react";
 import { TASK_DEFINITIONS } from "../../../../../shared/constants";
 import type { AppState, TaskActionKind } from "../../../../../shared/types";
 import { COUNT_SELECT_MAX, NO_REGION_FILTER, type OverviewSortKey, type OverviewTaskFilter, type QuickTaskId } from "../dashboard-types";
@@ -107,16 +107,37 @@ function getOverviewMetricGroupKey(metricKey: string): OverviewMetricGroupKey {
   if (["sanctum_raid", "sanctum_box", "corridor_lower", "corridor_middle"].includes(metricKey)) {
     return "urgent";
   }
-  if (["expedition", "transcendence", "daily_dungeon", "nightmare", "awakening", "suppression", "abyss_lower", "abyss_middle"].includes(metricKey)) {
+  if (["expedition", "transcendence"].includes(metricKey)) {
     return "dungeon";
   }
-  if (["weekly_mission", "shop_aode", "shop_ticket", "transform_aode"].includes(metricKey)) {
+  if (
+    ["daily_dungeon", "nightmare", "awakening", "suppression", "weekly_mission", "abyss_lower", "abyss_middle", "shop_aode", "shop_ticket", "transform_aode"].includes(
+      metricKey,
+    )
+  ) {
     return "weekly";
   }
-  if (["daily_mission"].includes(metricKey)) {
+  if (metricKey === "daily_mission") {
     return "mission";
   }
   return "leisure";
+}
+
+function getOverviewProgressFillStyle(groupKey: OverviewMetricGroupKey, current: number, total: number): CSSProperties {
+  const ratio = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
+  const tint =
+    groupKey === "urgent"
+      ? "rgba(249, 115, 22, 0.12)"
+      : groupKey === "dungeon"
+        ? "rgba(59, 130, 246, 0.12)"
+        : groupKey === "weekly"
+          ? "rgba(245, 158, 11, 0.12)"
+          : groupKey === "mission"
+            ? "rgba(16, 185, 129, 0.12)"
+            : "rgba(148, 163, 184, 0.1)";
+  return {
+    backgroundImage: `linear-gradient(90deg, ${tint} 0%, ${tint} ${ratio * 100}%, rgba(255, 255, 255, 0.62) ${ratio * 100}%, rgba(255, 255, 255, 0.62) 100%)`,
+  };
 }
 
 function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalWindow: boolean): OverviewMetricChip[] {
@@ -168,6 +189,7 @@ interface DashboardOverviewPanelProps {
   quickTaskExists: boolean;
   quickTaskSetCompletedTotal: number | null;
   quickCorridorTask: { title: string; lane: "lower" | "middle" } | null;
+  quickCorridorSetCompletedTotal: number | null;
   overviewSortKey: OverviewSortKey;
   onOverviewSortKeyChange: (value: OverviewSortKey) => void;
   overviewTaskFilter: OverviewTaskFilter;
@@ -208,6 +230,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
     quickTaskExists,
     quickTaskSetCompletedTotal,
     quickCorridorTask,
+    quickCorridorSetCompletedTotal,
     overviewSortKey,
     onOverviewSortKeyChange,
     overviewTaskFilter,
@@ -281,7 +304,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           >
             {quickActionOptions.map((action) => (
               <option key={action} value={action}>
-                {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "输入已完成"}
+                {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "直接设总完成"}
               </option>
             ))}
           </select>
@@ -301,7 +324,9 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           </button>
         </div>
         {quickAction === "set_completed" ? (
-          <p className="mt-2 summary-note">当前内容总量 {quickCorridorTask ? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。</p>
+          <p className="mt-2 summary-note">
+            当前内容总量 {quickCorridorTask ? quickCorridorSetCompletedTotal ?? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。
+          </p>
         ) : null}
         <div className="overview-filter-row mt-3 flex flex-wrap items-center gap-2">
           <span className="summary-note">筛选</span>
@@ -440,7 +465,11 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                         </div>
                         <div className="overview-task-list">
                           {groupedMetrics[groupKey].map((metric) => (
-                            <div key={`${entry.character.id}-${groupKey}-${metric.key}`} className={OVERVIEW_ROW_TONE_CLASS[groupKey]}>
+                            <div
+                              key={`${entry.character.id}-${groupKey}-${metric.key}`}
+                              className={OVERVIEW_ROW_TONE_CLASS[groupKey]}
+                              style={getOverviewProgressFillStyle(groupKey, metric.current, metric.total)}
+                            >
                               <span className="overview-task-row-label">{metric.label}</span>
                               <span className={`overview-task-row-value ${metric.urgent ? "overview-task-row-value-urgent" : ""}`}>
                                 {formatCounter(metric.current, metric.total)}

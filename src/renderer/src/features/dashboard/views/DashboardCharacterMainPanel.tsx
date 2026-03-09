@@ -22,7 +22,9 @@ interface DashboardCharacterMainPanelProps {
   expeditionOverRewardThreshold: boolean;
   transcendenceOverThreshold: boolean;
   corridorLowerAvailable: number;
+  corridorLowerCap: number;
   corridorMiddleAvailable: number;
+  corridorMiddleCap: number;
   renameName: string;
   profileClassTagInput: string;
   profileGearScoreInput: string;
@@ -82,7 +84,9 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     expeditionOverRewardThreshold,
     transcendenceOverThreshold,
     corridorLowerAvailable,
+    corridorLowerCap,
     corridorMiddleAvailable,
+    corridorMiddleCap,
     renameName,
     profileClassTagInput,
     profileGearScoreInput,
@@ -144,7 +148,9 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
         expeditionOverRewardThreshold={expeditionOverRewardThreshold}
         transcendenceOverThreshold={transcendenceOverThreshold}
         corridorLowerAvailable={corridorLowerAvailable}
+        corridorLowerCap={corridorLowerCap}
         corridorMiddleAvailable={corridorMiddleAvailable}
+        corridorMiddleCap={corridorMiddleCap}
         renameName={renameName}
         profileClassTagInput={profileClassTagInput}
         profileGearScoreInput={profileGearScoreInput}

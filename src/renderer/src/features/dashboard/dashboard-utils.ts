@@ -10,12 +10,12 @@ import type { CorridorDraft, PriorityTone, PriorityWeightKey, SettingsDraft } fr
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 
 export function getQuickActionsForTask(task: TaskDefinition): TaskActionKind[] {
-  if (task.allowSetCompleted) {
-    return ["set_completed"];
-  }
   const actions: TaskActionKind[] = [];
   if (task.allowComplete) {
     actions.push("complete_once");
+  }
+  if (task.allowSetCompleted) {
+    actions.push("set_completed");
   }
   if (task.allowUseTicket) {
     actions.push("use_ticket");

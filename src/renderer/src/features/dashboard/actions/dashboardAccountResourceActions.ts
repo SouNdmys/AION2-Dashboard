@@ -194,11 +194,11 @@ export async function applyCorridorSettingsAction(params: ApplyCorridorSettingsP
   const lowerCount = toInt(corridorDraft.lowerAvailable);
   const middleCount = toInt(corridorDraft.middleAvailable);
   if (lowerCount === null || lowerCount < 0 || lowerCount > 3 || middleCount === null || middleCount < 0 || middleCount > 3) {
-    onError("回廊数量必须是 0-3");
+    onError("回廊上限必须是 0-3");
     return;
   }
   const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
-  await sync(appActions.updateArtifactStatus(selectedAccountId, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt), "已同步深渊回廊到当前账号角色");
+  await sync(appActions.updateArtifactStatus(selectedAccountId, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt), "已同步深渊回廊上限到当前账号角色");
 }
 
 interface ApplyCorridorCompletionFromSettingsParams {

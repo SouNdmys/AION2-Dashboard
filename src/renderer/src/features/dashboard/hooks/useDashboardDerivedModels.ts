@@ -133,9 +133,9 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const abyssMiddleTotal = 5;
 
             const corridorLowerCurrent = item.activities.corridorLowerAvailable;
-            const corridorLowerTotal = 3;
+            const corridorLowerTotal = item.activities.corridorLowerCap;
             const corridorMiddleCurrent = item.activities.corridorMiddleAvailable;
-            const corridorMiddleTotal = 3;
+            const corridorMiddleTotal = item.activities.corridorMiddleCap;
             const aodeLimits = getCharacterAodeLimits(state, item.id);
             const aodeBaseEnergyCurrent = item.energy.baseCurrent;
             const aodeBonusEnergyCurrent = item.energy.bonusCurrent;
@@ -160,15 +160,11 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
               suppressionCurrent,
               miniGameCurrent,
               spiritCurrent,
-            ].filter((value) => value > 0).length;
-            const missionReadyBuckets = [
-              dailyMissionCurrent,
               weeklyMissionCurrent,
               abyssLowerCurrent,
               abyssMiddleCurrent,
-              corridorLowerCurrent,
-              corridorMiddleCurrent,
             ].filter((value) => value > 0).length;
+            const missionReadyBuckets = [dailyMissionCurrent, corridorLowerCurrent, corridorMiddleCurrent].filter((value) => value > 0).length;
             const readyBuckets = dungeonReadyBuckets + weeklyReadyBuckets + missionReadyBuckets;
             return {
               character: item,
@@ -323,8 +319,11 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
       nightmare: 2,
       awakening: 3,
       suppression: 4,
-      mini_game: 5,
-      spirit_invasion: 6,
+      weekly_order: 5,
+      abyss_lower: 6,
+      abyss_middle: 7,
+      mini_game: 8,
+      spirit_invasion: 9,
     };
     if (base["周常"]) {
       base["周常"] = [...base["周常"]].sort((left, right) => {
@@ -421,7 +420,15 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
 
       const corridorPending = entry.corridorLowerCurrent + entry.corridorMiddleCurrent;
       if (corridorPending > 0) {
-        pushItem(entry, "corridor", "深渊回廊", 950 + corridorPending, "high", "corridor", `下层 ${entry.corridorLowerCurrent}/3，中层 ${entry.corridorMiddleCurrent}/3`);
+        pushItem(
+          entry,
+          "corridor",
+          "深渊回廊",
+          950 + corridorPending,
+          "high",
+          "corridor",
+          `下层 ${entry.corridorLowerCurrent}/${entry.corridorLowerTotal}，中层 ${entry.corridorMiddleCurrent}/${entry.corridorMiddleTotal}`,
+        );
       }
 
       if (entry.dailyMissionCurrent > 0) {

@@ -72,7 +72,9 @@ describe("store/store-domain-character-mutation", () => {
     });
 
     expect(next[0].activities.corridorLowerAvailable).toBe(3);
+    expect(next[0].activities.corridorLowerCap).toBe(3);
     expect(next[0].activities.corridorMiddleAvailable).toBe(0);
+    expect(next[0].activities.corridorMiddleCap).toBe(0);
     expect(next[1].activities.corridorLowerAvailable).toBe(characters[1].activities.corridorLowerAvailable);
     expect(() =>
       updateArtifactStatusForAccount(accounts, characters, {
@@ -86,12 +88,24 @@ describe("store/store-domain-character-mutation", () => {
   });
 
   it("applies and sets corridor completion with clamping", () => {
-    const characters = [createCharacter("char-a")];
+    const characters = [
+      {
+        ...createCharacter("char-a"),
+        activities: {
+          ...createCharacter("char-a").activities,
+          corridorLowerAvailable: 2,
+          corridorLowerCap: 2,
+          corridorMiddleAvailable: 2,
+          corridorMiddleCap: 2,
+        },
+      },
+    ];
     const applied = applyCorridorCompletionToCharacter(characters, "char-a", "lower", 10);
     expect(applied[0].activities.corridorLowerAvailable).toBe(0);
 
     const set = setCorridorCompletedForCharacter(characters, "char-a", "middle", 2);
-    expect(set[0].activities.corridorMiddleAvailable).toBe(1);
+    expect(set[0].activities.corridorMiddleAvailable).toBe(0);
+    expect(set[0].activities.corridorMiddleCap).toBe(2);
   });
 
   it("updates energy segments under character caps", () => {

@@ -166,13 +166,13 @@ export function App(): JSX.Element {
     if (!selected) return;
     setCorridorDraft((prev) => ({
       ...prev,
-      ...buildCorridorDraft(selected.activities.corridorLowerAvailable, selected.activities.corridorMiddleAvailable),
+      ...buildCorridorDraft(selected.activities.corridorLowerCap, selected.activities.corridorMiddleCap),
       completeAmount: prev.completeAmount,
     }));
   }, [
     selected?.id,
-    selected?.activities.corridorLowerAvailable,
-    selected?.activities.corridorMiddleAvailable,
+    selected?.activities.corridorLowerCap,
+    selected?.activities.corridorMiddleCap,
   ]);
 
   useEffect(() => {
@@ -199,6 +199,7 @@ export function App(): JSX.Element {
 
   const quickTask = taskById.get(quickTaskId as TaskId) ?? null;
   const quickCorridorTask = quickTaskId === "corridor_lower" || quickTaskId === "corridor_middle" ? QUICK_CORRIDOR_TASKS[quickTaskId] : null;
+  const quickTargetCharacter = state?.characters.find((item) => item.id === (quickCharacterId || selected?.id || "")) ?? selected ?? null;
   const quickActionOptions = useMemo(() => {
     if (quickCorridorTask) {
       return ["set_completed"] as TaskActionKind[];
@@ -209,10 +210,14 @@ export function App(): JSX.Element {
 
   const quickAmountOptions = useMemo(() => {
     const min = quickAction === "set_completed" ? 0 : 1;
-    const setCompletedMax = quickCorridorTask ? 3 : quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX;
+    const setCompletedMax = quickCorridorTask
+      ? quickCorridorTask.lane === "lower"
+        ? quickTargetCharacter?.activities.corridorLowerCap ?? 3
+        : quickTargetCharacter?.activities.corridorMiddleCap ?? 3
+      : quickTask?.setCompletedTotal ?? COUNT_SELECT_MAX;
     const max = quickAction === "set_completed" ? Math.min(COUNT_SELECT_MAX, setCompletedMax) : COUNT_SELECT_MAX;
     return buildCountOptions(min, max, quickAmount);
-  }, [quickAction, quickTask?.setCompletedTotal, quickCorridorTask, quickAmount]);
+  }, [quickAction, quickTask?.setCompletedTotal, quickCorridorTask, quickTargetCharacter, quickAmount]);
 
   useEffect(() => {
     if (!quickTask && !quickCorridorTask) return;
@@ -222,6 +227,20 @@ export function App(): JSX.Element {
       setQuickAmount(nextAction === "set_completed" ? "0" : "1");
     }
   }, [quickTask, quickCorridorTask, quickActionOptions, quickAction]);
+
+  useEffect(() => {
+    if (quickCorridorTask) {
+      setQuickAction("set_completed");
+      setQuickAmount("0");
+      return;
+    }
+    const nextAction = quickActionOptions[0];
+    if (!nextAction) {
+      return;
+    }
+    setQuickAction(nextAction);
+    setQuickAmount(nextAction === "set_completed" ? "0" : "1");
+  }, [quickTaskId, quickCorridorTask, quickActionOptions]);
 
   useEffect(() => {
     setDraggingCharacterId(null);
@@ -442,6 +461,13 @@ export function App(): JSX.Element {
             quickTaskExists={Boolean(quickTask)}
             quickTaskSetCompletedTotal={quickTask?.setCompletedTotal ?? null}
             quickCorridorTask={quickCorridorTask}
+            quickCorridorSetCompletedTotal={
+              quickCorridorTask
+                ? quickCorridorTask.lane === "lower"
+                  ? quickTargetCharacter?.activities.corridorLowerCap ?? 3
+                  : quickTargetCharacter?.activities.corridorMiddleCap ?? 3
+                : null
+            }
             overviewSortKey={overviewSortKey}
             onOverviewSortKeyChange={setOverviewSortKey}
             overviewTaskFilter={overviewTaskFilter}
@@ -482,7 +508,9 @@ export function App(): JSX.Element {
             expeditionOverRewardThreshold={expeditionOverRewardThreshold}
             transcendenceOverThreshold={transcendenceOverThreshold}
             corridorLowerAvailable={selected.activities.corridorLowerAvailable}
+            corridorLowerCap={selected.activities.corridorLowerCap}
             corridorMiddleAvailable={selected.activities.corridorMiddleAvailable}
+            corridorMiddleCap={selected.activities.corridorMiddleCap}
             renameName={renameName}
             profileClassTagInput={profileClassTagInput}
             profileGearScoreInput={profileGearScoreInput}

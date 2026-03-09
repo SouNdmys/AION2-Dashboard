@@ -211,6 +211,10 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
           : typeof activitiesRaw?.artifactAvailable === "number"
             ? clamp(activitiesRaw.artifactAvailable, 0, 3)
             : 0,
+      corridorLowerCap:
+        typeof activitiesRaw?.corridorLowerCap === "number"
+          ? clamp(activitiesRaw.corridorLowerCap, 0, 3)
+          : 3,
       corridorLowerNextAt:
         typeof activitiesRaw?.corridorLowerNextAt === "string"
           ? activitiesRaw.corridorLowerNextAt
@@ -219,6 +223,10 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
             : null,
       corridorMiddleAvailable:
         typeof activitiesRaw?.corridorMiddleAvailable === "number" ? clamp(activitiesRaw.corridorMiddleAvailable, 0, 3) : 0,
+      corridorMiddleCap:
+        typeof activitiesRaw?.corridorMiddleCap === "number"
+          ? clamp(activitiesRaw.corridorMiddleCap, 0, 3)
+          : 3,
       corridorMiddleNextAt: typeof activitiesRaw?.corridorMiddleNextAt === "string" ? activitiesRaw.corridorMiddleNextAt : null,
     },
     stats: {

@@ -23,7 +23,9 @@ interface DashboardCharacterHeaderPanelProps {
   expeditionOverRewardThreshold: boolean;
   transcendenceOverThreshold: boolean;
   corridorLowerAvailable: number;
+  corridorLowerCap: number;
   corridorMiddleAvailable: number;
+  corridorMiddleCap: number;
   renameName: string;
   profileClassTagInput: string;
   profileGearScoreInput: string;
@@ -64,7 +66,9 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
     expeditionOverRewardThreshold,
     transcendenceOverThreshold,
     corridorLowerAvailable,
+    corridorLowerCap,
     corridorMiddleAvailable,
+    corridorMiddleCap,
     renameName,
     profileClassTagInput,
     profileGearScoreInput,
@@ -123,7 +127,7 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
           <div className="mini-stat mini-stat-compact">
             <p className="mini-stat-label">回廊剩余</p>
             <p className="mini-stat-value">
-              下层 {corridorLowerAvailable} / 中层 {corridorMiddleAvailable}
+              下层 {corridorLowerAvailable}/{corridorLowerCap} / 中层 {corridorMiddleAvailable}/{corridorMiddleCap}
             </p>
           </div>
         </div>

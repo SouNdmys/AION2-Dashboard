@@ -137,7 +137,11 @@ export function applyQuickEntryAction(params: ApplyQuickEntryParams): void {
       onError("已完成次数不能小于 0");
       return;
     }
-    const completed = Math.min(rawAmount, 3);
+    const targetCharacter = state.characters.find((item) => item.id === characterId);
+    const cap = quickCorridorTask.lane === "lower"
+      ? targetCharacter?.activities.corridorLowerCap ?? 3
+      : targetCharacter?.activities.corridorMiddleCap ?? 3;
+    const completed = Math.min(rawAmount, cap);
     void sync(
       appActions.setCorridorCompleted(characterId, quickCorridorTask.lane, completed),
       `${characterName} ${quickCorridorTask.title} 已录入`,

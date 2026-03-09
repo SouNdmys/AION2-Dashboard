@@ -39,8 +39,10 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
       miniGameTicketBonus: 0,
       spiritInvasionRemaining: 7,
       corridorLowerAvailable: 0,
+      corridorLowerCap: 3,
       corridorLowerNextAt: null,
       corridorMiddleAvailable: 0,
+      corridorMiddleCap: 3,
       corridorMiddleNextAt: null,
     },
     stats: {

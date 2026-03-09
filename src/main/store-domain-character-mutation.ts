@@ -112,8 +112,10 @@ export function updateArtifactStatusForAccount(
       activities: {
         ...item.activities,
         corridorLowerAvailable: clamp(payload.lowerAvailable, 0, 3),
+        corridorLowerCap: clamp(payload.lowerAvailable, 0, 3),
         corridorLowerNextAt: payload.lowerNextAt,
         corridorMiddleAvailable: clamp(payload.middleAvailable, 0, 3),
+        corridorMiddleCap: clamp(payload.middleAvailable, 0, 3),
         corridorMiddleNextAt: payload.middleNextAt,
       },
     };
@@ -131,15 +133,18 @@ export function applyCorridorCompletionToCharacter(
     if (item.id !== characterId) {
       return item;
     }
+    const laneCap = lane === "lower" ? item.activities.corridorLowerCap : item.activities.corridorMiddleCap;
     return {
       ...item,
       activities: {
         ...item.activities,
         corridorLowerAvailable:
-          lane === "lower" ? clamp(item.activities.corridorLowerAvailable - amount, 0, 3) : item.activities.corridorLowerAvailable,
+          lane === "lower"
+            ? clamp(item.activities.corridorLowerAvailable - amount, 0, laneCap)
+            : item.activities.corridorLowerAvailable,
         corridorMiddleAvailable:
           lane === "middle"
-            ? clamp(item.activities.corridorMiddleAvailable - amount, 0, 3)
+            ? clamp(item.activities.corridorMiddleAvailable - amount, 0, laneCap)
             : item.activities.corridorMiddleAvailable,
       },
     };
@@ -152,12 +157,13 @@ export function setCorridorCompletedForCharacter(
   lane: CorridorLane,
   completed: number,
 ): CharacterState[] {
-  const safeCompleted = clamp(Math.floor(completed), 0, 3);
-  const nextAvailable = clamp(3 - safeCompleted, 0, 3);
   return characters.map((item) => {
     if (item.id !== characterId) {
       return item;
     }
+    const laneCap = lane === "lower" ? item.activities.corridorLowerCap : item.activities.corridorMiddleCap;
+    const safeCompleted = clamp(Math.floor(completed), 0, laneCap);
+    const nextAvailable = clamp(laneCap - safeCompleted, 0, laneCap);
     return {
       ...item,
       activities: {

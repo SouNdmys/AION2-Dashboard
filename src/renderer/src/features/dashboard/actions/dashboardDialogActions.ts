@@ -140,17 +140,17 @@ export async function confirmDashboardDialog(params: ConfirmDashboardDialogParam
       onDialogError("未找到当前账号");
       return;
     }
-    const lowerCount = toInt(dialog.lowerAvailable);
-    const middleCount = toInt(dialog.middleAvailable);
-    if (lowerCount === null || lowerCount < 0 || lowerCount > 3 || middleCount === null || middleCount < 0 || middleCount > 3) {
-      onDialogError("回廊数量必须是 0-3");
-      return;
-    }
+      const lowerCount = toInt(dialog.lowerAvailable);
+      const middleCount = toInt(dialog.middleAvailable);
+      if (lowerCount === null || lowerCount < 0 || lowerCount > 3 || middleCount === null || middleCount < 0 || middleCount > 3) {
+        onDialogError("回廊上限必须是 0-3");
+        return;
+      }
     const nextUnifiedAt = getNextUnifiedCorridorRefresh(new Date()).toISOString();
     const ok = await sync(
-      appActions.updateArtifactStatus(selectedAccountId, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
-      "已同步深渊回廊到当前账号角色",
-    );
+        appActions.updateArtifactStatus(selectedAccountId, lowerCount, nextUnifiedAt, middleCount, nextUnifiedAt),
+        "已同步深渊回廊上限到当前账号角色",
+      );
     if (ok) {
       onCorridorDraftSyncCounts(lowerCount, middleCount);
       onDialogClose();

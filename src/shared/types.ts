@@ -50,8 +50,10 @@ export interface ActivityState {
   miniGameTicketBonus: number;
   spiritInvasionRemaining: number;
   corridorLowerAvailable: number;
+  corridorLowerCap: number;
   corridorLowerNextAt: string | null;
   corridorMiddleAvailable: number;
+  corridorMiddleCap: number;
   corridorMiddleNextAt: string | null;
 }
 

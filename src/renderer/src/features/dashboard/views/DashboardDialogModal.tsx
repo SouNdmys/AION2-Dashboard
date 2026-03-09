@@ -73,7 +73,7 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
         {dialog.kind === "set_completed" ? (
           <>
             <h4 className="text-base font-semibold">
-              输入已完成次数 - {dialog.task.title} (0-{dialog.task.setCompletedTotal})
+              输入总完成次数 - {dialog.task.title} (0-{dialog.task.setCompletedTotal})
             </h4>
             <select
               className="mt-3 w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -117,10 +117,11 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
 
         {dialog.kind === "corridor_sync" ? (
           <>
-            <h4 className="text-base font-semibold">同步深渊回廊（当前账号）</h4>
+            <h4 className="text-base font-semibold">同步深渊回廊上限（当前账号）</h4>
+            <p className="mt-2 text-xs text-slate-300">这里录入本轮神器战后该账号角色的回廊总上限，后续角色页和总览都会按这个上限计算。</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <p className="text-xs text-slate-300">下层</p>
+                <p className="text-xs text-slate-300">下层上限</p>
                 <div className="grid grid-cols-1 gap-1">
                   <select
                     className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
@@ -137,7 +138,7 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-xs text-slate-300">中层</p>
+                <p className="text-xs text-slate-300">中层上限</p>
                 <div className="grid grid-cols-1 gap-1">
                   <select
                     className="rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-sm outline-none focus:border-cyan-300/60"
