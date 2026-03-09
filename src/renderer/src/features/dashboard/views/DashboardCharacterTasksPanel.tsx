@@ -82,9 +82,10 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                     </span>
                   </div>
 
-                  <div className="mt-2 task-meta-line">{taskSummary.join(" | ")}</div>
+                  <div className="task-card-status mt-2 task-meta-line">{taskSummary.join(" | ")}</div>
 
-                  <div className="task-action-row mt-3">
+                  <div className="task-card-actions mt-3">
+                    <div className="task-action-row">
                     {showSetCompletedOnly ? (
                       <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
                         录入次数
@@ -120,12 +121,13 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                         手动设定
                       </button>
                     ) : null}
+                    </div>
                   </div>
                 </div>
               );
             })}
             {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
-              <div className="task-card col-span-2">
+              <div className="task-card">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold">圣域</h3>
@@ -137,13 +139,18 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                     手动设定
                   </button>
                 </div>
-                <div className="task-action-row mt-3">
-                  <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
-                    挑战完成
-                  </button>
-                  <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
-                    开箱完成(80奥德)
-                  </button>
+                <div className="task-card-actions mt-3">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,0.52fr)_minmax(0,0.48fr)]">
+                    <div className="grid gap-2">
+                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
+                        挑战完成
+                      </button>
+                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
+                        开箱完成(80奥德)
+                      </button>
+                    </div>
+                    <div className="hidden md:block" />
+                  </div>
                 </div>
               </div>
             ) : null}

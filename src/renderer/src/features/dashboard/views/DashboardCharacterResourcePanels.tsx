@@ -56,8 +56,8 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
   } = props;
 
   return (
-    <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <section className="toolbar-card">
+    <div className="mt-3 grid items-start gap-3 xl:grid-cols-[minmax(0,0.74fr)_minmax(0,1.26fr)]">
+      <section className="toolbar-card self-start">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Energy</p>
@@ -93,7 +93,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             />
           </div>
         </div>
-        <div className="toolbar-meta mt-2 summary-note">
+        <div className="toolbar-meta mt-1.5 summary-note">
           <span>基础优先扣除</span>
           <span>补充能量兜底</span>
         </div>

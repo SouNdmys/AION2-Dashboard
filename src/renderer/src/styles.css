@@ -403,26 +403,39 @@ select {
   border-radius: 1.1rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.86);
-  padding: 0.85rem 0.95rem;
+  padding: 0.82rem 0.9rem;
 }
 
 .task-section {
   border-radius: 1.35rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(251, 251, 248, 0.92);
-  padding: 0.95rem;
+  padding: 0.82rem 0.9rem;
 }
 
 .task-meta-line {
   color: var(--text-secondary);
-  font-size: 0.72rem;
-  line-height: 1.45;
+  font-size: 0.7rem;
+  line-height: 1.38;
 }
 
 .task-action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.task-card-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding-top: 0.55rem;
+}
+
+.task-card-actions {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding-top: 0.65rem;
 }
 
 .task-progress-pill {
@@ -441,7 +454,7 @@ select {
   border-radius: 1.15rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(251, 251, 248, 0.92);
-  padding: 0.9rem 0.95rem;
+  padding: 0.78rem 0.86rem;
 }
 
 .toolbar-grid {
