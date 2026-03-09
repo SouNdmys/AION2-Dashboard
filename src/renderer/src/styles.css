@@ -384,8 +384,8 @@ select {
 
 .task-btn-soft {
   border-color: rgba(15, 23, 42, 0.08);
-  background: linear-gradient(180deg, #7a808a, #686f7a);
-  box-shadow: 0 8px 18px rgba(70, 78, 92, 0.16);
+  background: linear-gradient(180deg, #767d87, #656d79);
+  box-shadow: 0 8px 18px rgba(70, 78, 92, 0.14);
 }
 
 .task-btn-soft:hover:enabled {
@@ -487,6 +487,15 @@ select {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.character-action-btn {
+  min-width: 5.75rem;
+  justify-content: center;
+}
+
+.character-action-btn-primary {
+  min-width: 6.25rem;
 }
 
 .overview-filter-row {
@@ -630,23 +639,23 @@ select option {
 }
 
 .overview-group-panel-urgent {
-  background: linear-gradient(180deg, rgba(255, 242, 236, 0.88), rgba(255, 248, 245, 0.94));
+  background: linear-gradient(180deg, rgba(255, 245, 240, 0.76), rgba(255, 249, 246, 0.9));
 }
 
 .overview-group-panel-dungeon {
-  background: linear-gradient(180deg, rgba(239, 247, 255, 0.9), rgba(248, 251, 255, 0.95));
+  background: linear-gradient(180deg, rgba(242, 248, 255, 0.78), rgba(249, 252, 255, 0.92));
 }
 
 .overview-group-panel-weekly {
-  background: linear-gradient(180deg, rgba(255, 247, 234, 0.9), rgba(255, 250, 243, 0.95));
+  background: linear-gradient(180deg, rgba(255, 248, 238, 0.78), rgba(255, 251, 245, 0.92));
 }
 
 .overview-group-panel-mission {
-  background: linear-gradient(180deg, rgba(238, 249, 245, 0.9), rgba(248, 252, 250, 0.95));
+  background: linear-gradient(180deg, rgba(241, 249, 246, 0.78), rgba(249, 252, 250, 0.92));
 }
 
 .overview-group-panel-leisure {
-  background: linear-gradient(180deg, rgba(247, 248, 250, 0.9), rgba(252, 252, 252, 0.95));
+  background: linear-gradient(180deg, rgba(248, 249, 251, 0.8), rgba(252, 252, 252, 0.93));
 }
 
 .overview-group-chip {
@@ -662,32 +671,32 @@ select option {
 }
 
 .overview-group-chip-urgent {
-  border-color: rgba(234, 88, 12, 0.14);
-  background: rgba(249, 115, 22, 0.1);
+  border-color: rgba(234, 88, 12, 0.12);
+  background: rgba(249, 115, 22, 0.08);
   color: #c2410c;
 }
 
 .overview-group-chip-dungeon {
-  border-color: rgba(59, 130, 246, 0.14);
-  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.08);
   color: #1d4ed8;
 }
 
 .overview-group-chip-weekly {
-  border-color: rgba(245, 158, 11, 0.14);
-  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.12);
+  background: rgba(245, 158, 11, 0.08);
   color: #b45309;
 }
 
 .overview-group-chip-mission {
-  border-color: rgba(16, 185, 129, 0.14);
-  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.12);
+  background: rgba(16, 185, 129, 0.08);
   color: #0f8f6f;
 }
 
 .overview-group-chip-leisure {
-  border-color: rgba(100, 116, 139, 0.14);
-  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(100, 116, 139, 0.1);
+  background: rgba(148, 163, 184, 0.07);
   color: #64748b;
 }
 
@@ -705,33 +714,33 @@ select option {
   border-radius: 0.9rem;
   padding: 0.45rem 0.65rem 0.45rem 0.8rem;
   border: 1px solid rgba(15, 23, 42, 0.04);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.72);
   box-shadow: inset 3px 0 0 transparent;
 }
 
 .overview-task-row-tone-urgent {
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.68);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.56);
 }
 
 .overview-task-row-tone-dungeon {
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.62);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.52);
 }
 
 .overview-task-row-tone-weekly {
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.64);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.54);
 }
 
 .overview-task-row-tone-mission {
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.62);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.5);
 }
 
 .overview-task-row-tone-leisure {
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: inset 3px 0 0 rgba(148, 163, 184, 0.48);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 3px 0 0 rgba(148, 163, 184, 0.38);
 }
 
 .overview-task-row-label {
@@ -1058,6 +1067,25 @@ select option {
 }
 
 @media (max-width: 767px) {
+  .glass-panel {
+    padding: 1rem !important;
+  }
+
+  .toolbar-card,
+  .task-section,
+  .section-card {
+    padding: 0.72rem 0.78rem;
+  }
+
+  .toolbar-actions {
+    gap: 0.4rem;
+  }
+
+  .character-action-btn {
+    min-width: 0;
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+
   .task-card-header {
     flex-direction: column;
     align-items: flex-start;
@@ -1065,6 +1093,17 @@ select option {
 
   .overview-task-row {
     padding-right: 0.55rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .character-hero-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-task-row {
+    gap: 0.55rem;
+    padding-left: 0.68rem;
   }
 }
 

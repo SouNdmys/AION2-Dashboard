@@ -170,10 +170,10 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
                   </option>
                 ))}
               </select>
-              <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
+              <button className="task-btn task-btn-soft task-btn-compact character-action-btn character-action-btn-primary px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
                 保存校准
               </button>
-              <button className="pill-btn" onClick={onResetWeeklyStats} disabled={busy}>
+              <button className="pill-btn character-action-btn" onClick={onResetWeeklyStats} disabled={busy}>
                 重置周收益
               </button>
             </div>
@@ -215,19 +215,19 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
               />
             </div>
             <div className="toolbar-actions mt-2">
-              <button className="pill-btn" onClick={onSaveCharacterProfile} disabled={busy}>
+              <button className="task-btn task-btn-soft task-btn-compact character-action-btn character-action-btn-primary px-4" onClick={onSaveCharacterProfile} disabled={busy}>
                 保存资料
               </button>
-              <button className="pill-btn" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
+              <button className="pill-btn character-action-btn" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
                 重命名
               </button>
-              <button className="pill-btn" onClick={onDeleteCharacter} disabled={busy || !canDeleteCharacter}>
+              <button className="pill-btn character-action-btn" onClick={onDeleteCharacter} disabled={busy || !canDeleteCharacter}>
                 删除
               </button>
-              <button className="pill-btn" onClick={onSyncCorridorStatus} disabled={busy}>
+              <button className="pill-btn character-action-btn" onClick={onSyncCorridorStatus} disabled={busy}>
                 同步回廊
               </button>
-              <button className="pill-btn" onClick={onApplyCorridorCompletion} disabled={busy}>
+              <button className="pill-btn character-action-btn" onClick={onApplyCorridorCompletion} disabled={busy}>
                 回廊录入完成
               </button>
             </div>
