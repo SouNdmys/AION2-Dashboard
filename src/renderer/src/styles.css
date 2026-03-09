@@ -437,6 +437,32 @@ select {
   color: var(--text-secondary);
 }
 
+.toolbar-card {
+  border-radius: 1.15rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(251, 251, 248, 0.92);
+  padding: 0.9rem 0.95rem;
+}
+
+.toolbar-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .overview-filter-row {
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   padding-top: 0.75rem;

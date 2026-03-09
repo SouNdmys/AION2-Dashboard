@@ -96,23 +96,23 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
       </section>
 
       <div className="space-y-3">
-      <section className="section-card">
-        <div className="flex items-center justify-between gap-2">
+      <section className="toolbar-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Breeze Shop</p>
             <h3 className="panel-title !mt-1 !text-sm">微风商店记录</h3>
           </div>
           <span className="summary-note">{selectedIsAodeExtra ? "额外+8资格" : "基础资格"}</span>
         </div>
-        <p className="mt-2 task-meta-line">
+        <div className="toolbar-meta mt-2 task-meta-line">
           奥德购买 {selected.aodePlan.shopAodePurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopAodePurchaseRemaining}） | 每日副本券购买{" "}
           {selected.aodePlan.shopDailyDungeonTicketPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}）
-        </p>
+        </div>
         <p className="summary-note mt-1">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
         {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
           <p className="banner-warning mt-1 rounded-lg px-3 py-2 text-xs">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
         ) : null}
-        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_auto_auto]">
           <select
             className="field-control"
             value={shopAodePurchaseUsedInput}
@@ -146,18 +146,21 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
         </div>
       </section>
 
-      <section className="section-card">
-        <div>
+      <section className="toolbar-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
           <p className="panel-kicker !tracking-[0.08em]">Transform</p>
           <h3 className="panel-title !mt-1 !text-sm">变换记录</h3>
+          </div>
+          <span className="summary-note">上限 {selectedAodeLimits.convertLimit} 次</span>
         </div>
-        <p className="mt-2 task-meta-line">
+        <div className="toolbar-meta mt-2 task-meta-line">
           奥德变换 {selected.aodePlan.transformAodeUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedTransformAodeRemaining}）
-        </p>
+        </div>
         <p className="summary-note mt-1">
           单次奥德按 {AODE_POINT_PER_OPERATION} 记录；基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次，额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次。
         </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+        <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_auto]">
           <select
             className="field-control"
             value={transformAodeUsedInput}

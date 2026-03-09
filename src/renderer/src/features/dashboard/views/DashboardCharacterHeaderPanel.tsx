@@ -102,18 +102,26 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
         </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <section className="section-card">
-          <div className="flex items-center justify-between gap-2">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <section className="toolbar-card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="panel-kicker !tracking-[0.08em]">Profile</p>
               <h3 className="panel-title !mt-1 !text-sm">角色资料</h3>
             </div>
-            <button className="pill-btn" onClick={onSaveCharacterProfile} disabled={busy}>
-              保存资料
-            </button>
+            <div className="toolbar-actions">
+              <button className="pill-btn" onClick={onSaveCharacterProfile} disabled={busy}>
+                保存资料
+              </button>
+              <button className="pill-btn" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
+                重命名
+              </button>
+              <button className="pill-btn" onClick={onDeleteCharacter} disabled={busy || !canDeleteCharacter}>
+                删除
+              </button>
+            </div>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)]">
             <input
               className="field-control"
               value={renameName}
@@ -136,32 +144,24 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
               placeholder="装分(整数)"
             />
           </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button className="pill-btn" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
-              重命名角色
-            </button>
-            <button className="pill-btn" onClick={onDeleteCharacter} disabled={busy || !canDeleteCharacter}>
-              删除角色
-            </button>
-          </div>
         </section>
 
-        <section className="section-card">
+        <section className="toolbar-card">
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Actions</p>
             <h3 className="panel-title !mt-1 !text-sm">快捷操作</h3>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            <button className="pill-btn w-full justify-center" onClick={onOpenEnergyDialog} disabled={busy}>
+          <div className="toolbar-actions mt-3">
+            <button className="pill-btn" onClick={onOpenEnergyDialog} disabled={busy}>
               手动改能量
             </button>
-            <button className="pill-btn w-full justify-center" onClick={onSyncCorridorStatus} disabled={busy}>
+            <button className="pill-btn" onClick={onSyncCorridorStatus} disabled={busy}>
               同步回廊
             </button>
-            <button className="pill-btn w-full justify-center" onClick={onApplyCorridorCompletion} disabled={busy}>
+            <button className="pill-btn" onClick={onApplyCorridorCompletion} disabled={busy}>
               回廊录入完成
             </button>
-            <button className="pill-btn w-full justify-center" onClick={onResetWeeklyStats} disabled={busy}>
+            <button className="pill-btn" onClick={onResetWeeklyStats} disabled={busy}>
               重置周收益
             </button>
           </div>
