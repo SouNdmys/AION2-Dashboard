@@ -43,7 +43,7 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">本周金币统计</h3>
       <div className="mt-3 grid grid-cols-2 gap-3 text-sm 2xl:grid-cols-4">
         <div className="data-pill">全角色本周收益: {weeklyEarnedText}</div>
@@ -98,3 +98,4 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
     </article>
   );
 }
+

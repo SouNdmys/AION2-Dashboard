@@ -38,7 +38,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">设置页</h3>
       <p className="mt-2 text-xs text-slate-300">金币收益参数 / 次数上限参数（可选） / 提示阈值参数 / 优先级偏好 / 数据导入导出</p>
       <div className="mt-3 grid grid-cols-3 gap-3">
@@ -245,3 +245,4 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
     </article>
   );
 }
+

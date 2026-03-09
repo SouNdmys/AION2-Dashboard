@@ -22,7 +22,7 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-      <div className="glass-panel w-full max-w-md rounded-2xl bg-[rgba(20,20,20,0.7)] p-5 backdrop-blur-2xl backdrop-saturate-150">
+      <div className="glass-panel w-full max-w-md rounded-2xl p-5">
         {dialog.kind === "complete" ? (
           <>
             <h4 className="text-base font-semibold">填写完成次数 - {dialog.title}</h4>
@@ -294,3 +294,4 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
     </div>
   );
 }
+

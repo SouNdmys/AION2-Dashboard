@@ -2,6 +2,33 @@
 
 ## 2026-03-09
 
+### UI 改造 Phase 6 完成（浅色极简主题首轮）
+- 全局主题已从深色玻璃风切换到浅色极简基底：
+  - 背景改为暖白灰工作台。
+  - 卡片改为白底柔阴影。
+  - 主按钮统一为深色实体按钮，次按钮退为浅色胶囊按钮。
+- 颜色层级压缩：
+  - 移除“黑底 + 白按钮”主视觉冲突。
+  - 强调色收敛到低饱和绿色，风险色只保留在异常/负向状态。
+- 首页与工坊主视觉重心重排：
+  - 顶部导航与工坊头部升级为 `hero-strip`。
+  - 关键统计统一为 `metric-card`。
+  - 快捷模式 / 专业模式改为更轻的说明卡片。
+- 留白与密度调整：
+  - 全局卡片圆角、内边距、栏间距增加。
+  - 左右侧栏与中栏的对比关系更清晰，减少拥挤感。
+- 截图回归：
+  - 新增命令：`npm run capture:ui-baseline:phase6`
+  - Phase 6 截图目录：`artifacts/ui-baseline/phase6/`
+- 本次校验：
+  - `npm run typecheck` 通过
+  - `npm run test:unit` 通过
+  - `npm run build` 通过
+  - `node scripts/ui-baseline-phase0-capture.mjs --out-dir artifacts/ui-baseline/phase6` 通过（16 张截图）
+- 结论：
+  - UI 已明显脱离“黑玻璃工具页”观感，开始接近浅色极简工作台。
+  - 下一轮不应再大改主题，而应进入信息裁剪和密度微调。
+
 ### UI 改造 Phase 5 完成（全局一致性收尾）
 - Dashboard 与 Workshop 顶栏语言已统一：
   - 共用 `kicker / title / subtitle` 三段式结构。

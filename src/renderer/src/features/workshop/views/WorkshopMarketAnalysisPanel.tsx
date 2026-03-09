@@ -161,7 +161,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     .slice(0, 4);
 
   return (
-    <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="order-3 glass-panel rounded-2xl p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">市场分析器</h4>
@@ -759,3 +759,4 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     </article>
   );
 }
+

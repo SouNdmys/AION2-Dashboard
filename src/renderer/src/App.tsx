@@ -331,8 +331,8 @@ export function App(): JSX.Element {
 
   if (!state || !settingsDraft) {
     return (
-      <main className="min-h-screen p-8 text-white">
-        <div className="glass-panel mx-auto mt-20 max-w-md rounded-2xl p-6 text-center">
+      <main className="min-h-screen p-8 text-slate-900">
+        <div className="glass-panel mx-auto mt-20 max-w-md rounded-[28px] p-7 text-center">
           <p className="text-sm text-slate-200">正在加载 AION 2 Dashboard...</p>
           {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
         </div>
@@ -342,8 +342,8 @@ export function App(): JSX.Element {
 
   if (!selected) {
     return (
-      <main className="min-h-screen p-8 text-slate-100">
-        <div className="glass-panel mx-auto mt-16 max-w-xl rounded-3xl bg-[rgba(20,20,20,0.58)] p-6 backdrop-blur-2xl backdrop-saturate-150">
+      <main className="min-h-screen p-8 text-slate-900">
+        <div className="hero-strip mx-auto mt-16 max-w-xl rounded-[32px] p-7">
           <h1 className="text-xl font-semibold">AION 2 Dashboard</h1>
           <p className="mt-2 text-sm text-slate-300">当前没有任何账号或角色数据。请先创建你的第一个账号。</p>
           <div className="mt-4 space-y-2">
@@ -373,8 +373,8 @@ export function App(): JSX.Element {
   }
 
   return (
-    <main className="min-h-screen p-5 text-slate-100">
-      <div className="grid min-h-[calc(100vh-2.5rem)] w-full grid-cols-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-5">
+    <main className="min-h-screen p-6 text-slate-900">
+      <div className="grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-6">
         <DashboardLeftSidebar
           busy={busy}
           state={state}

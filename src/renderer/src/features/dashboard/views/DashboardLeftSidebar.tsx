@@ -55,9 +55,13 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
   } = props;
 
   return (
-    <aside className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-      <h1 className="mb-3 text-lg font-semibold tracking-wide">AION 2</h1>
-      <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+    <aside className="glass-panel rounded-[30px] p-5">
+      <div className="mb-4">
+        <p className="panel-kicker">Roster</p>
+        <h1 className="panel-title !mt-1 !text-[1.18rem]">AION 2</h1>
+        <p className="panel-subtitle">左侧只做账号和角色上下文，避免把操作入口堆在这里。</p>
+      </div>
+      <div className="soft-card mb-4 p-4">
         <p className="text-xs font-semibold tracking-wide text-slate-200">账号管理</p>
         <div className="mt-2 space-y-2">
           <input

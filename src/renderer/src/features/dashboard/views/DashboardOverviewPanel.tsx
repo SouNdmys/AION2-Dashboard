@@ -145,8 +145,8 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
   }
 
   return (
-    <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <article className="glass-panel rounded-[30px] p-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="panel-kicker">Role Overview</p>
           <h3 className="panel-title !text-xl">角色概览总览</h3>
@@ -154,10 +154,10 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
         </div>
         <span className="pill-btn pill-static">批量视图</span>
       </div>
-      <div className="mb-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+      <div className="soft-card mb-4 p-4">
         <p className="panel-kicker !tracking-[0.08em]">Quick Entry</p>
         <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
-        <div className="mt-2 grid grid-cols-[1.2fr_1fr_1fr_0.8fr_auto] gap-2">
+        <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
           <select
             className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
             value={quickCharacterId}

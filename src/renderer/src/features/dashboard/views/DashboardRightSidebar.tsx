@@ -56,8 +56,9 @@ export function DashboardRightSidebar(props: DashboardRightSidebarProps): JSX.El
 
   return (
     <aside className="space-y-5 xl:sticky xl:top-5 xl:max-h-[calc(100vh-2.5rem)] xl:overflow-auto xl:pr-1">
-      <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h3 className="text-sm font-semibold tracking-wide">操作中心</h3>
+      <article className="glass-panel rounded-[28px] p-5">
+        <p className="panel-kicker">Ops</p>
+        <h3 className="panel-title !mt-1">操作中心</h3>
         <p className="mt-2 text-xs text-slate-300">历史记录 {historyCount} 条，支持撤销一步/多步。</p>
         <div className="mt-3 flex items-center gap-2">
           <button className="pill-btn" onClick={onUndoSingleStep} disabled={busy || historyCount === 0}>

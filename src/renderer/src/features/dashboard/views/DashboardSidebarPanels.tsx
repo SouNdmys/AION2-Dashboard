@@ -21,7 +21,7 @@ export function DashboardCountdownPanel(props: DashboardCountdownPanelProps): JS
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
         {countdownItems.map((item) => {
@@ -51,7 +51,7 @@ export function DashboardPriorityTodoPanel(props: DashboardPriorityTodoPanelProp
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">优先级待办</h3>
       <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新提醒综合排序（Top 8），可在设置页调整偏好权重。</p>
       {priorityTodoItems.length === 0 ? (
@@ -91,7 +91,7 @@ export function DashboardHistoryPanel(props: DashboardHistoryPanelProps): JSX.El
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">操作历史日志</h3>
       <p className="mt-2 text-xs text-slate-300">显示最近 20 条（最新在前）。</p>
       {historyRows.length === 0 ? (
@@ -130,7 +130,7 @@ export function DashboardPendingPanel(props: DashboardPendingPanelProps): JSX.El
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <h3 className="text-sm font-semibold tracking-wide">待办提醒</h3>
       <div className="mt-3 flex flex-wrap gap-2">
         {pendingLabels.map((label) => (
@@ -142,3 +142,4 @@ export function DashboardPendingPanel(props: DashboardPendingPanelProps): JSX.El
     </article>
   );
 }
+

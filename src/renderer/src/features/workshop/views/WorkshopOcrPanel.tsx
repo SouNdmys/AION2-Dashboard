@@ -90,7 +90,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
   } = props;
 
   return (
-    <article className="order-2 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="order-2 glass-panel rounded-2xl p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">OCR抓价器</h4>
@@ -377,3 +377,4 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
     </article>
   );
 }
+

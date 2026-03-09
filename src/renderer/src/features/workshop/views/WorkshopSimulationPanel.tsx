@@ -76,7 +76,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
         : "库存不足，需要先补材料再制作。";
 
   return (
-    <article className="order-1 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="order-1 glass-panel rounded-2xl p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold">做装模拟器</h4>
       </div>
@@ -280,3 +280,4 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     </article>
   );
 }
+

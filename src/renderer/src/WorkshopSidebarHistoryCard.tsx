@@ -328,7 +328,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
   }
 
   return (
-    <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-2xl p-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold tracking-wide">历史价格管理</h3>
         <div className="flex items-center gap-2">
@@ -456,3 +456,4 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
     </article>
   );
 }
+

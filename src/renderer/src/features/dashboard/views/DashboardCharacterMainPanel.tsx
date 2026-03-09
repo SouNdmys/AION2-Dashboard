@@ -99,7 +99,7 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
   }
 
   return (
-    <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
+    <article className="glass-panel rounded-3xl p-5">
       <DashboardCharacterHeaderPanel
         visible={true}
         busy={busy}
@@ -150,3 +150,4 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     </article>
   );
 }
+

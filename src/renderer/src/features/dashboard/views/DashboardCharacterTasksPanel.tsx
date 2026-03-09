@@ -60,7 +60,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
               return (
                 <div
                   key={task.id}
-                  className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150"
+                  className="glass-panel rounded-2xl p-4"
                 >
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
@@ -118,7 +118,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
               );
             })}
             {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
-              <div className="glass-panel col-span-2 rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+              <div className="glass-panel col-span-2 rounded-2xl p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-base font-semibold">圣域</h3>
                   <button className="pill-btn" onClick={onOpenSanctumEditDialog} disabled={busy}>
@@ -144,3 +144,4 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
     </>
   );
 }
+
