@@ -148,7 +148,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
       </div>
 
       <details className="group mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">
+        <summary className="details-summary">
           <div>
             <p className="text-sm font-medium text-slate-100">高级设置</p>
             <p className="mt-1 text-[11px] text-slate-400">自动巡航、调试明细、可视化校准。</p>

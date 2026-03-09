@@ -2,6 +2,31 @@
 
 ## 2026-03-09
 
+### UI 改造 Phase 5 完成（全局一致性收尾）
+- Dashboard 与 Workshop 顶栏语言已统一：
+  - 共用 `kicker / title / subtitle` 三段式结构。
+  - 标题、说明、状态标签的视觉层级更加稳定。
+- 常用按钮状态已收敛：
+  - 激活态统一为 `pill-btn-active`
+  - 静态标签统一为 `pill-static`
+- 折叠区交互已统一：
+  - 专业模式、高级设置、明细区统一使用同一套 `details-summary` 风格。
+  - 焦点态、悬停态反馈一致。
+- 动效与无障碍补齐：
+  - 卡片与按钮过渡统一收敛到 `120-180ms` 区间。
+  - 新增 `prefers-reduced-motion` 降级支持。
+- 截图回归：
+  - 新增命令：`npm run capture:ui-baseline:phase5`
+  - Phase 5 截图目录：`artifacts/ui-baseline/phase5/`
+- 本次校验：
+  - `npm run typecheck` 通过
+  - `npm run test:unit` 通过
+  - `npm run build` 通过
+  - `npm run capture:ui-baseline:phase5` 通过（16 张截图）
+- 结论：
+  - Phase 1-5 的基础收敛已经完成。
+  - 下一阶段可以进入更明显的“极简化与美术层”优化，而不是继续堆结构调整。
+
 ### UI 改造 Phase 4 完成（模拟结果优先）
 - 做装模拟器结果区已重构为：
   - 推荐结论

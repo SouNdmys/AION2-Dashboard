@@ -66,9 +66,9 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
   return (
     <div className="flex items-start justify-between gap-5">
       <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Current Character</p>
-        <h2 className="mt-1 text-2xl font-semibold">{characterName}</h2>
-        <p className="mt-1 text-xs text-slate-300">
+        <p className="panel-kicker">Current Character</p>
+        <h2 className="panel-title !text-2xl">{characterName}</h2>
+        <p className="panel-subtitle">
           所属账号: {accountName}
           {accountRegionTag ? ` (${accountRegionTag})` : ""}
         </p>

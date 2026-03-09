@@ -205,7 +205,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             </p>
           ) : null}
           <details className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
-            <summary className="cursor-pointer text-slate-200">
+            <summary className="details-summary text-slate-200">
               查看材料明细与库存修正（{simulation.materialRows.length} 项）
             </summary>
             <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-white/10 bg-black/30">

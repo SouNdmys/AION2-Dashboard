@@ -42,7 +42,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       <details className="group rounded-2xl">
         <summary
           aria-controls={expertModeId}
-          className="glass-panel flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150"
+          className="details-summary glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150"
         >
           <div>
             <h4 className="text-sm font-semibold">专业模式</h4>

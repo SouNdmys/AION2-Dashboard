@@ -148,13 +148,15 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
     <article className="glass-panel rounded-3xl bg-[rgba(20,20,20,0.58)] p-5 backdrop-blur-2xl backdrop-saturate-150">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Role Overview</p>
-          <h3 className="mt-1 text-xl font-semibold">角色概览总览</h3>
+          <p className="panel-kicker">Role Overview</p>
+          <h3 className="panel-title !text-xl">角色概览总览</h3>
+          <p className="panel-subtitle">按优先级筛选后可进入角色；也可先做一次快速录入。</p>
         </div>
-        <p className="text-xs text-slate-300">按优先级筛选后可进入角色；也可先做一次快速录入</p>
+        <span className="pill-btn pill-static">批量视图</span>
       </div>
       <div className="mb-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <p className="text-xs font-semibold tracking-wide text-slate-200">快速录入</p>
+        <p className="panel-kicker !tracking-[0.08em]">Quick Entry</p>
+        <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
         <div className="mt-2 grid grid-cols-[1.2fr_1fr_1fr_0.8fr_auto] gap-2">
           <select
             className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"

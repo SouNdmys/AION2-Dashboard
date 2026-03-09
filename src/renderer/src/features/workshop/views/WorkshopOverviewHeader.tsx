@@ -13,9 +13,13 @@ export function WorkshopOverviewHeader(props: WorkshopOverviewHeaderProps): JSX.
   return (
     <article className="glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-semibold">工坊（内置配方库）</h3>
+        <div>
+          <p className="panel-kicker">Workshop</p>
+          <h3 className="panel-title">工坊（内置配方库）</h3>
+          <p className="panel-subtitle">已支持内置材料/配方库、价格与库存维护、制作模拟和背包可制作推荐。</p>
+        </div>
+        <span className="pill-btn pill-static !border-cyan-300/35 !text-cyan-100">制作主流程</span>
       </div>
-      <p className="mt-2 text-xs text-slate-300">当前已支持: 内置材料/配方库，价格与库存维护，制作模拟，背包可制作推荐。</p>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
         <div className="data-pill">物品数: {state.items.length}</div>
         <div className="data-pill">配方数: {state.recipes.length}</div>
