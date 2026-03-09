@@ -97,9 +97,9 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
           </div>
 
           <div className="toolbar-actions xl:justify-end">
-            <div className="data-pill !px-3 !py-2">基础 {selected.energy.baseCurrent}/{selected.energy.baseCap}</div>
-            <div className="data-pill !px-3 !py-2">补充 {selected.energy.bonusCurrent}/{selected.energy.bonusCap}</div>
-            <button className="pill-btn" onClick={onOpenEnergyDialog} disabled={busy}>
+            <div className="data-pill !px-2.5 !py-1.5 !text-xs">基础 {selected.energy.baseCurrent}/{selected.energy.baseCap}</div>
+            <div className="data-pill !px-2.5 !py-1.5 !text-xs">补充 {selected.energy.bonusCurrent}/{selected.energy.bonusCap}</div>
+            <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onOpenEnergyDialog} disabled={busy}>
               调整能量
             </button>
           </div>
@@ -119,8 +119,8 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               <span>资格 {selectedIsAodeExtra ? "额外+8" : "基础"}</span>
             </div>
             <div className="toolbar-actions">
-              <div className="data-pill !px-3 !py-2">奥德剩余 {selectedShopAodePurchaseRemaining}</div>
-              <div className="data-pill !px-3 !py-2">副本券剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}</div>
+              <div className="data-pill !px-2.5 !py-1.5 !text-xs">奥德剩余 {selectedShopAodePurchaseRemaining}</div>
+              <div className="data-pill !px-2.5 !py-1.5 !text-xs">副本券剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}</div>
             </div>
           </div>
           <p className="summary-note mt-1">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
@@ -173,8 +173,8 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               <span>单次 {AODE_POINT_PER_OPERATION} 奥德</span>
             </div>
             <div className="toolbar-actions">
-              <div className="data-pill !px-3 !py-2">基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次</div>
-              <div className="data-pill !px-3 !py-2">额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次</div>
+              <div className="data-pill !px-2.5 !py-1.5 !text-xs">基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次</div>
+              <div className="data-pill !px-2.5 !py-1.5 !text-xs">额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次</div>
             </div>
           </div>
           <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_auto]">
