@@ -344,11 +344,11 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           </button>
         </div>
       </div>
-      <p className="mt-2 text-xs text-slate-300">用于误操作修正。删除后会立即影响行情与制作模拟。</p>
+      <p className="mt-2 summary-note">用于误操作修正。删除后会立即影响行情与制作模拟。</p>
 
       <div className="mt-3 grid grid-cols-1 gap-2">
         <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm min-w-0"
           value={mainCategory}
           onChange={(event) => setMainCategory(event.target.value)}
           disabled={busy}
@@ -361,7 +361,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           ))}
         </select>
         <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm min-w-0"
           value={subCategory}
           onChange={(event) => setSubCategory(event.target.value)}
           disabled={busy}
@@ -374,7 +374,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           ))}
         </select>
         <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm min-w-0"
           value={selectedItemId}
           onChange={(event) => setSelectedItemId(event.target.value)}
           disabled={busy}
@@ -387,14 +387,14 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           ))}
         </select>
         <input
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm min-w-0"
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
           disabled={busy}
           placeholder="按物品名搜索（可选）"
         />
         <input
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm min-w-0"
           value={limitInput}
           onChange={(event) => setLimitInput(event.target.value)}
           disabled={busy}
@@ -402,24 +402,24 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
         />
       </div>
 
-      <p className="mt-2 text-xs text-slate-300">当前显示最近 {limit} 条。</p>
-      {message ? <p className="mt-1 text-xs text-emerald-300">{message}</p> : null}
-      {error ? <p className="mt-1 text-xs text-rose-300">{error}</p> : null}
+      <p className="mt-2 summary-note">当前显示最近 {limit} 条。</p>
+      {message ? <p className="banner-positive mt-1 rounded-xl px-3 py-2 text-xs">{message}</p> : null}
+      {error ? <p className="banner-danger mt-1 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
 
-      <div ref={historyTableContainerRef} className="mt-3 max-h-72 overflow-auto rounded-xl border border-white/10 bg-black/20">
+      <div ref={historyTableContainerRef} className="tool-table-wrap mt-3 max-h-72">
         {rows.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-slate-300">暂无可管理的价格快照。</p>
+          <p className="px-3 py-3 text-xs text-slate-500">暂无可管理的价格快照。</p>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="bg-white/5 text-slate-300">
+          <table className="tool-table">
+            <thead>
               <tr>
-                <th className="px-2 py-2">物品</th>
-                <th className="px-2 py-2">分类</th>
-                <th className="px-2 py-2">价格</th>
-                <th className="px-2 py-2">市场</th>
-                <th className="px-2 py-2">时间</th>
-                <th className="px-2 py-2">来源</th>
-                <th className="px-2 py-2">操作</th>
+                <th>物品</th>
+                <th>分类</th>
+                <th>价格</th>
+                <th>市场</th>
+                <th>时间</th>
+                <th>来源</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -427,20 +427,20 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
                 <tr
                   id={`workshop-price-row-${row.id}`}
                   key={`workshop-price-manage-${row.id}`}
-                  className={`border-t border-white/10 ${highlightSnapshotId === row.id ? "bg-cyan-500/20" : ""}`}
+                  className={highlightSnapshotId === row.id ? "bg-[rgba(15,143,111,0.10)]" : ""}
                 >
-                  <td className="px-2 py-2">{row.itemName}</td>
-                  <td className="px-2 py-2">{`${row.mainCategory}/${row.subCategory}`}</td>
-                  <td className={`px-2 py-2 ${isSuspectPriceNote(row.note) ? "text-rose-300" : ""}`}>
+                  <td>{row.itemName}</td>
+                  <td>{`${row.mainCategory}/${row.subCategory}`}</td>
+                  <td className={isSuspectPriceNote(row.note) ? "tone-danger" : ""}>
                     {formatGold(row.unitPrice)}
                     {isSuspectPriceNote(row.note) ? "（可疑）" : ""}
                   </td>
-                  <td className="px-2 py-2">{formatMarketLabel(row.market)}</td>
-                  <td className="px-2 py-2">{new Date(row.capturedAt).toLocaleString()}</td>
-                  <td className="px-2 py-2">{row.source === "import" ? "导入" : "手动"}</td>
-                  <td className="px-2 py-2">
+                  <td>{formatMarketLabel(row.market)}</td>
+                  <td>{new Date(row.capturedAt).toLocaleString()}</td>
+                  <td>{row.source === "import" ? "导入" : "手动"}</td>
+                  <td>
                     <button
-                      className="pill-btn text-rose-300"
+                      className="pill-btn"
                       onClick={() => void onDeleteSnapshot(row.id, row.itemName, row.capturedAt)}
                       disabled={busy}
                     >

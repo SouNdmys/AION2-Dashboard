@@ -109,17 +109,17 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
           </button>
         </div>
 
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="tool-panel mt-3">
           <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
             <input
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               value={itemKeyword}
               onChange={(event) => setItemKeyword(event.target.value)}
               disabled={busy}
               placeholder="搜索物品名（全局）"
             />
             <select
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               value={itemMainCategory}
               onChange={(event) => setItemMainCategory(event.target.value)}
               disabled={busy || itemMainCategoryOptions.length === 0}
@@ -131,7 +131,7 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
               ))}
             </select>
             <select
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               value={itemSubCategory}
               onChange={(event) => setItemSubCategory(event.target.value)}
               disabled={busy}
@@ -144,7 +144,7 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
               ))}
             </select>
             <select
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               value={selectedItemId}
               onChange={(event) => setSelectedItemId(event.target.value)}
               disabled={busy || filteredItems.length === 0}
@@ -156,10 +156,10 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
               ))}
             </select>
           </div>
-          <p className="mt-2 text-xs text-slate-300">提示：输入关键词后，将在全物品范围搜索并忽略大类/下级分类筛选。</p>
+          <p className="mt-2 summary-note">提示：输入关键词后，将在全物品范围搜索并忽略大类/下级分类筛选。</p>
           <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3 2xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <select
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               value={selectedItemPriceMarket}
               onChange={(event) => setSelectedItemPriceMarket(event.target.value as "server" | "world")}
               disabled={busy || !selectedItemId}
@@ -168,14 +168,14 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
               <option value="world">价格市场: 世界</option>
             </select>
             <input
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               placeholder="录入价格"
               value={selectedItemPrice}
               onChange={(event) => setSelectedItemPrice(event.target.value)}
               disabled={busy || !selectedItemId}
             />
             <input
-              className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control min-w-0"
               placeholder="库存数量"
               value={selectedItemInventory}
               onChange={(event) => setSelectedItemInventory(event.target.value)}
@@ -201,35 +201,35 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
               {inventoryByItemId.get(selectedItemId) ?? 0}
             </p>
           ) : (
-            <p className="mt-2 text-xs text-amber-300">当前分类下没有物品。</p>
+            <p className="banner-warning mt-2 rounded-xl px-3 py-2 text-xs">当前分类下没有物品。</p>
           )}
-          <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-white/10 bg-black/30">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-white/5 text-slate-300">
+          <div className="tool-table-wrap mt-2 max-h-48">
+            <table className="tool-table">
+              <thead>
                 <tr>
-                  <th className="px-2 py-1">物品</th>
-                  <th className="px-2 py-1">分类</th>
-                  <th className="px-2 py-1">伺服器价格</th>
-                  <th className="px-2 py-1">世界价格</th>
-                  <th className="px-2 py-1">库存</th>
-                  <th className="px-2 py-1">选择</th>
+                  <th>物品</th>
+                  <th>分类</th>
+                  <th>伺服器价格</th>
+                  <th>世界价格</th>
+                  <th>库存</th>
+                  <th>选择</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((item) => (
-                  <tr key={item.id} className="border-t border-white/10">
-                    <td className="px-2 py-1">{item.name}</td>
-                    <td className="px-2 py-1">{`${item.mainCategory} / ${item.subCategory}`}</td>
-                    <td className="px-2 py-1">
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>{`${item.mainCategory} / ${item.subCategory}`}</td>
+                    <td>
                       <div>{formatGold(latestPriceMetaByItemId.get(item.id)?.server?.price ?? null)}</div>
                       <div className="text-[10px] text-slate-400">{formatDateTime(latestPriceMetaByItemId.get(item.id)?.server?.capturedAt ?? null)}</div>
                     </td>
-                    <td className="px-2 py-1">
+                    <td>
                       <div>{formatGold(latestPriceMetaByItemId.get(item.id)?.world?.price ?? null)}</div>
                       <div className="text-[10px] text-slate-400">{formatDateTime(latestPriceMetaByItemId.get(item.id)?.world?.capturedAt ?? null)}</div>
                     </td>
-                    <td className="px-2 py-1">{inventoryByItemId.get(item.id) ?? 0}</td>
-                    <td className="px-2 py-1">
+                    <td>{inventoryByItemId.get(item.id) ?? 0}</td>
+                    <td>
                       <button className="pill-btn" onClick={() => onPickItemForCorrection(item.id)} disabled={busy}>
                         选择
                       </button>
@@ -241,20 +241,20 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
           </div>
         </div>
 
-        <h5 className="mt-4 text-xs font-semibold text-slate-200">材料逆向推导制造推荐工具</h5>
-        <p className="mt-2 text-xs text-slate-300">
+        <h5 className="mt-4 text-xs font-semibold text-slate-700">材料逆向推导制造推荐工具</h5>
+        <p className="mt-2 summary-note">
           输入一个材料可反推关联配方；留空则按你当前背包的综合材料覆盖率自动推荐。系统会同步给出补差材料和预算内建议次数。
         </p>
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]">
           <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control min-w-0"
             value={reverseMaterialKeyword}
             onChange={(event) => setReverseMaterialKeyword(event.target.value)}
             disabled={busy}
             placeholder="材料关键词（如 奥里哈康）"
           />
           <select
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control min-w-0"
             value={reverseFocusMaterialId}
             onChange={(event) => setReverseFocusMaterialId(event.target.value)}
             disabled={busy}
@@ -267,14 +267,14 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
             ))}
           </select>
           <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control min-w-0"
             value={reverseCraftBudgetInput}
             onChange={(event) => setReverseCraftBudgetInput(event.target.value)}
             disabled={busy}
             placeholder="补差预算（金币）"
           />
           <select
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control min-w-0"
             value={reverseScoreMode}
             onChange={(event) => setReverseScoreMode(event.target.value as ReverseScoreMode)}
             disabled={busy}
@@ -293,12 +293,12 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
           {formatGold(reverseCraftBudget)} 金币 | 评分偏好: {reverseScoreModeLabel}
         </p>
         <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-          <span className="rounded border border-emerald-300/40 bg-emerald-500/10 px-2 py-1 text-emerald-200">可直接制作</span>
-          <span className="rounded border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-cyan-200">补差后可做</span>
-          <span className="rounded border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-amber-200">缺价格待补</span>
-          <span className="rounded border border-rose-300/35 bg-rose-500/10 px-2 py-1 text-rose-200">低利润/风险</span>
+          <span className="semantic-chip semantic-chip-ready">可直接制作</span>
+          <span className="semantic-chip semantic-chip-watch">补差后可做</span>
+          <span className="semantic-chip semantic-chip-watch">缺价格待补</span>
+          <span className="semantic-chip semantic-chip-urgent">低利润/风险</span>
         </div>
-        <div className="mt-3 max-h-80 overflow-auto rounded-xl border border-white/10 bg-black/20 p-2 text-xs">
+        <div className="tool-table-wrap mt-3 max-h-80 p-2 text-xs">
           {craftOptions.length === 0 ? (
             <p className="px-2 py-2 text-slate-300">暂无可分析配方。</p>
           ) : reverseCraftSuggestions.length === 0 ? (

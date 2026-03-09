@@ -94,23 +94,23 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">OCR抓价器</h4>
-          <p className="mt-1 text-xs text-slate-300">默认只保留抓价主流程，自动巡航、调试警告和可视化校准收进高级设置。</p>
+          <p className="mt-1 summary-note">默认只保留抓价主流程，自动巡航、调试警告和可视化校准收进高级设置。</p>
         </div>
-        <span className="pill-btn !border-cyan-300/35 !text-cyan-100">价格输入</span>
+        <span className="pill-btn pill-static">价格输入</span>
       </div>
 
-      <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-500/10 p-3 text-xs">
-        <p className="text-cyan-200">快捷抓价（全局热键：自动截屏并完成 OCR 与导入）</p>
+      <div className="tool-banner mt-3 text-xs">
+        <p className="tone-positive">快捷抓价（全局热键：自动截屏并完成 OCR 与导入）</p>
         <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.55fr)_minmax(0,0.8fr)_auto_auto_auto]">
           <input
-            className="min-w-0 px-3 py-2 text-xs"
+            className="field-control-sm min-w-0"
             value={ocrCaptureDelayMs}
             onChange={(event) => setOcrCaptureDelayMs(event.target.value)}
             disabled={busy}
             placeholder="截屏延迟毫秒（建议 300~1000）"
           />
           <input
-            className="min-w-0 px-3 py-2 text-xs"
+            className="field-control-sm min-w-0"
             value={ocrHotkeyShortcut}
             onChange={(event) => setOcrHotkeyShortcut(event.target.value)}
             disabled={busy}
@@ -126,7 +126,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
             立即抓取一次
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-slate-400">`1200` 表示按下热键后先等待 `1.2` 秒再截图；想提速可先试 `300~800`。</p>
+        <p className="mt-1 text-[11px] text-slate-500">`1200` 表示按下热键后先等待 `1.2` 秒再截图；想提速可先试 `300~800`。</p>
         <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
           <div className="data-pill">状态: {ocrHotkeyState?.enabled ? (ocrHotkeyState.registered ? "已启用" : "注册失败") : "未启用"}</div>
           <div className="data-pill">快捷键: {ocrHotkeyState?.shortcut ?? "--"}</div>
@@ -143,43 +143,43 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
           <div className="data-pill">警告: {ocrHotkeyLastResult?.warnings.length ?? 0}</div>
         </div>
         {ocrHotkeyLastResult ? (
-          <p className={`mt-2 ${ocrHotkeyLastResult.success ? "text-emerald-300" : "text-rose-300"}`}>{ocrHotkeyLastResult.message}</p>
+          <p className={`mt-2 ${ocrHotkeyLastResult.success ? "tone-positive" : "tone-danger"}`}>{ocrHotkeyLastResult.message}</p>
         ) : null}
       </div>
 
-      <details className="group mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+      <details className="group mt-3 tool-panel">
         <summary className="details-summary">
           <div>
-            <p className="text-sm font-medium text-slate-100">高级设置</p>
-            <p className="mt-1 text-[11px] text-slate-400">自动巡航、调试明细、可视化校准。</p>
+            <p className="text-sm font-medium text-slate-900">高级设置</p>
+            <p className="mt-1 text-[11px] text-slate-500">自动巡航、调试明细、可视化校准。</p>
           </div>
-          <span className="pill-btn !border-white/15 !text-slate-200 group-open:!border-cyan-300/35 group-open:!text-cyan-100">
+          <span className="pill-btn">
             <span className="group-open:hidden">展开</span>
             <span className="hidden group-open:inline">收起</span>
           </span>
         </summary>
 
         <div className="mt-3 space-y-3">
-          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-            <p className="text-[11px] text-cyan-200">自动巡航抓价（常驻轮询，适合你在交易行里持续滚动列表）</p>
-            <p className="mt-1 text-[11px] text-slate-400">全局切换快捷键：`Shift+F2`（开始/暂停巡航）。</p>
+          <div className="tool-panel">
+            <p className="text-[11px] tone-positive">自动巡航抓价（常驻轮询，适合你在交易行里持续滚动列表）</p>
+            <p className="mt-1 text-[11px] text-slate-500">全局切换快捷键：`Shift+F2`（开始/暂停巡航）。</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,0.28fr)_minmax(0,0.24fr)_minmax(0,0.24fr)_auto_auto_auto]">
               <input
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrAutoRunIntervalSeconds}
                 onChange={(event) => setOcrAutoRunIntervalSeconds(event.target.value)}
                 disabled={busy}
                 placeholder="抓取间隔秒（2~120）"
               />
               <input
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrAutoRunFailLimit}
                 onChange={(event) => setOcrAutoRunFailLimit(event.target.value)}
                 disabled={busy}
                 placeholder="连续失败暂停（1~10）"
               />
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrAutoRunOverlayEnabled ? "on" : "off"}
                 onChange={(event) => setOcrAutoRunOverlayEnabled(event.target.value === "on")}
                 disabled={busy}
@@ -211,7 +211,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
             </div>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrHideAppBeforeCapture ? "on" : "off"}
                 onChange={(event) => setOcrHideAppBeforeCapture(event.target.value === "on")}
                 disabled={busy}
@@ -220,7 +220,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
                 <option value="off">截屏前不隐藏程序</option>
               </select>
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrSafeMode ? "on" : "off"}
                 onChange={(event) => setOcrSafeMode(event.target.value === "on")}
                 disabled={busy}
@@ -230,12 +230,12 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
               </select>
               <div className="data-pill">巡航快捷键: {ocrAutoRunState?.toggleShortcut ?? "Shift+F2"}</div>
             </div>
-            {ocrAutoRunState?.lastMessage ? <p className="mt-2 text-[11px] text-slate-300">{ocrAutoRunState.lastMessage}</p> : null}
+            {ocrAutoRunState?.lastMessage ? <p className="mt-2 text-[11px] text-slate-500">{ocrAutoRunState.lastMessage}</p> : null}
           </div>
 
           {ocrHotkeyLastResult && ocrHotkeyLastResult.warnings.length > 0 ? (
-            <details className="rounded-lg border border-white/10 bg-black/25 p-2 text-slate-300">
-              <summary className="cursor-pointer text-[11px] text-cyan-300">查看快捷抓价警告（调试）</summary>
+            <details className="tool-panel text-slate-500">
+              <summary className="cursor-pointer text-[11px] tone-positive">查看快捷抓价警告（调试）</summary>
               <div className="mt-2 max-h-32 overflow-auto text-[11px]">
                 {ocrHotkeyLastResult.warnings.slice(0, 30).map((line, index) => (
                   <p key={`ocr-hotkey-warning-${index}`}>{line}</p>
@@ -245,29 +245,29 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
           ) : null}
 
           {ocrHotkeyLastResult && ocrHotkeyLastResult.importedEntries.length > 0 ? (
-            <details className="rounded-lg border border-white/10 bg-black/25 p-2 text-slate-300">
-              <summary className="cursor-pointer text-[11px] text-cyan-300">查看本次抓价明细（物品/价格）</summary>
-              <div className="mt-2 max-h-44 overflow-auto">
-                <table className="w-full text-left text-[11px]">
-                  <thead className="bg-white/5">
+            <details className="tool-panel text-slate-500">
+              <summary className="cursor-pointer text-[11px] tone-positive">查看本次抓价明细（物品/价格）</summary>
+              <div className="tool-table-wrap mt-2 max-h-44">
+                <table className="tool-table">
+                  <thead>
                     <tr>
-                      <th className="px-2 py-1">行</th>
-                      <th className="px-2 py-1">物品</th>
-                      <th className="px-2 py-1">价格</th>
-                      <th className="px-2 py-1">市场</th>
-                      <th className="px-2 py-1">时间</th>
-                      <th className="px-2 py-1">备注</th>
+                      <th>行</th>
+                      <th>物品</th>
+                      <th>价格</th>
+                      <th>市场</th>
+                      <th>时间</th>
+                      <th>备注</th>
                     </tr>
                   </thead>
                   <tbody>
                     {ocrHotkeyLastResult.importedEntries.map((entry, index) => (
-                      <tr key={`ocr-hotkey-entry-${entry.itemId}-${entry.lineNumber}-${index}`} className="border-t border-white/10">
-                        <td className="px-2 py-1">{entry.lineNumber}</td>
-                        <td className="px-2 py-1">{entry.itemName}</td>
-                        <td className="px-2 py-1">{formatGold(entry.unitPrice)}</td>
-                        <td className="px-2 py-1">{formatMarketLabel(entry.market)}</td>
-                        <td className="px-2 py-1">{formatDateTime(entry.capturedAt)}</td>
-                        <td className={`px-2 py-1 ${entry.createdItem ? "text-amber-300" : "text-slate-300"}`}>
+                      <tr key={`ocr-hotkey-entry-${entry.itemId}-${entry.lineNumber}-${index}`}>
+                        <td>{entry.lineNumber}</td>
+                        <td>{entry.itemName}</td>
+                        <td>{formatGold(entry.unitPrice)}</td>
+                        <td>{formatMarketLabel(entry.market)}</td>
+                        <td>{formatDateTime(entry.capturedAt)}</td>
+                        <td className={entry.createdItem ? "tone-warning" : "text-slate-500"}>
                           {entry.createdItem ? "新增物品" : "已存在物品"}
                         </td>
                       </tr>
@@ -278,11 +278,11 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
             </details>
           ) : null}
 
-          <div className="rounded-xl border border-white/10 bg-black/25 p-2">
-            <p className="text-[11px] text-slate-300">可视化校准：拖拽可重画大小；在框内拖动可平移；可见行数可自动识别（适配不同游戏 UI 大小）。</p>
+          <div className="tool-panel">
+            <p className="text-[11px] text-slate-500">可视化校准：拖拽可重画大小；在框内拖动可平移；可见行数可自动识别（适配不同游戏 UI 大小）。</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrTradePresetKey}
                 onChange={(event) => setOcrTradePresetKey(event.target.value as OcrTradePresetKey)}
                 disabled={busy}
@@ -292,7 +292,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
                 <option value="custom">交易行预设: 自定义</option>
               </select>
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrCalibrationTarget}
                 onChange={(event) => setOcrCalibrationTarget(event.target.value as "names" | "prices")}
                 disabled={busy}
@@ -301,7 +301,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
                 <option value="prices">拖拽校准目标: 价格框</option>
               </select>
               <select
-                className="min-w-0 px-3 py-2 text-xs"
+                className="field-control-sm min-w-0"
                 value={ocrTradeRowCount}
                 onChange={(event) => setOcrTradeRowCount(event.target.value)}
                 disabled={busy}
@@ -318,7 +318,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
               </button>
             </div>
             {ocrScreenPreview ? (
-              <div className="mt-2 overflow-auto rounded-lg border border-white/10 bg-black/20 p-2">
+              <div className="tool-table-wrap mt-2 overflow-auto p-2">
                 <div
                   className="relative"
                   style={{

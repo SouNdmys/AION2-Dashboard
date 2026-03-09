@@ -69,6 +69,32 @@ interface OverviewMetricChip {
   urgent: boolean;
 }
 
+type OverviewMetricGroupKey = "urgent" | "dungeon" | "weekly" | "mission" | "leisure";
+
+const OVERVIEW_GROUP_LABELS: Record<OverviewMetricGroupKey, string> = {
+  urgent: "高优先",
+  dungeon: "副本",
+  weekly: "周常",
+  mission: "使命",
+  leisure: "休闲",
+};
+
+function getOverviewMetricGroupKey(metricKey: string): OverviewMetricGroupKey {
+  if (["sanctum_raid", "sanctum_box", "corridor_lower", "corridor_middle"].includes(metricKey)) {
+    return "urgent";
+  }
+  if (["expedition", "transcendence", "daily_dungeon", "nightmare", "awakening", "suppression", "abyss_lower", "abyss_middle"].includes(metricKey)) {
+    return "dungeon";
+  }
+  if (["weekly_mission", "shop_aode", "shop_ticket", "transform_aode"].includes(metricKey)) {
+    return "weekly";
+  }
+  if (["daily_mission"].includes(metricKey)) {
+    return "mission";
+  }
+  return "leisure";
+}
+
 function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalWindow: boolean): OverviewMetricChip[] {
   return [
     { key: "expedition", label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
@@ -323,9 +349,20 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           const actionableMetrics = allMetrics
             .filter((metric) => metric.current > 0)
             .sort((left, right) => Number(right.urgent) - Number(left.urgent) || right.current - left.current || left.label.localeCompare(right.label, "zh-CN"));
-          const visibleMetrics = actionableMetrics.slice(0, 3);
-          const secondaryMetric = actionableMetrics[3] ?? null;
-          const hiddenMetricCount = Math.max(0, actionableMetrics.length - visibleMetrics.length - (secondaryMetric ? 1 : 0));
+          const groupedMetrics = actionableMetrics.reduce<Record<OverviewMetricGroupKey, OverviewMetricChip[]>>(
+            (acc, metric) => {
+              acc[getOverviewMetricGroupKey(metric.key)].push(metric);
+              return acc;
+            },
+            {
+              urgent: [],
+              dungeon: [],
+              weekly: [],
+              mission: [],
+              leisure: [],
+            },
+          );
+          const visibleGroups = (Object.keys(groupedMetrics) as OverviewMetricGroupKey[]).filter((groupKey) => groupedMetrics[groupKey].length > 0);
           const filteredReadyCount =
             overviewTaskFilter === "dungeon"
               ? entry.dungeonReadyBuckets
@@ -365,35 +402,37 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                   <span className={getUrgentBoardToneClass(entry.aodeBaseEnergyCurrent, entry.aodeBaseEnergyCap, entry.aodeBaseEnergyOverflow)}>
                     奥德 {entry.aodeBaseEnergyCurrent}(+{entry.aodeBonusEnergyCurrent})/{entry.aodeBaseEnergyCap}
                   </span>
-                  <span className="summary-note">
-                    可执行项 {filteredReadyCount}
-                    {overviewTaskFilter === "all" ? "" : overviewTaskFilter === "dungeon" ? " / 副本" : overviewTaskFilter === "weekly" ? " / 周常" : " / 使命"}
-                  </span>
+                  <span className="summary-note">可执行项 {filteredReadyCount}</span>
                 </div>
               </div>
               <div className="mt-3 space-y-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {visibleMetrics.length > 0 ? (
-                    visibleMetrics.map((metric) => (
-                      <span key={`${entry.character.id}-${metric.key}`} className={getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}>
-                        {metric.label} {formatCounter(metric.current, metric.total)}
-                      </span>
-                    ))
-                  ) : (
+                {visibleGroups.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+                    {visibleGroups.map((groupKey) => (
+                      <section key={`${entry.character.id}-${groupKey}`} className="subtle-panel">
+                        <p className="overview-group-title">{OVERVIEW_GROUP_LABELS[groupKey]}</p>
+                        <div className="overview-task-list">
+                          {groupedMetrics[groupKey].map((metric) => (
+                            <div key={`${entry.character.id}-${groupKey}-${metric.key}`} className="overview-task-row">
+                              <span className="overview-task-row-label">{metric.label}</span>
+                              <span className={`overview-task-row-value ${metric.urgent ? "tone-danger" : ""}`}>{formatCounter(metric.current, metric.total)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="subtle-panel">
                     <span className="summary-note">当前主要项目已基本清空，可直接进入角色确认细节。</span>
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="rounded-2xl border border-[rgba(15,23,42,0.06)] bg-white/70 px-3 py-2">
-                  {secondaryMetric ? (
-                    <p className="inline-note">
-                      次级关注: <span className="font-semibold text-slate-700">{secondaryMetric.label}</span> {formatCounter(secondaryMetric.current, secondaryMetric.total)}
-                    </p>
-                  ) : null}
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="summary-note">副本 {entry.dungeonReadyBuckets}</span>
                     <span className="summary-note">周常 {entry.weeklyReadyBuckets}</span>
                     <span className="summary-note">使命 {entry.missionReadyBuckets}</span>
-                    <span className="summary-note">已折叠 {hiddenMetricCount} 项</span>
+                    <span className="summary-note">明细 {actionableMetrics.length} 项</span>
                   </div>
                 </div>
               </div>

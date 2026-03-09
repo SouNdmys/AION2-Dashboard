@@ -165,14 +165,14 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold">市场分析器</h4>
-          <p className="mt-1 text-xs text-slate-300">默认只显示当前物品的近期价格和结论，筛选器、曲线和信号细节按需展开。</p>
+          <p className="mt-1 summary-note">默认只显示当前物品的近期价格和结论，筛选器、曲线和信号细节按需展开。</p>
         </div>
-        <span className="pill-btn !border-cyan-300/35 !text-cyan-100">同步联动</span>
+        <span className="pill-btn pill-static">同步联动</span>
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto_auto]">
           <select
-            className="min-w-0 px-3 py-2 text-sm"
+            className="field-control min-w-0"
             value={historyItemId}
             onChange={(event) => setHistoryItemId(event.target.value)}
             disabled={busy || filteredHistoryItems.length === 0}
@@ -184,7 +184,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             ))}
           </select>
           <input
-            className="min-w-0 px-3 py-2 text-sm"
+            className="field-control min-w-0"
             value={historyDaysInput}
             onChange={(event) => setHistoryDaysInput(event.target.value)}
             disabled={busy}
@@ -197,37 +197,37 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             {historyItemId && isStarredItem(historyItemId) ? "★ 取消星标" : "☆ 星标关注"}
           </button>
         </div>
-      {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前搜索条件下没有可查询物品。</p> : null}
+      {filteredHistoryItems.length === 0 ? <p className="banner-warning mt-2 rounded-xl px-3 py-2 text-xs">当前搜索条件下没有可查询物品。</p> : null}
 
       <div className="mt-3 grid grid-cols-1 gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
         <div className="data-pill">
-          <p className="text-[11px] text-slate-400">伺服器最近价格</p>
-          <p className="mt-1 text-sm text-slate-100">{formatGold(historyServerResult?.latestPrice ?? null)}</p>
+          <p className="text-[11px] text-slate-500">伺服器最近价格</p>
+          <p className="mt-1 text-sm text-slate-900">{formatGold(historyServerResult?.latestPrice ?? null)}</p>
           <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestServerCapturedAt)}</p>
         </div>
         <div className="data-pill">
-          <p className="text-[11px] text-slate-400">世界最近价格</p>
-          <p className="mt-1 text-sm text-slate-100">{formatGold(historyWorldResult?.latestPrice ?? null)}</p>
+          <p className="text-[11px] text-slate-500">世界最近价格</p>
+          <p className="mt-1 text-sm text-slate-900">{formatGold(historyWorldResult?.latestPrice ?? null)}</p>
           <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestWorldCapturedAt)}</p>
         </div>
         <div className="data-pill">
-          <p className="text-[11px] text-slate-400">趋势方向</p>
+          <p className="text-[11px] text-slate-500">趋势方向</p>
           <p className={`mt-1 text-sm ${trendSummaryClass}`}>{trendSummaryLabel}</p>
           <p className="mt-1 text-[11px] text-slate-400">{currentSignalSummary}</p>
         </div>
         <div className="data-pill">
-          <p className="text-[11px] text-slate-400">异常提醒</p>
-          <p className={`mt-1 text-sm ${suspectCount > 0 ? "text-rose-300" : "text-slate-100"}`}>{anomalySummary}</p>
+          <p className="text-[11px] text-slate-500">异常提醒</p>
+          <p className={`mt-1 text-sm ${suspectCount > 0 ? "tone-danger" : "text-slate-900"}`}>{anomalySummary}</p>
           <p className="mt-1 text-[11px] text-slate-400">当前样本 {historyPointCount}</p>
         </div>
       </div>
-      {historyHasLoaded ? <p className="mt-2 text-xs text-slate-300">默认首屏只保留结论摘要；曲线、筛选和信号明细已收进下方展开区。</p> : <p className="mt-2 text-xs text-slate-300">先选物品，系统会自动同步最近价格、历史样本和周期信号。</p>}
+      {historyHasLoaded ? <p className="mt-2 summary-note">默认首屏只保留结论摘要；曲线、筛选和信号明细已收进下方展开区。</p> : <p className="mt-2 summary-note">先选物品，系统会自动同步最近价格、历史样本和周期信号。</p>}
       {suspectHighlights.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-2">
           {suspectHighlights.map((point) => (
             <button
               key={`history-suspect-highlight-${point.market}-${point.id}`}
-              className="pill-btn !border-rose-300/50 !text-rose-200"
+              className="pill-btn"
               onClick={() => onJumpHistoryManagerForSnapshot(point.id, point.capturedAt)}
               disabled={busy}
             >
@@ -237,13 +237,13 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         </div>
       ) : null}
 
-      <details className="group mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+      <details className="group mt-3 tool-panel">
         <summary className="details-summary">
           <div>
-            <p className="text-sm font-medium text-slate-100">高级筛选与细节</p>
-            <p className="mt-1 text-[11px] text-slate-400">分类筛选、星标过滤、价格曲线、信号列表。</p>
+            <p className="text-sm font-medium text-slate-900">高级筛选与细节</p>
+            <p className="mt-1 text-[11px] text-slate-500">分类筛选、星标过滤、价格曲线、信号列表。</p>
           </div>
-          <span className="pill-btn !border-white/15 !text-slate-200 group-open:!border-cyan-300/35 group-open:!text-cyan-100">
+          <span className="pill-btn">
             <span className="group-open:hidden">展开</span>
             <span className="hidden group-open:inline">收起</span>
           </span>
@@ -252,7 +252,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         <div className="mt-3">
           <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
             <select
-              className="min-w-0 px-3 py-2 text-sm"
+              className="field-control min-w-0"
               value={historyMainCategory}
               onChange={(event) => setHistoryMainCategory(event.target.value)}
               disabled={busy || historyMainCategoryOptions.length === 0}
@@ -264,7 +264,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
               ))}
             </select>
             <select
-              className="min-w-0 px-3 py-2 text-sm"
+              className="field-control min-w-0"
               value={historySubCategory}
               onChange={(event) => setHistorySubCategory(event.target.value)}
               disabled={busy}
@@ -277,7 +277,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
               ))}
             </select>
             <input
-              className="min-w-0 px-3 py-2 text-sm"
+              className="field-control min-w-0"
               value={historyKeyword}
               onChange={(event) => setHistoryKeyword(event.target.value)}
               disabled={busy}
@@ -285,16 +285,16 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             />
           </div>
           {historyKeyword.trim() ? (
-            <p className="mt-1 text-[11px] text-cyan-200">关键词搜索已切换为全物品范围（忽略大类/下级分类）。</p>
+            <p className="mt-1 text-[11px] tone-positive">关键词搜索已切换为全物品范围（忽略大类/下级分类）。</p>
           ) : null}
 
           {starredHistoryItems.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="text-amber-200">重点关注:</span>
+                <span className="tone-warning">重点关注:</span>
               {starredHistoryItems.slice(0, 12).map((item) => (
                 <button
                   key={`star-item-chip-${item.id}`}
-                  className="pill-btn !border-amber-300/40 !text-amber-200"
+                  className="pill-btn"
                   onClick={() => onViewHistoryCurveForItem(item.id, { scroll: false })}
                 >
                   ★ {item.name}
@@ -305,13 +305,13 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
 
           <div className="mt-2 flex flex-wrap gap-2">
             <button
-              className={`pill-btn whitespace-nowrap ${focusStarOnly ? "!border-amber-300/60 !text-amber-200" : ""}`}
+                className={`pill-btn whitespace-nowrap ${focusStarOnly ? "pill-btn-active" : ""}`}
               onClick={() => setFocusStarOnly((prev) => !prev)}
             >
               {focusStarOnly ? "仅看星标: 开" : "仅看星标: 关"}
             </button>
             <button
-              className={`pill-btn whitespace-nowrap ${historyIncludeSuspect ? "!border-rose-300/70 !text-rose-200" : "!border-emerald-300/50 !text-emerald-200"}`}
+                className={`pill-btn whitespace-nowrap ${historyIncludeSuspect ? "" : "pill-btn-active"}`}
               onClick={() => setHistoryIncludeSuspect((prev) => !prev)}
               disabled={busy || !historyItemId}
             >
@@ -322,7 +322,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
               return (
                 <button
                   key={`history-quick-${days}`}
-                  className={`pill-btn ${active ? "!border-cyan-300/60 !bg-cyan-300/20 !text-cyan-100" : ""}`}
+                  className={`pill-btn ${active ? "pill-btn-active" : ""}`}
                   onClick={() => {
                     setHistoryDaysInput(String(days));
                   }}
@@ -334,27 +334,27 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             })}
           </div>
         {recentOcrImportedEntries.length > 0 ? (
-          <div className="mt-2 rounded-lg border border-cyan-300/20 bg-cyan-500/10 p-2 text-xs">
-            <p className="text-cyan-200">最近抓价更新（最新 20 条）</p>
-            <div className="mt-2 max-h-36 overflow-auto rounded-lg border border-white/10 bg-black/20">
-              <table className="w-full text-left text-[11px]">
-                <thead className="bg-white/5 text-slate-300">
+          <div className="tool-banner mt-2 text-xs">
+            <p className="tone-positive">最近抓价更新（最新 20 条）</p>
+            <div className="tool-table-wrap mt-2 max-h-36">
+              <table className="tool-table">
+                <thead>
                   <tr>
-                    <th className="px-2 py-1">物品</th>
-                    <th className="px-2 py-1">市场</th>
-                    <th className="px-2 py-1">价格</th>
-                    <th className="px-2 py-1">时间</th>
-                    <th className="px-2 py-1">状态</th>
+                    <th>物品</th>
+                    <th>市场</th>
+                    <th>价格</th>
+                    <th>时间</th>
+                    <th>状态</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentOcrImportedEntries.map((entry, index) => (
-                    <tr key={`recent-ocr-import-${entry.itemId}-${entry.lineNumber}-${index}`} className="border-t border-white/10">
-                      <td className="px-2 py-1">{entry.itemName}</td>
-                      <td className="px-2 py-1">{formatMarketLabel(entry.market)}</td>
-                      <td className="px-2 py-1">{formatGold(entry.unitPrice)}</td>
-                      <td className="px-2 py-1">{formatDateTime(entry.capturedAt)}</td>
-                      <td className={`px-2 py-1 ${entry.createdItem ? "text-amber-300" : "text-emerald-300"}`}>
+                    <tr key={`recent-ocr-import-${entry.itemId}-${entry.lineNumber}-${index}`}>
+                      <td>{entry.itemName}</td>
+                      <td>{formatMarketLabel(entry.market)}</td>
+                      <td>{formatGold(entry.unitPrice)}</td>
+                      <td>{formatDateTime(entry.capturedAt)}</td>
+                      <td className={entry.createdItem ? "tone-warning" : "tone-positive"}>
                         {entry.createdItem ? "新增物品" : "已更新"}
                       </td>
                     </tr>
