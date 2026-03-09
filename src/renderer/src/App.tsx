@@ -472,6 +472,15 @@ export function App(): JSX.Element {
             classTag={selected.classTag?.trim() || "未填写"}
             gearScore={selected.gearScore}
             weeklyGoldEarnedText={toGoldText(selected.stats.goldEarned)}
+            weeklyExpeditionRuns={weeklyExpeditionRuns}
+            expeditionWarnThreshold={expeditionWarnThreshold}
+            weeklyTransRuns={weeklyTransRuns}
+            transcendenceWarnThreshold={transcendenceWarnThreshold}
+            cycleStartedAt={selected.stats.cycleStartedAt}
+            weeklyExpeditionCompletedInput={weeklyExpeditionCompletedInput}
+            weeklyTranscendenceCompletedInput={weeklyTranscendenceCompletedInput}
+            expeditionOverRewardThreshold={expeditionOverRewardThreshold}
+            transcendenceOverThreshold={transcendenceOverThreshold}
             corridorLowerAvailable={selected.activities.corridorLowerAvailable}
             corridorMiddleAvailable={selected.activities.corridorMiddleAvailable}
             renameName={renameName}
@@ -498,6 +507,9 @@ export function App(): JSX.Element {
             onSyncCorridorStatus={onSyncCorridorStatus}
             onApplyCorridorCompletion={onApplyCorridorCompletion}
             onResetWeeklyStats={onResetWeeklyStats}
+            onWeeklyExpeditionCompletedInputChange={setWeeklyExpeditionCompletedInput}
+            onWeeklyTranscendenceCompletedInputChange={setWeeklyTranscendenceCompletedInput}
+            onSaveWeeklyCompletions={onSaveWeeklyCompletions}
             onShopAodePurchaseUsedInputChange={setShopAodePurchaseUsedInput}
             onShopDailyDungeonTicketPurchaseUsedInputChange={setShopDailyDungeonTicketPurchaseUsedInput}
             onTransformAodeUsedInputChange={setTransformAodeUsedInput}
@@ -507,7 +519,7 @@ export function App(): JSX.Element {
           />
 
           <DashboardCharacterModePanels
-            weeklyVisible={viewMode === "dashboard"}
+            weeklyVisible={viewMode === "dashboard" && dashboardMode === "overview"}
             characterVisible={viewMode === "dashboard" && dashboardMode === "character"}
             busy={busy}
             weeklyEarnedText={toGoldText(weeklyEarned)}

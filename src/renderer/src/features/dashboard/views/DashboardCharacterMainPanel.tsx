@@ -12,6 +12,15 @@ interface DashboardCharacterMainPanelProps {
   classTag: string;
   gearScore: number | undefined;
   weeklyGoldEarnedText: string;
+  weeklyExpeditionRuns: number;
+  expeditionWarnThreshold: number;
+  weeklyTransRuns: number;
+  transcendenceWarnThreshold: number;
+  cycleStartedAt: string;
+  weeklyExpeditionCompletedInput: string;
+  weeklyTranscendenceCompletedInput: string;
+  expeditionOverRewardThreshold: boolean;
+  transcendenceOverThreshold: boolean;
   corridorLowerAvailable: number;
   corridorMiddleAvailable: number;
   renameName: string;
@@ -41,6 +50,9 @@ interface DashboardCharacterMainPanelProps {
   onSyncCorridorStatus: () => void;
   onApplyCorridorCompletion: () => void;
   onResetWeeklyStats: () => void;
+  onWeeklyExpeditionCompletedInputChange: (value: string) => void;
+  onWeeklyTranscendenceCompletedInputChange: (value: string) => void;
+  onSaveWeeklyCompletions: () => void;
   onShopAodePurchaseUsedInputChange: (value: string) => void;
   onShopDailyDungeonTicketPurchaseUsedInputChange: (value: string) => void;
   onTransformAodeUsedInputChange: (value: string) => void;
@@ -60,6 +72,15 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     classTag,
     gearScore,
     weeklyGoldEarnedText,
+    weeklyExpeditionRuns,
+    expeditionWarnThreshold,
+    weeklyTransRuns,
+    transcendenceWarnThreshold,
+    cycleStartedAt,
+    weeklyExpeditionCompletedInput,
+    weeklyTranscendenceCompletedInput,
+    expeditionOverRewardThreshold,
+    transcendenceOverThreshold,
     corridorLowerAvailable,
     corridorMiddleAvailable,
     renameName,
@@ -86,6 +107,9 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     onSyncCorridorStatus,
     onApplyCorridorCompletion,
     onResetWeeklyStats,
+    onWeeklyExpeditionCompletedInputChange,
+    onWeeklyTranscendenceCompletedInputChange,
+    onSaveWeeklyCompletions,
     onShopAodePurchaseUsedInputChange,
     onShopDailyDungeonTicketPurchaseUsedInputChange,
     onTransformAodeUsedInputChange,
@@ -110,6 +134,15 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
         classTag={classTag}
         gearScore={gearScore}
         weeklyGoldEarnedText={weeklyGoldEarnedText}
+        weeklyExpeditionRuns={weeklyExpeditionRuns}
+        expeditionWarnThreshold={expeditionWarnThreshold}
+        weeklyTransRuns={weeklyTransRuns}
+        transcendenceWarnThreshold={transcendenceWarnThreshold}
+        cycleStartedAt={cycleStartedAt}
+        weeklyExpeditionCompletedInput={weeklyExpeditionCompletedInput}
+        weeklyTranscendenceCompletedInput={weeklyTranscendenceCompletedInput}
+        expeditionOverRewardThreshold={expeditionOverRewardThreshold}
+        transcendenceOverThreshold={transcendenceOverThreshold}
         corridorLowerAvailable={corridorLowerAvailable}
         corridorMiddleAvailable={corridorMiddleAvailable}
         renameName={renameName}
@@ -123,14 +156,17 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
         onSaveCharacterProfile={onSaveCharacterProfile}
         onRenameCharacter={onRenameCharacter}
         onDeleteCharacter={onDeleteCharacter}
-        onOpenEnergyDialog={onOpenEnergyDialog}
         onSyncCorridorStatus={onSyncCorridorStatus}
         onApplyCorridorCompletion={onApplyCorridorCompletion}
         onResetWeeklyStats={onResetWeeklyStats}
+        onWeeklyExpeditionCompletedInputChange={onWeeklyExpeditionCompletedInputChange}
+        onWeeklyTranscendenceCompletedInputChange={onWeeklyTranscendenceCompletedInputChange}
+        onSaveWeeklyCompletions={onSaveWeeklyCompletions}
       />
       <DashboardCharacterResourcePanels
         busy={busy}
         selected={selected}
+        onOpenEnergyDialog={onOpenEnergyDialog}
         selectedAodeLimits={selectedAodeLimits}
         selectedIsAodeExtra={selectedIsAodeExtra}
         selectedAccountExtraCharacterName={selectedAccountExtraCharacterName}

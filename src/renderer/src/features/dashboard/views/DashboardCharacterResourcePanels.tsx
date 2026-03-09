@@ -12,6 +12,7 @@ import { buildCountOptions } from "../dashboard-utils";
 interface DashboardCharacterResourcePanelsProps {
   busy: boolean;
   selected: CharacterState;
+  onOpenEnergyDialog: () => void;
   selectedAodeLimits: {
     purchaseLimit: number;
     convertLimit: number;
@@ -36,6 +37,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
   const {
     busy,
     selected,
+    onOpenEnergyDialog,
     selectedAodeLimits,
     selectedIsAodeExtra,
     selectedAccountExtraCharacterName,
@@ -55,23 +57,22 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
 
   return (
     <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <section className="section-card">
+      <section className="toolbar-card">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Energy</p>
             <h3 className="panel-title !mt-1 !text-sm">奥德能量</h3>
           </div>
+          <div className="toolbar-actions">
           <span className="summary-note">
             {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}
           </span>
+          <button className="pill-btn" onClick={onOpenEnergyDialog} disabled={busy}>
+            调整能量
+          </button>
+          </div>
         </div>
-        <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
-          <span>奥德能量</span>
-          <span>
-            {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}
-          </span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.06)]">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.06)]">
           <div
             className="flex h-full"
             style={{
@@ -92,7 +93,10 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             />
           </div>
         </div>
-        <p className="mt-2 summary-note">基础能量优先扣除，补充能量用于兜底。</p>
+        <div className="toolbar-meta mt-2 summary-note">
+          <span>基础优先扣除</span>
+          <span>补充能量兜底</span>
+        </div>
       </section>
 
       <div className="space-y-3">

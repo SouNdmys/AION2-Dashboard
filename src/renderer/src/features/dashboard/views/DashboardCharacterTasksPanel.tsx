@@ -138,11 +138,11 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                   </button>
                 </div>
                 <div className="task-action-row mt-3">
-                  <button className="task-btn task-btn-soft task-btn-compact min-w-[180px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
-                    录入挑战次数
+                  <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
+                    挑战完成
                   </button>
-                  <button className="task-btn task-btn-soft task-btn-compact min-w-[180px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
-                    录入开箱次数(80奥德)
+                  <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
+                    开箱完成(80奥德)
                   </button>
                 </div>
               </div>

@@ -1,3 +1,6 @@
+import { COUNT_SELECT_MAX } from "../dashboard-types";
+import { buildCountOptions } from "../dashboard-utils";
+
 const numberFormatter = new Intl.NumberFormat("zh-CN");
 
 interface DashboardCharacterHeaderPanelProps {
@@ -10,6 +13,15 @@ interface DashboardCharacterHeaderPanelProps {
   classTag: string;
   gearScore: number | undefined;
   weeklyGoldEarnedText: string;
+  weeklyExpeditionRuns: number;
+  expeditionWarnThreshold: number;
+  weeklyTransRuns: number;
+  transcendenceWarnThreshold: number;
+  cycleStartedAt: string;
+  weeklyExpeditionCompletedInput: string;
+  weeklyTranscendenceCompletedInput: string;
+  expeditionOverRewardThreshold: boolean;
+  transcendenceOverThreshold: boolean;
   corridorLowerAvailable: number;
   corridorMiddleAvailable: number;
   renameName: string;
@@ -23,10 +35,12 @@ interface DashboardCharacterHeaderPanelProps {
   onSaveCharacterProfile: () => void;
   onRenameCharacter: () => void;
   onDeleteCharacter: () => void;
-  onOpenEnergyDialog: () => void;
   onSyncCorridorStatus: () => void;
   onApplyCorridorCompletion: () => void;
   onResetWeeklyStats: () => void;
+  onWeeklyExpeditionCompletedInputChange: (value: string) => void;
+  onWeeklyTranscendenceCompletedInputChange: (value: string) => void;
+  onSaveWeeklyCompletions: () => void;
 }
 
 export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPanelProps): JSX.Element | null {
@@ -40,6 +54,15 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
     classTag,
     gearScore,
     weeklyGoldEarnedText,
+    weeklyExpeditionRuns,
+    expeditionWarnThreshold,
+    weeklyTransRuns,
+    transcendenceWarnThreshold,
+    cycleStartedAt,
+    weeklyExpeditionCompletedInput,
+    weeklyTranscendenceCompletedInput,
+    expeditionOverRewardThreshold,
+    transcendenceOverThreshold,
     corridorLowerAvailable,
     corridorMiddleAvailable,
     renameName,
@@ -53,10 +76,12 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
     onSaveCharacterProfile,
     onRenameCharacter,
     onDeleteCharacter,
-    onOpenEnergyDialog,
     onSyncCorridorStatus,
     onApplyCorridorCompletion,
     onResetWeeklyStats,
+    onWeeklyExpeditionCompletedInputChange,
+    onWeeklyTranscendenceCompletedInputChange,
+    onSaveWeeklyCompletions,
   } = props;
 
   if (!visible) {
@@ -101,6 +126,62 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
           </p>
         </div>
       </div>
+
+      <section className="toolbar-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Weekly Tools</p>
+            <h3 className="panel-title !mt-1 !text-sm">周统计工具</h3>
+          </div>
+          <div className="toolbar-meta summary-note">
+            <span>全角色远征 {weeklyExpeditionRuns}</span>
+            <span>全角色超越 {weeklyTransRuns}</span>
+            <span>起点 {new Date(cycleStartedAt).toLocaleString()}</span>
+          </div>
+        </div>
+        <div className="toolbar-grid mt-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_auto_auto]">
+          <select
+            className="field-control"
+            value={weeklyExpeditionCompletedInput}
+            onChange={(event) => onWeeklyExpeditionCompletedInputChange(event.target.value)}
+            disabled={busy}
+          >
+            {buildCountOptions(0, COUNT_SELECT_MAX, weeklyExpeditionCompletedInput).map((value) => (
+              <option key={`header-weekly-expedition-${value}`} value={value}>
+                当前角色远征 {value}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field-control"
+            value={weeklyTranscendenceCompletedInput}
+            onChange={(event) => onWeeklyTranscendenceCompletedInputChange(event.target.value)}
+            disabled={busy}
+          >
+            {buildCountOptions(0, COUNT_SELECT_MAX, weeklyTranscendenceCompletedInput).map((value) => (
+              <option key={`header-weekly-transcendence-${value}`} value={value}>
+                当前角色超越 {value}
+              </option>
+            ))}
+          </select>
+          <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
+            保存校准
+          </button>
+          <button className="pill-btn" onClick={onResetWeeklyStats} disabled={busy}>
+            重置周收益
+          </button>
+        </div>
+        {expeditionOverRewardThreshold || transcendenceOverThreshold ? (
+          <div className="toolbar-meta mt-2">
+            {expeditionOverRewardThreshold ? (
+              <span className="banner-warning rounded-lg px-3 py-2 text-xs">远征已超过阈值 {expeditionWarnThreshold}</span>
+            ) : null}
+            {transcendenceOverThreshold ? (
+              <span className="banner-warning rounded-lg px-3 py-2 text-xs">超越已超过阈值 {transcendenceWarnThreshold}</span>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <section className="toolbar-card">
@@ -152,17 +233,11 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
             <h3 className="panel-title !mt-1 !text-sm">快捷操作</h3>
           </div>
           <div className="toolbar-actions mt-3">
-            <button className="pill-btn" onClick={onOpenEnergyDialog} disabled={busy}>
-              手动改能量
-            </button>
             <button className="pill-btn" onClick={onSyncCorridorStatus} disabled={busy}>
               同步回廊
             </button>
             <button className="pill-btn" onClick={onApplyCorridorCompletion} disabled={busy}>
               回廊录入完成
-            </button>
-            <button className="pill-btn" onClick={onResetWeeklyStats} disabled={busy}>
-              重置周收益
             </button>
           </div>
         </section>
