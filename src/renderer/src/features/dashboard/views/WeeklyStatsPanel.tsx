@@ -44,18 +44,25 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
 
   return (
     <article className="glass-panel rounded-2xl p-4">
-      <h3 className="text-sm font-semibold tracking-wide">本周金币统计</h3>
-      <div className="mt-3 grid grid-cols-2 gap-3 text-sm 2xl:grid-cols-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="panel-kicker">Weekly Summary</p>
+          <h3 className="panel-title !mt-1 !text-sm">本周金币统计</h3>
+        </div>
+        <p className="summary-note">周收益统计每周三 05:00 自动重置，也可手动校准。</p>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm 2xl:grid-cols-4">
         <div className="data-pill">全角色本周收益: {weeklyEarnedText}</div>
         <div className="data-pill">全角色远征次数: {weeklyExpeditionRuns} (阈值 {expeditionWarnThreshold})</div>
         <div className="data-pill">全角色超越次数: {weeklyTransRuns} (阈值 {transcendenceWarnThreshold})</div>
         <div className="data-pill">本轮统计起点: {new Date(cycleStartedAt).toLocaleString()}</div>
       </div>
-      <p className="mt-2 summary-note">周收益统计会在每周三 05:00 自动重置，也可手动重置。</p>
-      <div className="section-card mt-3">
-        <p className="text-xs font-semibold tracking-wide text-slate-700">当前角色周次数校准（远征/超越）</p>
-        <p className="mt-1 summary-note">用于误清空后回填游戏内真实已完成次数。</p>
-        <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
+      <div className="subtle-panel mt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold tracking-wide text-slate-700">当前角色周次数校准</p>
+          <p className="summary-note">用于误清空后回填真实次数。</p>
+        </div>
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_auto]">
           <select
             className="field-control"
             value={weeklyExpeditionCompletedInput}
@@ -64,7 +71,7 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
           >
             {buildCountOptions(0, COUNT_SELECT_MAX, weeklyExpeditionCompletedInput).map((value) => (
               <option key={`weekly-expedition-${value}`} value={value}>
-                {value}
+                远征 {value}
               </option>
             ))}
           </select>
@@ -76,11 +83,11 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
           >
             {buildCountOptions(0, COUNT_SELECT_MAX, weeklyTranscendenceCompletedInput).map((value) => (
               <option key={`weekly-transcendence-${value}`} value={value}>
-                {value}
+                超越 {value}
               </option>
             ))}
           </select>
-          <button className="task-btn px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
+          <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveWeeklyCompletions} disabled={busy}>
             保存校准
           </button>
         </div>

@@ -392,6 +392,51 @@ select {
   box-shadow: 0 12px 22px rgba(70, 78, 92, 0.2);
 }
 
+.task-btn-compact {
+  min-height: var(--control-h-sm);
+  padding: 0.38rem 0.72rem;
+  font-size: 0.72rem;
+  border-radius: 0.9rem;
+}
+
+.task-card {
+  border-radius: 1.1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.85rem 0.95rem;
+}
+
+.task-section {
+  border-radius: 1.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(251, 251, 248, 0.92);
+  padding: 0.95rem;
+}
+
+.task-meta-line {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.task-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.task-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(247, 247, 243, 0.94);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
 .overview-filter-row {
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   padding-top: 0.75rem;

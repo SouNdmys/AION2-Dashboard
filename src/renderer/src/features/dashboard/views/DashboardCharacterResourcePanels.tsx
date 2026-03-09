@@ -54,7 +54,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
   } = props;
 
   return (
-    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+    <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <section className="section-card">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -92,10 +92,10 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             />
           </div>
         </div>
-        <p className="mt-2 text-xs text-slate-400">基础能量优先扣除，补充能量用于兜底。</p>
+        <p className="mt-2 summary-note">基础能量优先扣除，补充能量用于兜底。</p>
       </section>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
       <section className="section-card">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -104,7 +104,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
           </div>
           <span className="summary-note">{selectedIsAodeExtra ? "额外+8资格" : "基础资格"}</span>
         </div>
-        <p className="mt-2 text-xs text-slate-300">
+        <p className="mt-2 task-meta-line">
           奥德购买 {selected.aodePlan.shopAodePurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopAodePurchaseRemaining}） | 每日副本券购买{" "}
           {selected.aodePlan.shopDailyDungeonTicketPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}）
         </p>
@@ -137,10 +137,10 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               </option>
             ))}
           </select>
-          <button className="task-btn px-4" onClick={onSaveShopPlan} disabled={busy}>
+          <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveShopPlan} disabled={busy}>
             保存记录
           </button>
-          <button className="task-btn px-4" onClick={() => onAssignExtraAodeCharacter(!selectedIsAodeExtra)} disabled={busy}>
+          <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={() => onAssignExtraAodeCharacter(!selectedIsAodeExtra)} disabled={busy}>
             {selectedIsAodeExtra ? "取消额外" : "设为额外"}
           </button>
         </div>
@@ -151,7 +151,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
           <p className="panel-kicker !tracking-[0.08em]">Transform</p>
           <h3 className="panel-title !mt-1 !text-sm">变换记录</h3>
         </div>
-        <p className="mt-2 text-xs text-slate-300">
+        <p className="mt-2 task-meta-line">
           奥德变换 {selected.aodePlan.transformAodeUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedTransformAodeRemaining}）
         </p>
         <p className="summary-note mt-1">
@@ -170,7 +170,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               </option>
             ))}
           </select>
-          <button className="task-btn px-4" onClick={onSaveTransformPlan} disabled={busy}>
+          <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveTransformPlan} disabled={busy}>
             保存记录
           </button>
         </div>

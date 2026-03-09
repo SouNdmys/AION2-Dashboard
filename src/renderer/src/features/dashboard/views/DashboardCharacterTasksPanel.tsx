@@ -41,9 +41,15 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
   return (
     <>
       {(Object.keys(groupedTasks) as TaskDefinition["category"][]).map((category) => (
-        <article key={category} className="space-y-3">
-          <h3 className="px-1 text-sm font-semibold tracking-wide text-slate-200">{category}任务</h3>
-          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+        <article key={category} className="task-section space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <h3 className="text-sm font-semibold tracking-wide text-slate-900">{category}任务</h3>
+            <span className="summary-note">
+              {(groupedTasks[category] ?? []).length}
+              {category === "副本" && sanctumRaidTask && sanctumBoxTask ? " + 圣域" : ""} 项
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
             {(groupedTasks[category] ?? []).map((task) => {
               const canComplete = task.allowComplete && !task.allowSetCompleted;
               const showSetCompletedOnly = task.allowSetCompleted;
@@ -56,46 +62,47 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                   : task.id === "transcendence"
                     ? `首领剩余 ${selected.activities.transcendenceBossRemaining}/28`
                     : null;
+              const taskSummary = [`消耗 ${task.energyCost} 奥德`];
+              if (goldReward > 0) {
+                taskSummary.push(`收益 ${toGoldText(goldReward)}`);
+              }
+              if (extraLimitText) {
+                taskSummary.push(extraLimitText);
+              }
 
               return (
-                <div
-                  key={task.id}
-                  className="glass-panel rounded-2xl p-4"
-                >
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-base font-semibold">{task.title}</h3>
-                      <p className="mt-1 text-xs text-slate-300">{task.description}</p>
+                <div key={task.id} className="task-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{task.title}</h3>
+                      <p className="mt-1 task-meta-line">{task.description}</p>
                     </div>
-                    <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-xs">
+                    <span className="task-progress-pill shrink-0">
                       剩余 {getTaskProgressText(selected, task, state.settings)}
                     </span>
                   </div>
 
-                  <div className="mb-3 text-xs text-slate-300">
-                    消耗: {task.energyCost} 奥德 {goldReward > 0 ? `| 金币收益 ${toGoldText(goldReward)}` : ""}
-                    {extraLimitText ? ` | ${extraLimitText}` : ""}
-                  </div>
+                  <div className="mt-2 task-meta-line">{taskSummary.join(" | ")}</div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="task-action-row mt-3">
                     {showSetCompletedOnly ? (
-                      <button className="task-btn task-btn-soft w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
-                        输入已完成次数
+                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
+                        录入次数
                       </button>
                     ) : null}
                     {canComplete ? (
-                      <button className="task-btn task-btn-soft min-w-[120px] flex-1" onClick={() => onOpenCompleteDialog(task.id, task.title)} disabled={busy}>
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[96px] flex-1" onClick={() => onOpenCompleteDialog(task.id, task.title)} disabled={busy}>
                         完成次数
                       </button>
                     ) : null}
                     {showTicket ? (
-                      <button className="task-btn task-btn-soft min-w-[120px] flex-1" onClick={() => onOpenUseTicketDialog(task.id, task.title)} disabled={busy}>
-                        挑战券增加次数
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[96px] flex-1" onClick={() => onOpenUseTicketDialog(task.id, task.title)} disabled={busy}>
+                        增加券数
                       </button>
                     ) : null}
                     {showManualEdit ? (
                       <button
-                        className="task-btn task-btn-soft min-w-[120px] flex-1"
+                        className="task-btn task-btn-soft task-btn-compact min-w-[96px] flex-1"
                         onClick={() =>
                           onOpenTaskEditDialog(
                             task.id as
@@ -118,22 +125,24 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
               );
             })}
             {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
-              <div className="glass-panel col-span-2 rounded-2xl p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-base font-semibold">圣域</h3>
+              <div className="task-card col-span-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">圣域</h3>
+                    <p className="task-meta-line mt-1">
+                      挑战剩余 {selected.activities.sanctumRaidRemaining}/4 | 开箱剩余 {selected.activities.sanctumBoxRemaining}/2
+                    </p>
+                  </div>
                   <button className="pill-btn" onClick={onOpenSanctumEditDialog} disabled={busy}>
                     手动设定
                   </button>
                 </div>
-                <p className="text-xs text-slate-300">
-                  挑战剩余 {selected.activities.sanctumRaidRemaining}/4，开箱剩余 {selected.activities.sanctumBoxRemaining}/2
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button className="task-btn task-btn-soft" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
-                    填写挑战完成次数
+                <div className="task-action-row mt-3">
+                  <button className="task-btn task-btn-soft task-btn-compact min-w-[180px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
+                    录入挑战次数
                   </button>
-                  <button className="task-btn task-btn-soft" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
-                    填写开箱完成次数(80奥德)
+                  <button className="task-btn task-btn-soft task-btn-compact min-w-[180px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
+                    录入开箱次数(80奥德)
                   </button>
                 </div>
               </div>

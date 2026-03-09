@@ -64,11 +64,11 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="panel-kicker">Current Character</p>
-          <h2 className="panel-title !text-2xl">{characterName}</h2>
+          <h2 className="panel-title !text-[1.55rem]">{characterName}</h2>
           <p className="panel-subtitle">
             所属账号: {accountName}
             {accountRegionTag ? ` (${accountRegionTag})` : ""}
@@ -79,7 +79,7 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <div className="mini-stat">
           <p className="mini-stat-label">清空奥德预估</p>
           <p className="mini-stat-value">{estimatedGoldText}</p>
@@ -102,7 +102,7 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <section className="section-card">
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -136,7 +136,7 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
               placeholder="装分(整数)"
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <button className="pill-btn" onClick={onRenameCharacter} disabled={busy || !renameName.trim()}>
               重命名角色
             </button>
@@ -150,7 +150,6 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Actions</p>
             <h3 className="panel-title !mt-1 !text-sm">快捷操作</h3>
-            <p className="summary-note mt-2">把高频修正动作收成一组，避免纵向按钮堆满整页。</p>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             <button className="pill-btn w-full justify-center" onClick={onOpenEnergyDialog} disabled={busy}>
