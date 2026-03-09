@@ -118,7 +118,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
       </div>
       <div className="soft-card mb-4 p-4">
         <p className="panel-kicker !tracking-[0.08em]">Context</p>
-        <h2 className="panel-title !mt-1 !text-sm">当前上下文</h2>
+        <h2 className="panel-title !mt-1 !text-sm">当前账号</h2>
         <div className="mt-3 grid gap-2">
           <div className="context-card">
             <p className="context-label">账号</p>

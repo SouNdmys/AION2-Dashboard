@@ -284,6 +284,7 @@ select {
 .field-control-inline {
   padding: 0.45rem 0.65rem !important;
   font-size: 0.75rem;
+  min-height: var(--control-h-sm);
 }
 
 .surface-table {
@@ -382,7 +383,18 @@ select {
 }
 
 .task-btn-soft {
-  background: linear-gradient(180deg, #6c717b, #5d626c);
+  border-color: rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #7a808a, #686f7a);
+  box-shadow: 0 8px 18px rgba(70, 78, 92, 0.16);
+}
+
+.task-btn-soft:hover:enabled {
+  box-shadow: 0 12px 22px rgba(70, 78, 92, 0.2);
+}
+
+.overview-filter-row {
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  padding-top: 0.75rem;
 }
 
 select option {

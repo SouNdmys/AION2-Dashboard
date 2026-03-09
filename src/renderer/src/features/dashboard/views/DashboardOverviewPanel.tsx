@@ -210,138 +210,128 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
 
   return (
     <article className="glass-panel rounded-[30px] p-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4">
         <div>
           <p className="panel-kicker">Role Overview</p>
           <h3 className="panel-title !text-xl">角色概览总览</h3>
-          <p className="panel-subtitle">默认先看最高优先的可执行项，次级信息下沉成摘要。</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <span className="pill-btn pill-static">角色 {numberFormatter.format(overviewRowsFiltered.length)}</span>
-          <details className="group">
-            <summary className="details-summary details-summary-inline pill-btn">
-              <span className="group-open:hidden">快速录入</span>
-              <span className="hidden group-open:inline">收起快速录入</span>
-            </summary>
-            <div className="soft-card mt-3 p-4">
-              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
-                <select className="field-control-sm" value={quickCharacterId} onChange={(event) => onQuickCharacterIdChange(event.target.value)} disabled={busy}>
-                  {state.characters.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} ({accountNameById.get(item.accountId) ?? "账号"})
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="field-control-sm"
-                  value={quickTaskId}
-                  onChange={(event) => onQuickTaskIdChange(event.target.value as QuickTaskId)}
-                  disabled={busy}
-                >
-                  {TASK_DEFINITIONS.map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.title}
-                    </option>
-                  ))}
-                  <option value="corridor_lower">回廊完成(下层)</option>
-                  <option value="corridor_middle">回廊完成(中层)</option>
-                </select>
-                <select
-                  className="field-control-sm"
-                  value={quickAction}
-                  onChange={(event) => onQuickActionChange(event.target.value as TaskActionKind)}
-                  disabled={busy || quickActionOptions.length === 0}
-                >
-                  {quickActionOptions.map((action) => (
-                    <option key={action} value={action}>
-                      {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "输入已完成"}
-                    </option>
-                  ))}
-                </select>
-                <select className="field-control-sm" value={quickAmount} onChange={(event) => onQuickAmountChange(event.target.value)} disabled={busy}>
-                  {quickAmountOptions.map((value) => (
-                    <option key={`quick-amount-${value}`} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="task-btn task-btn-soft px-4"
-                  onClick={onApplyQuickAction}
-                  disabled={busy || !quickCharacterId || (!quickTaskExists && !quickCorridorTask)}
-                >
-                  提交录入
-                </button>
-              </div>
-              {quickAction === "set_completed" ? (
-                <p className="mt-2 summary-note">当前内容总量 {quickCorridorTask ? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。</p>
-              ) : null}
-            </div>
-          </details>
+          <p className="panel-subtitle">先做快速录入，再看每个角色当前还能执行的具体任务。</p>
         </div>
       </div>
       <div className="soft-card mb-4 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="panel-kicker !tracking-[0.08em]">Overview Controls</p>
-            <h4 className="panel-title !mt-1 !text-sm">筛选与排序</h4>
+            <p className="panel-kicker !tracking-[0.08em]">Quick Entry</p>
+            <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
           </div>
           <p className="summary-note">
             当前命中 {overviewRowsFiltered.length} 个角色。
             {overviewSortKey === "manual" ? " 当前支持拖拽卡片调整顺序。" : " 切到“按手动排序”后可拖拽调整顺序。"}
           </p>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 2xl:grid-cols-4">
-        <select
-          className="field-control-sm"
-          value={overviewSortKey}
-          onChange={(event) => onOverviewSortKeyChange(event.target.value as OverviewSortKey)}
-          disabled={busy}
-        >
-          <option value="manual">按手动排序</option>
-          <option value="ready">按可执行项排序</option>
-          <option value="account">按账号排序</option>
-          <option value="region">按大区排序</option>
-        </select>
-        <select
-          className="field-control-sm"
-          value={overviewTaskFilter}
-          onChange={(event) => onOverviewTaskFilterChange(event.target.value as OverviewTaskFilter)}
-          disabled={busy}
-        >
-          <option value="all">任务类型: 全部</option>
-          <option value="dungeon">任务类型: 副本</option>
-          <option value="weekly">任务类型: 周常</option>
-          <option value="mission">任务类型: 使命</option>
-        </select>
-        <select
-          className="field-control-sm"
-          value={overviewAccountFilter}
-          onChange={(event) => onOverviewAccountFilterChange(event.target.value)}
-          disabled={busy}
-        >
-          <option value="all">账号: 全部</option>
-          {state.accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="field-control-sm"
-          value={overviewRegionFilter}
-          onChange={(event) => onOverviewRegionFilterChange(event.target.value)}
-          disabled={busy}
-        >
-          <option value="all">大区: 全部</option>
-          <option value={NO_REGION_FILTER}>大区: 未设置</option>
-          {overviewRegionOptions.map((region) => (
-            <option key={region} value={region}>
-              大区: {region}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
+          <select className="field-control-sm" value={quickCharacterId} onChange={(event) => onQuickCharacterIdChange(event.target.value)} disabled={busy}>
+            {state.characters.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ({accountNameById.get(item.accountId) ?? "账号"})
+              </option>
+            ))}
+          </select>
+          <select
+            className="field-control-sm"
+            value={quickTaskId}
+            onChange={(event) => onQuickTaskIdChange(event.target.value as QuickTaskId)}
+            disabled={busy}
+          >
+            {TASK_DEFINITIONS.map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.title}
+              </option>
+            ))}
+            <option value="corridor_lower">回廊完成(下层)</option>
+            <option value="corridor_middle">回廊完成(中层)</option>
+          </select>
+          <select
+            className="field-control-sm"
+            value={quickAction}
+            onChange={(event) => onQuickActionChange(event.target.value as TaskActionKind)}
+            disabled={busy || quickActionOptions.length === 0}
+          >
+            {quickActionOptions.map((action) => (
+              <option key={action} value={action}>
+                {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "输入已完成"}
+              </option>
+            ))}
+          </select>
+          <select className="field-control-sm" value={quickAmount} onChange={(event) => onQuickAmountChange(event.target.value)} disabled={busy}>
+            {quickAmountOptions.map((value) => (
+              <option key={`quick-amount-${value}`} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <button
+            className="task-btn task-btn-soft px-4"
+            onClick={onApplyQuickAction}
+            disabled={busy || !quickCharacterId || (!quickTaskExists && !quickCorridorTask)}
+          >
+            提交录入
+          </button>
+        </div>
+        {quickAction === "set_completed" ? (
+          <p className="mt-2 summary-note">当前内容总量 {quickCorridorTask ? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。</p>
+        ) : null}
+        <div className="overview-filter-row mt-3 flex flex-wrap items-center gap-2">
+          <span className="summary-note">筛选</span>
+          <select
+            className="field-control-inline min-w-[130px]"
+            value={overviewSortKey}
+            onChange={(event) => onOverviewSortKeyChange(event.target.value as OverviewSortKey)}
+            disabled={busy}
+          >
+            <option value="manual">手动排序</option>
+            <option value="ready">可执行项</option>
+            <option value="account">按账号</option>
+            <option value="region">按大区</option>
+          </select>
+          <select
+            className="field-control-inline min-w-[120px]"
+            value={overviewTaskFilter}
+            onChange={(event) => onOverviewTaskFilterChange(event.target.value as OverviewTaskFilter)}
+            disabled={busy}
+          >
+            <option value="all">全部任务</option>
+            <option value="dungeon">副本</option>
+            <option value="weekly">周常</option>
+            <option value="mission">使命</option>
+          </select>
+          <select
+            className="field-control-inline min-w-[130px]"
+            value={overviewAccountFilter}
+            onChange={(event) => onOverviewAccountFilterChange(event.target.value)}
+            disabled={busy}
+          >
+            <option value="all">全部账号</option>
+            {state.accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field-control-inline min-w-[130px]"
+            value={overviewRegionFilter}
+            onChange={(event) => onOverviewRegionFilterChange(event.target.value)}
+            disabled={busy}
+          >
+            <option value="all">全部大区</option>
+            <option value={NO_REGION_FILTER}>未设置大区</option>
+            {overviewRegionOptions.map((region) => (
+              <option key={region} value={region}>
+                {region}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
         {overviewRowsFiltered.map((entry) => {

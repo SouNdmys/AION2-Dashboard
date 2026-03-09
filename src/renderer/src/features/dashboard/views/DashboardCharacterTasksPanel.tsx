@@ -79,23 +79,23 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
 
                   <div className="flex flex-wrap gap-2">
                     {showSetCompletedOnly ? (
-                      <button className="task-btn w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
+                      <button className="task-btn task-btn-soft w-full" onClick={() => onOpenSetCompletedDialog(task)} disabled={busy}>
                         输入已完成次数
                       </button>
                     ) : null}
                     {canComplete ? (
-                      <button className="task-btn min-w-[120px] flex-1" onClick={() => onOpenCompleteDialog(task.id, task.title)} disabled={busy}>
+                      <button className="task-btn task-btn-soft min-w-[120px] flex-1" onClick={() => onOpenCompleteDialog(task.id, task.title)} disabled={busy}>
                         完成次数
                       </button>
                     ) : null}
                     {showTicket ? (
-                      <button className="task-btn min-w-[120px] flex-1" onClick={() => onOpenUseTicketDialog(task.id, task.title)} disabled={busy}>
+                      <button className="task-btn task-btn-soft min-w-[120px] flex-1" onClick={() => onOpenUseTicketDialog(task.id, task.title)} disabled={busy}>
                         挑战券增加次数
                       </button>
                     ) : null}
                     {showManualEdit ? (
                       <button
-                        className="task-btn min-w-[120px] flex-1"
+                        className="task-btn task-btn-soft min-w-[120px] flex-1"
                         onClick={() =>
                           onOpenTaskEditDialog(
                             task.id as
@@ -129,10 +129,10 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                   挑战剩余 {selected.activities.sanctumRaidRemaining}/4，开箱剩余 {selected.activities.sanctumBoxRemaining}/2
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button className="task-btn" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
+                  <button className="task-btn task-btn-soft" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
                     填写挑战完成次数
                   </button>
-                  <button className="task-btn" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
+                  <button className="task-btn task-btn-soft" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
                     填写开箱完成次数(80奥德)
                   </button>
                 </div>
