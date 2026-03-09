@@ -1,5 +1,24 @@
 # AION2 Dashboard - 操作日志
 
+## 2026-03-09
+
+### UI 改造 Phase 1 完成（Design Tokens 收敛）
+- 已完成 renderer 全局基础视觉层收敛，不改业务结构与 IPC/store：
+  - 统一 `styles.css` 设计 token：颜色、圆角、阴影、控件高度、动效时长。
+  - 收敛 `.task-btn`、`.pill-btn`、`.glass-panel`、`.data-pill` 风格。
+  - 为 `input/select/textarea` 增加全局默认规格，减少页面内重复类名拼接导致的控件漂移。
+- 基线截图脚本增强：
+  - `scripts/ui-baseline-phase0-capture.mjs` 新增 `--out-dir` 参数。
+  - 新增命令：`npm run capture:ui-baseline:phase1`
+  - Phase 1 截图目录：`artifacts/ui-baseline/phase1/`
+- 本次校验：
+  - `npm run typecheck` 通过
+  - `npm run test:unit` 通过
+  - `npm run capture:ui-baseline:phase1` 通过（16 张截图）
+- 结论：
+  - 当前视觉噪音已下降，但工坊仍不够极简，问题已明确收敛到信息架构层。
+  - 下一步进入 `Phase 2`：工坊 IA 重排，优先处理默认首屏暴露过多的问题。
+
 ## 2026-02-27
 
 ### UI 改造收工笔记（Phase 0 完成，待明日开工）

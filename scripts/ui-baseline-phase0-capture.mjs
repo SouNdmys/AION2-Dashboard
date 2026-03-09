@@ -2,7 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { _electron as electron } from "playwright";
 
-const OUTPUT_DIR = path.resolve("artifacts/ui-baseline/phase0");
+function resolveOutputDir() {
+  const outDirFlagIndex = process.argv.indexOf("--out-dir");
+  if (outDirFlagIndex >= 0 && process.argv[outDirFlagIndex + 1]) {
+    return path.resolve(process.argv[outDirFlagIndex + 1]);
+  }
+  return path.resolve("artifacts/ui-baseline/phase0");
+}
+
+const OUTPUT_DIR = resolveOutputDir();
 const VIEWPORTS = [
   { key: "desktop", width: 1728, height: 1117 },
   { key: "narrow", width: 430, height: 932 },
