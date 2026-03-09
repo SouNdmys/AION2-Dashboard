@@ -28,9 +28,9 @@ async function run() {
     await waitForVisibleText(page, "设置页");
     await waitForVisibleText(page, "保存设置");
 
-    await page.getByRole("button", { name: "工坊" }).click();
-    await waitForVisibleText(page, "工坊（内置配方库）");
-    await waitForVisibleText(page, "价格快照:");
+    await page.getByRole("button", { name: "做装模拟" }).click();
+    await waitForVisibleText(page, "做装模拟器");
+    await waitForVisibleText(page, "市场工具");
 
     // Validate standardized IPC error format from preload bridge.
     const ipcErrorMessage = await page.evaluate(async () => {

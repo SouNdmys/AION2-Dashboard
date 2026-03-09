@@ -114,7 +114,7 @@ export function useWorkshopLifecycle(params: UseWorkshopLifecycleParams): Worksh
     try {
       await Promise.all([loadState(), loadCraftOptions(), loadSignals(), loadOcrHotkeyState(), loadOcrAutoRunState()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "工坊初始化失败");
+      setError(err instanceof Error ? err.message : "做装模拟初始化失败");
     } finally {
       setBusy(false);
     }

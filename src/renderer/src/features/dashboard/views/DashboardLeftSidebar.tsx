@@ -106,7 +106,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "workshop" ? "pill-btn-active" : ""}`}
             onClick={onSwitchWorkshop}
             disabled={busy}
-            title="工坊"
+            title="做装模拟"
           >
             工
           </button>
@@ -157,7 +157,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             角色操作
           </button>
           <button className={`pill-btn w-full justify-start ${viewMode === "workshop" ? "pill-btn-active" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
-            工坊
+            做装模拟
           </button>
           <button className={`pill-btn w-full justify-start ${viewMode === "settings" ? "pill-btn-active" : ""}`} onClick={onSwitchSettings} disabled={busy}>
             设置页

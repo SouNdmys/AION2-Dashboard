@@ -28,7 +28,7 @@ export function useWorkshopCommitRunner(params: UseWorkshopCommitRunnerParams): 
         setMessage(successText);
         await Promise.all([loadCraftOptions(), loadSignals()]);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "工坊操作失败");
+        setError(err instanceof Error ? err.message : "做装模拟操作失败");
       } finally {
         setBusy(false);
       }

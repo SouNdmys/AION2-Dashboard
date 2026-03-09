@@ -24,9 +24,9 @@ const WORKSHOP_CARD_HEADINGS = [
 ];
 
 const CARD_REVEAL_ACTIONS = {
-  OCR抓价器: "专业工具",
-  市场分析器: "专业工具",
-  库存管理: "专业工具",
+  OCR抓价器: "市场工具",
+  市场分析器: "市场工具",
+  库存管理: "市场工具",
 };
 
 function ensureDir(dirPath) {
@@ -130,7 +130,7 @@ async function run() {
         manifest.screenshots.push(path.relative(path.resolve("."), filePath).replaceAll("\\", "/"));
       }
 
-      await clickToolbar(page, "工坊");
+      await clickToolbar(page, "做装模拟");
       await waitForVisibleText(page, "做装模拟器");
       await ensureWorkshopSimulationReady(page);
       {

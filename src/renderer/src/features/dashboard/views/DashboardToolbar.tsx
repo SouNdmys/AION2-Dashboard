@@ -63,7 +63,7 @@ export function DashboardToolbar(props: DashboardToolbarProps): JSX.Element {
           设置页
         </button>
         <button className={`pill-btn ${viewMode === "workshop" ? "pill-btn-active" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
-          工坊
+          做装模拟
         </button>
       </div>
       {infoMessage ? <p className="mt-3 text-xs text-emerald-300">{infoMessage}</p> : null}

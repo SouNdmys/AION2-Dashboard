@@ -42,8 +42,8 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
       <details className="order-2 group">
         <summary aria-controls={expertModeId} className="details-summary soft-card px-4 py-3">
           <div>
-            <p className="panel-kicker">Expert Tools</p>
-            <h4 className="panel-title !mt-1 !text-sm">专业工具</h4>
+            <p className="panel-kicker">Market Tools</p>
+            <h4 className="panel-title !mt-1 !text-sm">市场工具</h4>
           </div>
           <span className="pill-btn group-open:!border-emerald-700/15 group-open:!bg-emerald-700/5 group-open:!text-slate-900">
             <span className="group-open:hidden">展开工具</span>
