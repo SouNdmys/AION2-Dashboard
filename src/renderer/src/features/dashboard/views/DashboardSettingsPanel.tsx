@@ -38,89 +38,114 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
-      <h3 className="text-sm font-semibold tracking-wide">设置页</h3>
-      <p className="mt-2 text-xs text-slate-300">金币收益参数 / 次数上限参数（可选） / 提示阈值参数 / 优先级偏好 / 数据导入导出</p>
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div className="space-y-2">
-          <p className="text-xs text-slate-300">远征单次金币（万）</p>
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={settingsDraft.expeditionGoldPerRun}
-            onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionGoldPerRun: event.target.value })}
-            disabled={busy}
-          />
+    <article className="glass-panel rounded-[30px] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="panel-kicker">Settings</p>
+          <h3 className="panel-title !mt-1 !text-base">设置页</h3>
+          <p className="panel-subtitle">把收益、阈值、优先级和数据操作收成几个短分组，减少整页输入框平铺。</p>
         </div>
-        <div className="space-y-2">
-          <p className="text-xs text-slate-300">超越单次金币（万）</p>
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={settingsDraft.transcendenceGoldPerRun}
-            onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceGoldPerRun: event.target.value })}
-            disabled={busy}
-          />
-        </div>
-        <div className="space-y-2">
-          <p className="text-xs text-slate-300">远征阈值(如84)</p>
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={settingsDraft.expeditionWarnThreshold}
-            onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionWarnThreshold: event.target.value })}
-            disabled={busy}
-          />
+        <div className="flex flex-wrap gap-2">
+          <button className="task-btn" onClick={onSaveSettings} disabled={busy}>
+            保存设置
+          </button>
+          <button className="pill-btn" onClick={() => void onExportData()} disabled={busy}>
+            导出 JSON
+          </button>
+          <button className="pill-btn" onClick={() => void onImportData()} disabled={busy}>
+            导入 JSON
+          </button>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-5 gap-2">
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
-          value={settingsDraft.expeditionRunCap}
-          onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionRunCap: event.target.value })}
-          disabled={busy}
-          placeholder="远征上限(可空)"
-        />
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
-          value={settingsDraft.transcendenceRunCap}
-          onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceRunCap: event.target.value })}
-          disabled={busy}
-          placeholder="超越上限(可空)"
-        />
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
-          value={settingsDraft.nightmareRunCap}
-          onChange={(event) => onSettingsDraftChange({ ...settingsDraft, nightmareRunCap: event.target.value })}
-          disabled={busy}
-          placeholder="恶梦上限(可空)"
-        />
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
-          value={settingsDraft.awakeningRunCap}
-          onChange={(event) => onSettingsDraftChange({ ...settingsDraft, awakeningRunCap: event.target.value })}
-          disabled={busy}
-          placeholder="觉醒上限(可空)"
-        />
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
-          value={settingsDraft.suppressionRunCap}
-          onChange={(event) => onSettingsDraftChange({ ...settingsDraft, suppressionRunCap: event.target.value })}
-          disabled={busy}
-          placeholder="讨伐上限(可空)"
-        />
-      </div>
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        <div className="space-y-2">
-          <p className="text-xs text-slate-300">超越阈值</p>
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={settingsDraft.transcendenceWarnThreshold}
-            onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceWarnThreshold: event.target.value })}
-            disabled={busy}
-          />
-        </div>
-        <div className="col-span-3 rounded-xl border border-white/10 bg-black/20 p-3">
-          <p className="text-xs font-semibold text-slate-200">优先级偏好(1-5，默认 3)</p>
-          <p className="mt-1 text-xs text-slate-400">数值越高，在“优先级待办”里的排序越靠前。</p>
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <section className="section-card">
+          <p className="panel-kicker !tracking-[0.08em]">Economy</p>
+          <h4 className="panel-title !mt-1 !text-sm">收益与阈值</h4>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-xs text-slate-300">远征单次金币（万）</p>
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={settingsDraft.expeditionGoldPerRun}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionGoldPerRun: event.target.value })}
+                disabled={busy}
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-300">超越单次金币（万）</p>
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={settingsDraft.transcendenceGoldPerRun}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceGoldPerRun: event.target.value })}
+                disabled={busy}
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-slate-300">远征阈值</p>
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={settingsDraft.expeditionWarnThreshold}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionWarnThreshold: event.target.value })}
+                disabled={busy}
+              />
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-xs text-slate-300">超越阈值</p>
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={settingsDraft.transcendenceWarnThreshold}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceWarnThreshold: event.target.value })}
+                disabled={busy}
+              />
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={settingsDraft.expeditionRunCap}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionRunCap: event.target.value })}
+                disabled={busy}
+                placeholder="远征上限"
+              />
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={settingsDraft.transcendenceRunCap}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceRunCap: event.target.value })}
+                disabled={busy}
+                placeholder="超越上限"
+              />
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={settingsDraft.nightmareRunCap}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, nightmareRunCap: event.target.value })}
+                disabled={busy}
+                placeholder="恶梦上限"
+              />
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={settingsDraft.awakeningRunCap}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, awakeningRunCap: event.target.value })}
+                disabled={busy}
+                placeholder="觉醒上限"
+              />
+              <input
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                value={settingsDraft.suppressionRunCap}
+                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, suppressionRunCap: event.target.value })}
+                disabled={busy}
+                placeholder="讨伐上限"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="section-card">
+          <p className="panel-kicker !tracking-[0.08em]">Priority</p>
+          <h4 className="panel-title !mt-1 !text-sm">优先级偏好</h4>
+          <p className="summary-note mt-2">数值越高，在“优先级待办”里的排序越靠前。</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
             {PRIORITY_SETTING_FIELDS.map((item) => (
               <label key={item.key} className="space-y-1 text-xs text-slate-300">
                 <span>{item.label}</span>
@@ -144,70 +169,62 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
               </label>
             ))}
           </div>
-        </div>
-        <button className="task-btn" onClick={onSaveSettings} disabled={busy}>
-          保存设置
-        </button>
-        <button className="task-btn" onClick={() => void onExportData()} disabled={busy}>
-          导出 JSON
-        </button>
-        <button className="task-btn" onClick={() => void onImportData()} disabled={busy}>
-          导入 JSON
-        </button>
+        </section>
       </div>
 
-      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-        <h4 className="text-sm font-semibold">构建信息</h4>
-        <div className="mt-2 grid grid-cols-1 gap-2 text-xs md:grid-cols-3">
-          <div className="data-pill">版本: {buildInfo?.version ? `v${buildInfo.version}` : "--"}</div>
-          <div className="data-pill">构建时间: {buildInfo?.buildTime ? formatBuildTime(buildInfo.buildTime) : "--"}</div>
-          <div className="data-pill">作者: {buildInfo?.author ?? "--"}</div>
-        </div>
-      </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section className="section-card">
+          <p className="panel-kicker !tracking-[0.08em]">Build</p>
+          <h4 className="panel-title !mt-1 !text-sm">构建信息</h4>
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="data-pill">版本: {buildInfo?.version ? `v${buildInfo.version}` : "--"}</div>
+            <div className="data-pill">构建时间: {buildInfo?.buildTime ? formatBuildTime(buildInfo.buildTime) : "--"}</div>
+            <div className="data-pill">作者: {buildInfo?.author ?? "--"}</div>
+          </div>
+        </section>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-        <h4 className="text-sm font-semibold">深渊回廊参数（当前账号同步）</h4>
-        <p className="mt-1 text-xs text-slate-300">规则: 回廊统一在每周二、周四、周六 21:00 刷新，这里只需录入当前可打数量并同步到当前账号。</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <p className="text-xs text-slate-300">下层数量</p>
-            <select
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              value={corridorDraft.lowerAvailable}
-              onChange={(event) => onCorridorDraftChange({ ...corridorDraft, lowerAvailable: event.target.value })}
-              disabled={busy}
-            >
-              {Array.from({ length: 4 }, (_, i) => (
-                <option key={`lower-count-${i}`} value={String(i)}>
-                  {i}
-                </option>
-              ))}
-            </select>
+        <section className="section-card">
+          <p className="panel-kicker !tracking-[0.08em]">Corridor</p>
+          <h4 className="panel-title !mt-1 !text-sm">深渊回廊参数</h4>
+          <p className="summary-note mt-2">统一在周二、周四、周六 21:00 刷新，这里只录入当前账号剩余数量和完成次数。</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <p className="text-xs text-slate-300">下层数量</p>
+              <select
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={corridorDraft.lowerAvailable}
+                onChange={(event) => onCorridorDraftChange({ ...corridorDraft, lowerAvailable: event.target.value })}
+                disabled={busy}
+              >
+                {Array.from({ length: 4 }, (_, i) => (
+                  <option key={`lower-count-${i}`} value={String(i)}>
+                    {i}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-slate-300">中层数量</p>
+              <select
+                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                value={corridorDraft.middleAvailable}
+                onChange={(event) => onCorridorDraftChange({ ...corridorDraft, middleAvailable: event.target.value })}
+                disabled={busy}
+              >
+                {Array.from({ length: 4 }, (_, i) => (
+                  <option key={`middle-count-${i}`} value={String(i)}>
+                    {i}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-300">中层数量</p>
-            <select
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              value={corridorDraft.middleAvailable}
-              onChange={(event) => onCorridorDraftChange({ ...corridorDraft, middleAvailable: event.target.value })}
-              disabled={busy}
-            >
-              {Array.from({ length: 4 }, (_, i) => (
-                <option key={`middle-count-${i}`} value={String(i)}>
-                  {i}
-                </option>
-              ))}
-            </select>
+          <div className="mt-3">
+            <button className="task-btn w-full" onClick={onApplyCorridorSettings} disabled={busy}>
+              同步到当前账号角色
+            </button>
           </div>
-        </div>
-        <div className="mt-3">
-          <button className="task-btn w-full" onClick={onApplyCorridorSettings} disabled={busy}>
-            同步中层/下层到当前账号角色
-          </button>
-        </div>
-        <div className="mt-3 grid grid-cols-4 gap-2">
-          <div className="space-y-1">
-            <p className="text-xs text-slate-300">完成层级</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]">
             <select
               className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
               value={corridorDraft.completeLane}
@@ -216,12 +233,9 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
               }
               disabled={busy}
             >
-              <option value="lower">下层</option>
-              <option value="middle">中层</option>
+              <option value="lower">完成层级: 下层</option>
+              <option value="middle">完成层级: 中层</option>
             </select>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-300">当前角色完成次数</p>
             <select
               className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
               value={corridorDraft.completeAmount}
@@ -230,19 +244,16 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             >
               {buildCountOptions(1, COUNT_SELECT_MAX, corridorDraft.completeAmount).map((value) => (
                 <option key={`corridor-complete-amount-${value}`} value={value}>
-                  {value}
+                  完成次数: {value}
                 </option>
               ))}
             </select>
-          </div>
-          <div className="flex items-end col-span-2">
-            <button className="task-btn w-full" onClick={onApplyCorridorCompletionFromSettings} disabled={busy}>
-              录入当前角色完成（所选层级）
+            <button className="pill-btn" onClick={onApplyCorridorCompletionFromSettings} disabled={busy}>
+              录入完成
             </button>
           </div>
-        </div>
+        </section>
       </div>
     </article>
   );
 }
-

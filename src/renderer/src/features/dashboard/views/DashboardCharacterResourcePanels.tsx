@@ -54,8 +54,17 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
   } = props;
 
   return (
-    <>
-      <div className="mt-4">
+    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      <section className="section-card">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Energy</p>
+            <h3 className="panel-title !mt-1 !text-sm">奥德能量</h3>
+          </div>
+          <span className="summary-note">
+            {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}
+          </span>
+        </div>
         <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
           <span>奥德能量</span>
           <span>
@@ -84,24 +93,26 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
           </div>
         </div>
         <p className="mt-2 text-xs text-slate-400">基础能量优先扣除，补充能量用于兜底。</p>
-      </div>
+      </section>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+      <div className="space-y-4">
+      <section className="section-card">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">微风商店记录</p>
-          <span className="text-xs text-slate-300">{selectedIsAodeExtra ? "本角色: 额外+8资格" : "本角色: 基础资格"}</span>
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Breeze Shop</p>
+            <h3 className="panel-title !mt-1 !text-sm">微风商店记录</h3>
+          </div>
+          <span className="summary-note">{selectedIsAodeExtra ? "额外+8资格" : "基础资格"}</span>
         </div>
-        <p className="mt-1 text-xs text-slate-300">
+        <p className="mt-2 text-xs text-slate-300">
           奥德购买 {selected.aodePlan.shopAodePurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopAodePurchaseRemaining}） | 每日副本券购买{" "}
           {selected.aodePlan.shopDailyDungeonTicketPurchaseUsed}/{selectedAodeLimits.purchaseLimit}（剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}）
         </p>
-        <p className="mt-1 text-xs text-slate-300">
-          基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。
-        </p>
+        <p className="summary-note mt-1">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
         {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
           <p className="mt-1 text-xs text-amber-300">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
         ) : null}
-        <div className="mt-2 grid grid-cols-[1fr_1fr_auto_auto] gap-2">
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
           <select
             className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={shopAodePurchaseUsedInput}
@@ -133,17 +144,20 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             {selectedIsAodeExtra ? "取消额外" : "设为额外"}
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-        <p className="text-sm font-semibold">变换记录</p>
-        <p className="mt-1 text-xs text-slate-300">
+      <section className="section-card">
+        <div>
+          <p className="panel-kicker !tracking-[0.08em]">Transform</p>
+          <h3 className="panel-title !mt-1 !text-sm">变换记录</h3>
+        </div>
+        <p className="mt-2 text-xs text-slate-300">
           奥德变换 {selected.aodePlan.transformAodeUsed}/{selectedAodeLimits.convertLimit}（剩余 {selectedTransformAodeRemaining}）
         </p>
-        <p className="mt-1 text-xs text-slate-300">
+        <p className="summary-note mt-1">
           单次奥德按 {AODE_POINT_PER_OPERATION} 记录；基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次，额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次。
         </p>
-        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
           <select
             className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
             value={transformAodeUsedInput}
@@ -160,7 +174,8 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             保存记录
           </button>
         </div>
+      </section>
       </div>
-    </>
+    </div>
   );
 }

@@ -21,7 +21,7 @@ export function DashboardCountdownPanel(props: DashboardCountdownPanelProps): JS
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
+    <article className="glass-panel rounded-2xl p-3.5">
       <h3 className="text-sm font-semibold tracking-wide">下一次恢复倒计时</h3>
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
         {countdownItems.map((item) => {
@@ -51,13 +51,13 @@ export function DashboardPriorityTodoPanel(props: DashboardPriorityTodoPanelProp
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
+    <article className="glass-panel rounded-2xl p-3.5">
       <h3 className="text-sm font-semibold tracking-wide">优先级待办</h3>
       <p className="mt-2 text-xs text-slate-300">按收益、溢出风险和周刷新提醒综合排序（Top 8），可在设置页调整偏好权重。</p>
       {priorityTodoItems.length === 0 ? (
         <p className="mt-3 text-xs text-slate-400">当前没有待处理高优先任务。</p>
       ) : (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1.5">
           {priorityTodoItems.map((item) => (
             <div key={item.id} className="data-pill">
               <div className="flex items-start justify-between gap-2">
@@ -91,13 +91,13 @@ export function DashboardHistoryPanel(props: DashboardHistoryPanelProps): JSX.El
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
+    <article className="glass-panel rounded-2xl p-3.5">
       <h3 className="text-sm font-semibold tracking-wide">操作历史日志</h3>
       <p className="mt-2 text-xs text-slate-300">显示最近 20 条（最新在前）。</p>
       {historyRows.length === 0 ? (
         <p className="mt-3 text-xs text-slate-400">暂无操作记录。</p>
       ) : (
-        <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+        <div className="mt-3 max-h-72 space-y-1.5 overflow-auto pr-1">
           {historyRows.map((entry) => {
             const charName =
               entry.characterId === null ? "全局" : characterNameById.get(entry.characterId) ?? `角色(${entry.characterId.slice(0, 6)})`;
@@ -130,7 +130,7 @@ export function DashboardPendingPanel(props: DashboardPendingPanelProps): JSX.El
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
+    <article className="glass-panel rounded-2xl p-3.5">
       <h3 className="text-sm font-semibold tracking-wide">待办提醒</h3>
       <div className="mt-3 flex flex-wrap gap-2">
         {pendingLabels.map((label) => (

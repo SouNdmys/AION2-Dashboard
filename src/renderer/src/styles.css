@@ -408,6 +408,32 @@ select option {
   line-height: 1.5;
 }
 
+.section-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(251, 251, 248, 0.92);
+  padding: 1rem;
+}
+
+.mini-stat {
+  border-radius: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.75rem 0.85rem;
+}
+
+.mini-stat-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.mini-stat-value {
+  margin-top: 0.3rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .text-slate-100,
 .text-slate-200 {
   color: var(--text-primary) !important;
