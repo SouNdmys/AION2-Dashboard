@@ -2,6 +2,29 @@
 
 ## 2026-03-09
 
+### UI 改造 Phase 2 完成（工坊 IA 重排）
+- 工坊进入“两层模式”：
+  - 默认增加“快捷模式”说明，首屏聚焦“选配方 -> 抓价格 -> 看结论”。
+  - `库存管理` 下沉到“专业模式”折叠区。
+- OCR 抓价器首屏减负：
+  - 默认仅保留抓价主流程与状态摘要。
+  - 自动巡航、调试警告、可视化校准移入“高级设置”。
+- 市场分析器首屏减负：
+  - 默认仅保留当前物品选择、历史价格入口和近期价格/信号摘要。
+  - 分类筛选、星标过滤、价格曲线、周期信号细节移入“高级筛选与细节”。
+- 截图回归增强：
+  - 新增命令：`npm run capture:ui-baseline:phase2`
+  - 截图脚本现可在 `库存管理` 被折叠时自动展开“专业模式”后截图。
+  - Phase 2 截图目录：`artifacts/ui-baseline/phase2/`
+- 本次校验：
+  - `npm run typecheck` 通过
+  - `npm run test:unit` 通过
+  - `npm run build` 通过
+  - `node scripts/ui-baseline-phase0-capture.mjs --out-dir artifacts/ui-baseline/phase2` 通过（16 张截图）
+- 结论：
+  - 工坊默认首屏已开始体现“主任务优先”。
+  - 下一步进入 `Phase 3`：继续给市场分析器减负，把默认可见信息压到“最近价格 + 趋势方向 + 异常提醒”。
+
 ### UI 改造 Phase 1 完成（Design Tokens 收敛）
 - 已完成 renderer 全局基础视觉层收敛，不改业务结构与 IPC/store：
   - 统一 `styles.css` 设计 token：颜色、圆角、阴影、控件高度、动效时长。

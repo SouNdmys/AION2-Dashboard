@@ -23,6 +23,10 @@ const WORKSHOP_CARD_HEADINGS = [
   { key: "inventory", heading: "库存管理" },
 ];
 
+const CARD_REVEAL_ACTIONS = {
+  库存管理: "专业模式",
+};
+
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -56,6 +60,10 @@ async function captureViewport(page, filePath) {
 
 async function captureCard(page, heading, filePath) {
   const headingLocator = page.getByRole("heading", { name: heading, exact: false }).first();
+  const revealAction = CARD_REVEAL_ACTIONS[heading];
+  if (!(await headingLocator.isVisible().catch(() => false)) && revealAction) {
+    await page.getByText(revealAction, { exact: false }).first().click();
+  }
   await headingLocator.scrollIntoViewIfNeeded();
   const articleLocator = headingLocator.locator("xpath=ancestor::article[1]");
   await articleLocator.screenshot({

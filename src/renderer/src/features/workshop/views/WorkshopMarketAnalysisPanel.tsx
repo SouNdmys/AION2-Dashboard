@@ -120,49 +120,18 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
   } = props;
 
   return (
-      <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
-        <h4 className="text-sm font-semibold">市场分析器</h4>
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-          <select
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={historyMainCategory}
-            onChange={(event) => setHistoryMainCategory(event.target.value)}
-            disabled={busy || historyMainCategoryOptions.length === 0}
-          >
-            {historyMainCategoryOptions.map((category) => (
-              <option key={`history-main-category-${category}`} value={category}>
-                大类: {category}
-              </option>
-            ))}
-          </select>
-          <select
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={historySubCategory}
-            onChange={(event) => setHistorySubCategory(event.target.value)}
-            disabled={busy}
-          >
-            <option value="all">下级分类: 全部</option>
-            {historySubCategoryOptions.map((category) => (
-              <option key={`history-sub-category-${category}`} value={category}>
-                下级分类: {category}
-              </option>
-            ))}
-          </select>
-          <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            value={historyKeyword}
-            onChange={(event) => setHistoryKeyword(event.target.value)}
-            disabled={busy}
-            placeholder="搜索物品（全物品范围）"
-          />
+    <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold">市场分析器</h4>
+          <p className="mt-1 text-xs text-slate-300">默认只显示当前物品的近期价格和结论，筛选器、曲线和信号细节按需展开。</p>
         </div>
-        {historyKeyword.trim() ? (
-          <p className="mt-1 text-[11px] text-cyan-200">关键词搜索已切换为全物品范围（忽略大类/下级分类）。</p>
-        ) : null}
+        <span className="pill-btn !border-cyan-300/35 !text-cyan-100">同步联动</span>
+      </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto_auto_auto]">
+      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto_auto]">
           <select
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="min-w-0 px-3 py-2 text-sm"
             value={historyItemId}
             onChange={(event) => setHistoryItemId(event.target.value)}
             disabled={busy || filteredHistoryItems.length === 0}
@@ -174,7 +143,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             ))}
           </select>
           <input
-            className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="min-w-0 px-3 py-2 text-sm"
             value={historyDaysInput}
             onChange={(event) => setHistoryDaysInput(event.target.value)}
             disabled={busy}
@@ -186,50 +155,120 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
           <button className="pill-btn whitespace-nowrap" onClick={() => onToggleStarItem(historyItemId)} disabled={busy || !historyItemId}>
             {historyItemId && isStarredItem(historyItemId) ? "★ 取消星标" : "☆ 星标关注"}
           </button>
-          <button className={`pill-btn whitespace-nowrap ${focusStarOnly ? "!border-amber-300/60 !text-amber-200" : ""}`} onClick={() => setFocusStarOnly((prev) => !prev)}>
-            {focusStarOnly ? "仅看星标: 开" : "仅看星标: 关"}
-          </button>
         </div>
-        {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前搜索条件下没有可查询物品。</p> : null}
-        {starredHistoryItems.length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            <span className="text-amber-200">重点关注:</span>
-            {starredHistoryItems.slice(0, 12).map((item) => (
-              <button
-                key={`star-item-chip-${item.id}`}
-                className="pill-btn !border-amber-300/40 !text-amber-200"
-                onClick={() => onViewHistoryCurveForItem(item.id, { scroll: false })}
-              >
-                ★ {item.name}
-              </button>
-            ))}
-          </div>
-        ) : null}
+      {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前搜索条件下没有可查询物品。</p> : null}
 
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            className={`pill-btn whitespace-nowrap ${historyIncludeSuspect ? "!border-rose-300/70 !text-rose-200" : "!border-emerald-300/50 !text-emerald-200"}`}
-            onClick={() => setHistoryIncludeSuspect((prev) => !prev)}
-            disabled={busy || !historyItemId}
-          >
-            {historyIncludeSuspect ? "可疑点: 已包含" : "可疑点: 已过滤"}
-          </button>
-          {HISTORY_QUICK_DAY_OPTIONS.map((days) => {
-            const active = activeHistoryQuickDays === days;
-            return (
-              <button
-                key={`history-quick-${days}`}
-                className={`pill-btn ${active ? "!border-cyan-300/60 !bg-cyan-300/20 !text-cyan-100" : ""}`}
-                onClick={() => {
-                  setHistoryDaysInput(String(days));
-                }}
-                disabled={busy || !historyItemId}
-              >
-                {days} 天
-              </button>
-            );
-          })}
-        </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+        <div className="data-pill">伺服器最新: {formatGold(historyServerResult?.latestPrice ?? null)}</div>
+        <div className="data-pill">世界最新: {formatGold(historyWorldResult?.latestPrice ?? null)}</div>
+        <div className="data-pill text-emerald-300">进货点: {signalResult?.buyZoneCount ?? 0}</div>
+        <div className="data-pill text-amber-300">出货点: {signalResult?.sellZoneCount ?? 0}</div>
+      </div>
+      {historyHasLoaded ? (
+        <p className="mt-2 text-xs text-slate-300">
+          当前查询区间内，伺服器样本 {historyServerResult?.sampleCount ?? 0} 条，世界样本 {historyWorldResult?.sampleCount ?? 0} 条。
+          {signalResult?.triggeredCount ? ` 已触发 ${signalResult.triggeredCount} 条周期信号。` : " 当前没有触发中的周期信号。"}
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-slate-300">先选物品，系统会自动同步最近价格、历史样本和周期信号。</p>
+      )}
+
+      <details className="group mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium text-slate-100">高级筛选与细节</p>
+            <p className="mt-1 text-[11px] text-slate-400">分类筛选、星标过滤、价格曲线、信号列表。</p>
+          </div>
+          <span className="pill-btn !border-white/15 !text-slate-200 group-open:!border-cyan-300/35 group-open:!text-cyan-100">
+            <span className="group-open:hidden">展开</span>
+            <span className="hidden group-open:inline">收起</span>
+          </span>
+        </summary>
+
+        <div className="mt-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <select
+              className="min-w-0 px-3 py-2 text-sm"
+              value={historyMainCategory}
+              onChange={(event) => setHistoryMainCategory(event.target.value)}
+              disabled={busy || historyMainCategoryOptions.length === 0}
+            >
+              {historyMainCategoryOptions.map((category) => (
+                <option key={`history-main-category-${category}`} value={category}>
+                  大类: {category}
+                </option>
+              ))}
+            </select>
+            <select
+              className="min-w-0 px-3 py-2 text-sm"
+              value={historySubCategory}
+              onChange={(event) => setHistorySubCategory(event.target.value)}
+              disabled={busy}
+            >
+              <option value="all">下级分类: 全部</option>
+              {historySubCategoryOptions.map((category) => (
+                <option key={`history-sub-category-${category}`} value={category}>
+                  下级分类: {category}
+                </option>
+              ))}
+            </select>
+            <input
+              className="min-w-0 px-3 py-2 text-sm"
+              value={historyKeyword}
+              onChange={(event) => setHistoryKeyword(event.target.value)}
+              disabled={busy}
+              placeholder="搜索物品（全物品范围）"
+            />
+          </div>
+          {historyKeyword.trim() ? (
+            <p className="mt-1 text-[11px] text-cyan-200">关键词搜索已切换为全物品范围（忽略大类/下级分类）。</p>
+          ) : null}
+
+          {starredHistoryItems.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="text-amber-200">重点关注:</span>
+              {starredHistoryItems.slice(0, 12).map((item) => (
+                <button
+                  key={`star-item-chip-${item.id}`}
+                  className="pill-btn !border-amber-300/40 !text-amber-200"
+                  onClick={() => onViewHistoryCurveForItem(item.id, { scroll: false })}
+                >
+                  ★ {item.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              className={`pill-btn whitespace-nowrap ${focusStarOnly ? "!border-amber-300/60 !text-amber-200" : ""}`}
+              onClick={() => setFocusStarOnly((prev) => !prev)}
+            >
+              {focusStarOnly ? "仅看星标: 开" : "仅看星标: 关"}
+            </button>
+            <button
+              className={`pill-btn whitespace-nowrap ${historyIncludeSuspect ? "!border-rose-300/70 !text-rose-200" : "!border-emerald-300/50 !text-emerald-200"}`}
+              onClick={() => setHistoryIncludeSuspect((prev) => !prev)}
+              disabled={busy || !historyItemId}
+            >
+              {historyIncludeSuspect ? "可疑点: 已包含" : "可疑点: 已过滤"}
+            </button>
+            {HISTORY_QUICK_DAY_OPTIONS.map((days) => {
+              const active = activeHistoryQuickDays === days;
+              return (
+                <button
+                  key={`history-quick-${days}`}
+                  className={`pill-btn ${active ? "!border-cyan-300/60 !bg-cyan-300/20 !text-cyan-100" : ""}`}
+                  onClick={() => {
+                    setHistoryDaysInput(String(days));
+                  }}
+                  disabled={busy || !historyItemId}
+                >
+                  {days} 天
+                </button>
+              );
+            })}
+          </div>
         {recentOcrImportedEntries.length > 0 ? (
           <div className="mt-2 rounded-lg border border-cyan-300/20 bg-cyan-500/10 p-2 text-xs">
             <p className="text-cyan-200">最近抓价更新（最新 20 条）</p>
@@ -651,6 +690,8 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
             </div>
           )}
         </div>
-      </article>
+        </div>
+      </details>
+    </article>
   );
 }
