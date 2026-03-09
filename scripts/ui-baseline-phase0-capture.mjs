@@ -73,6 +73,15 @@ async function captureCard(page, heading, filePath) {
   });
 }
 
+async function ensureWorkshopSimulationReady(page) {
+  const simulateButton = page.getByRole("button", { name: "运行模拟", exact: true }).first();
+  if (!(await simulateButton.isVisible().catch(() => false))) {
+    return;
+  }
+  await simulateButton.click();
+  await page.getByText("模拟结论", { exact: false }).first().waitFor({ state: "visible", timeout: 20_000 });
+}
+
 async function run() {
   ensureDir(OUTPUT_DIR);
   const manifest = {
@@ -121,6 +130,7 @@ async function run() {
 
       await clickToolbar(page, "工坊");
       await waitForVisibleText(page, "工坊（内置配方库）");
+      await ensureWorkshopSimulationReady(page);
       {
         const filePath = path.join(OUTPUT_DIR, `${viewport.key}-workshop-overview.jpg`);
         await captureViewport(page, filePath);
