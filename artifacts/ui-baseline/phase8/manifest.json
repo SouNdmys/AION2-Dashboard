@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-03-09T06:30:38.726Z",
+  "outputDir": "D:\\Projects\\AION2 Dashboard\\artifacts\\ui-baseline\\phase8",
+  "screenshots": [
+    "artifacts/ui-baseline/phase8/desktop-dashboard-overview.jpg",
+    "artifacts/ui-baseline/phase8/desktop-dashboard-character.jpg",
+    "artifacts/ui-baseline/phase8/desktop-dashboard-settings.jpg",
+    "artifacts/ui-baseline/phase8/desktop-workshop-overview.jpg",
+    "artifacts/ui-baseline/phase8/desktop-workshop-simulation.jpg",
+    "artifacts/ui-baseline/phase8/desktop-workshop-ocr.jpg",
+    "artifacts/ui-baseline/phase8/desktop-workshop-market-analysis.jpg",
+    "artifacts/ui-baseline/phase8/desktop-workshop-inventory.jpg",
+    "artifacts/ui-baseline/phase8/narrow-dashboard-overview.jpg",
+    "artifacts/ui-baseline/phase8/narrow-dashboard-character.jpg",
+    "artifacts/ui-baseline/phase8/narrow-dashboard-settings.jpg",
+    "artifacts/ui-baseline/phase8/narrow-workshop-overview.jpg",
+    "artifacts/ui-baseline/phase8/narrow-workshop-simulation.jpg",
+    "artifacts/ui-baseline/phase8/narrow-workshop-ocr.jpg",
+    "artifacts/ui-baseline/phase8/narrow-workshop-market-analysis.jpg",
+    "artifacts/ui-baseline/phase8/narrow-workshop-inventory.jpg"
+  ]
+}

@@ -25,7 +25,6 @@ import {
   getQuickActionsForTask,
   toGoldText,
 } from "./features/dashboard/dashboard-utils";
-import { DashboardOverviewSummaryCards } from "./features/dashboard/views/DashboardOverviewSummaryCards";
 import { DashboardCharacterMainPanel } from "./features/dashboard/views/DashboardCharacterMainPanel";
 import { DashboardCharacterModePanels } from "./features/dashboard/views/DashboardCharacterModePanels";
 import { DashboardDialogModal } from "./features/dashboard/views/DashboardDialogModal";
@@ -33,7 +32,6 @@ import { DashboardLeftSidebar } from "./features/dashboard/views/DashboardLeftSi
 import { DashboardOverviewPanel } from "./features/dashboard/views/DashboardOverviewPanel";
 import { DashboardRightSidebar } from "./features/dashboard/views/DashboardRightSidebar";
 import { DashboardSettingsPanel } from "./features/dashboard/views/DashboardSettingsPanel";
-import { DashboardToolbar } from "./features/dashboard/views/DashboardToolbar";
 import { WorkshopView } from "./WorkshopView";
 
 export function App(): JSX.Element {
@@ -112,10 +110,6 @@ export function App(): JSX.Element {
     isWeeklyCriticalWindow,
     selectedEstimatedGold,
     selectedPendingLabels,
-    readyCharacters,
-    weeklyGold,
-    pendingDaily,
-    pendingWeekly,
     weeklyEarned,
     weeklyExpeditionRuns,
     weeklyTransRuns,
@@ -399,37 +393,25 @@ export function App(): JSX.Element {
           accountCharacters={accountCharacters}
           onSelectCharacter={onSelectCharacter}
           onToggleCharacterStar={onToggleCharacterStar}
+          viewMode={viewMode}
+          dashboardMode={dashboardMode}
+          buildVersion={buildInfo?.version ?? null}
+          infoMessage={infoMessage}
+          error={error}
+          onCheckAppUpdate={onCheckAppUpdate}
+          onSwitchOverview={() => {
+            setViewMode("dashboard");
+            setDashboardMode("overview");
+          }}
+          onSwitchCharacter={() => {
+            setViewMode("dashboard");
+            setDashboardMode("character");
+          }}
+          onSwitchSettings={() => setViewMode("settings")}
+          onSwitchWorkshop={() => setViewMode("workshop")}
         />
 
         <section className="min-w-0 w-full space-y-5">
-          <DashboardToolbar
-            busy={busy}
-            viewMode={viewMode}
-            dashboardMode={dashboardMode}
-            buildVersion={buildInfo?.version ?? null}
-            infoMessage={infoMessage}
-            error={error}
-            onCheckAppUpdate={onCheckAppUpdate}
-            onSwitchOverview={() => {
-              setViewMode("dashboard");
-              setDashboardMode("overview");
-            }}
-            onSwitchCharacter={() => {
-              setViewMode("dashboard");
-              setDashboardMode("character");
-            }}
-            onSwitchSettings={() => setViewMode("settings")}
-            onSwitchWorkshop={() => setViewMode("workshop")}
-          />
-
-          <DashboardOverviewSummaryCards
-            visible={viewMode === "dashboard"}
-            readyCharacters={readyCharacters}
-            weeklyGoldText={toGoldText(weeklyGold)}
-            pendingDaily={pendingDaily}
-            pendingWeekly={pendingWeekly}
-          />
-
           <DashboardOverviewPanel
             visible={viewMode === "dashboard" && dashboardMode === "overview"}
             busy={busy}

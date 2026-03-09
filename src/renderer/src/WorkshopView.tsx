@@ -40,7 +40,7 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     <div className="flex flex-col gap-5">
       <WorkshopOverviewHeader state={state} starCount={starCount} message={message} error={error} />
       <WorkshopSimulationPanel {...simulationPanelProps} />
-      <details className="group rounded-[28px]">
+      <details className="order-2 group rounded-[28px]">
         <summary aria-controls={expertModeId} className="details-summary soft-card p-5">
           <div>
             <p className="panel-kicker">Expert Mode</p>

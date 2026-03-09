@@ -1,5 +1,5 @@
 import type { AppState, CharacterState } from "../../../../../shared/types";
-import type { AccountEditorDraft } from "../dashboard-types";
+import type { AccountEditorDraft, DashboardMode, ViewMode } from "../dashboard-types";
 
 interface DashboardLeftSidebarProps {
   busy: boolean;
@@ -25,6 +25,16 @@ interface DashboardLeftSidebarProps {
   accountCharacters: CharacterState[];
   onSelectCharacter: (characterId: string) => void;
   onToggleCharacterStar: (characterId: string, isStarred: boolean) => void;
+  viewMode: ViewMode;
+  dashboardMode: DashboardMode;
+  buildVersion: string | null;
+  infoMessage: string | null;
+  error: string | null;
+  onCheckAppUpdate: () => void;
+  onSwitchOverview: () => void;
+  onSwitchCharacter: () => void;
+  onSwitchSettings: () => void;
+  onSwitchWorkshop: () => void;
 }
 
 export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Element {
@@ -52,6 +62,16 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
     accountCharacters,
     onSelectCharacter,
     onToggleCharacterStar,
+    viewMode,
+    dashboardMode,
+    buildVersion,
+    infoMessage,
+    error,
+    onCheckAppUpdate,
+    onSwitchOverview,
+    onSwitchCharacter,
+    onSwitchSettings,
+    onSwitchWorkshop,
   } = props;
 
   return (
@@ -60,6 +80,40 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
         <p className="panel-kicker">Roster</p>
         <h1 className="panel-title !mt-1 !text-[1.18rem]">AION 2</h1>
         <p className="panel-subtitle">左侧只做账号和角色上下文，避免把操作入口堆在这里。</p>
+      </div>
+      <div className="soft-card mb-4 p-4">
+        <p className="panel-kicker !tracking-[0.08em]">Workspace</p>
+        <h2 className="panel-title !mt-1 !text-sm">目录导航</h2>
+        <div className="mt-3 space-y-2">
+          <button
+            className={`pill-btn w-full justify-start ${viewMode === "dashboard" && dashboardMode === "overview" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchOverview}
+            disabled={busy}
+          >
+            角色总览
+          </button>
+          <button
+            className={`pill-btn w-full justify-start ${viewMode === "dashboard" && dashboardMode === "character" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchCharacter}
+            disabled={busy}
+          >
+            角色操作
+          </button>
+          <button className={`pill-btn w-full justify-start ${viewMode === "workshop" ? "pill-btn-active" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
+            工坊
+          </button>
+          <button className={`pill-btn w-full justify-start ${viewMode === "settings" ? "pill-btn-active" : ""}`} onClick={onSwitchSettings} disabled={busy}>
+            设置页
+          </button>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="pill-btn pill-static">版本: {buildVersion ? `v${buildVersion}` : "--"}</span>
+          <button className="pill-btn" onClick={onCheckAppUpdate} disabled={busy}>
+            检查更新
+          </button>
+        </div>
+        {infoMessage ? <p className="mt-3 text-xs text-emerald-300">{infoMessage}</p> : null}
+        {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
       </div>
       <div className="soft-card mb-4 p-4">
         <p className="text-xs font-semibold tracking-wide text-slate-200">账号管理</p>

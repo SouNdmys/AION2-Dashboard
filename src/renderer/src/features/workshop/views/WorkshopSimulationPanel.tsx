@@ -204,10 +204,8 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
               {simulation.unknownPriceItemIds.map((itemId) => resolveItemName(itemId)).join("、")}
             </p>
           ) : null}
-          <details className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
-            <summary className="details-summary text-slate-200">
-              查看材料明细与库存修正（{simulation.materialRows.length} 项）
-            </summary>
+          <div className="mt-3">
+            <p className="text-[11px] font-medium text-slate-400">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
             <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-white/10 bg-black/30">
               <table className="w-full text-left">
                 <thead className="bg-white/5 text-slate-300">
@@ -274,7 +272,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                 </tbody>
               </table>
             </div>
-          </details>
+          </div>
         </div>
       ) : null}
     </article>
