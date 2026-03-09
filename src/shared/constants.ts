@@ -197,7 +197,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   },
   {
     id: "abyss_lower",
-    title: "深渊指令书(下层)",
+    title: "深渊下层指令",
     description: "每周 20 次，周三凌晨 5 点刷新。",
     category: "周常",
     energyCost: 0,
@@ -212,7 +212,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   },
   {
     id: "abyss_middle",
-    title: "深渊指令书(中层)",
+    title: "深渊中层指令",
     description: "每周 5 次，周三凌晨 5 点刷新。",
     category: "周常",
     energyCost: 0,
