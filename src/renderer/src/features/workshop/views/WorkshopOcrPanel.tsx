@@ -90,14 +90,17 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
   } = props;
 
   return (
-    <article className="order-2 glass-panel rounded-2xl p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <details className="order-2 group glass-panel rounded-2xl p-4">
+      <summary className="details-summary">
         <div>
           <h4 className="text-sm font-semibold">OCR抓价器</h4>
-          <p className="mt-1 summary-note">默认只保留抓价主流程，自动巡航、调试警告和可视化校准收进高级设置。</p>
+          <p className="mt-1 summary-note">自动抓价、巡航与可视化校准。</p>
         </div>
-        <span className="pill-btn pill-static">价格输入</span>
-      </div>
+        <span className="pill-btn">
+          <span className="group-open:hidden">展开</span>
+          <span className="hidden group-open:inline">收起</span>
+        </span>
+      </summary>
 
       <div className="tool-banner mt-3 text-xs">
         <p className="tone-positive">快捷抓价（全局热键：自动截屏并完成 OCR 与导入）</p>
@@ -374,7 +377,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
           </div>
         </div>
       </details>
-    </article>
+    </details>
   );
 }
 

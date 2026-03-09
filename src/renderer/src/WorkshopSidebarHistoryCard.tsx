@@ -62,6 +62,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
   const [keyword, setKeyword] = useState("");
   const [limitInput, setLimitInput] = useState("120");
   const [highlightSnapshotId, setHighlightSnapshotId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
   const handledFocusNonceRef = useRef(0);
   const historyTableContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -239,6 +240,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
     });
     setSelectedItemId(focusItemId);
     setHighlightSnapshotId(focusSnapshotId ?? null);
+    setPanelOpen(true);
     setMessage(focusSnapshotId ? `已定位到历史价格管理：${target.name}（目标点位已高亮）` : `已定位到历史价格管理：${target.name}`);
   }, [focusItemId, focusSnapshotId, focusNonce, classifiedItems]);
 
@@ -328,9 +330,20 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
   }
 
   return (
-    <article className="glass-panel rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold tracking-wide">历史价格管理</h3>
+    <details className="group glass-panel rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
+      <summary className="details-summary">
+        <div>
+          <h3 className="text-sm font-semibold tracking-wide">历史价格管理</h3>
+          <p className="mt-1 summary-note">历史快照修正与一键清理。</p>
+        </div>
+        <span className="pill-btn">
+          <span className="group-open:hidden">展开</span>
+          <span className="hidden group-open:inline">收起</span>
+        </span>
+      </summary>
+
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="summary-note">用于误操作修正。删除后会立即影响行情与制作模拟。</div>
         <div className="flex items-center gap-2">
           <button
             className="pill-btn text-rose-300"
@@ -344,7 +357,6 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           </button>
         </div>
       </div>
-      <p className="mt-2 summary-note">用于误操作修正。删除后会立即影响行情与制作模拟。</p>
 
       <div className="mt-3 grid grid-cols-1 gap-2">
         <select
@@ -453,7 +465,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
           </table>
         )}
       </div>
-    </article>
+    </details>
   );
 }
 

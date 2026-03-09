@@ -101,9 +101,19 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
   } = props;
 
   return (
-      <article className="order-4 glass-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <details className="order-4 group glass-panel rounded-2xl p-4">
+        <summary className="details-summary">
+          <div>
           <h4 className="text-sm font-semibold">库存管理</h4>
+          <p className="mt-1 summary-note">价格修正、库存录入与逆向推荐。</p>
+          </div>
+          <span className="pill-btn">
+            <span className="group-open:hidden">展开</span>
+            <span className="hidden group-open:inline">收起</span>
+          </span>
+        </summary>
+
+        <div className="mt-3 flex justify-end">
           <button className="pill-btn" onClick={() => void loadCraftOptions()} disabled={busy}>
             刷新建议
           </button>
@@ -397,7 +407,7 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
             })
           )}
         </div>
-      </article>
+      </details>
   );
 }
 

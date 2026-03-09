@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { WorkshopOcrHotkeyRunResult, WorkshopPriceHistoryResult, WorkshopPriceMarket, WorkshopPriceSignalResult, WorkshopPriceSignalRow } from "../../../../../shared/types";
 import {
   formatDateLabel,
@@ -119,6 +119,8 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     sellZoneRows,
   } = props;
 
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const historyPointCount = (historyServerResult?.sampleCount ?? 0) + (historyWorldResult?.sampleCount ?? 0);
   const suspectCount = (historyServerResult?.suspectCount ?? 0) + (historyWorldResult?.suspectCount ?? 0);
   const latestServerCapturedAt = historyServerResult?.latestCapturedAt ?? null;
@@ -161,16 +163,19 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     .slice(0, 4);
 
   return (
-    <article className="order-3 glass-panel rounded-2xl p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <details className="order-3 group glass-panel rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
+      <summary className="details-summary">
         <div>
           <h4 className="text-sm font-semibold">市场分析器</h4>
-          <p className="mt-1 summary-note">默认只显示当前物品的近期价格和结论，筛选器、曲线和信号细节按需展开。</p>
+          <p className="mt-1 summary-note">近期价格、结论摘要与价格曲线。</p>
         </div>
-        <span className="pill-btn pill-static">同步联动</span>
-      </div>
+        <span className="pill-btn">
+          <span className="group-open:hidden">展开</span>
+          <span className="hidden group-open:inline">收起</span>
+        </span>
+      </summary>
 
-      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_auto_auto]">
+      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.55fr)_auto_auto_auto]">
           <select
             className="field-control min-w-0"
             value={historyItemId}
@@ -192,6 +197,16 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
           />
           <button className="pill-btn whitespace-nowrap" onClick={onJumpHistoryManagerForCurrentItem} disabled={busy || !historyItemId}>
             管理历史价格
+          </button>
+          <button
+            className="pill-btn whitespace-nowrap"
+            onClick={() => {
+              setAdvancedOpen(true);
+              onViewHistoryCurveForItem(historyItemId, { scroll: true });
+            }}
+            disabled={busy || !historyItemId}
+          >
+            查看曲线
           </button>
           <button className="pill-btn whitespace-nowrap" onClick={() => onToggleStarItem(historyItemId)} disabled={busy || !historyItemId}>
             {historyItemId && isStarredItem(historyItemId) ? "★ 取消星标" : "☆ 星标关注"}
@@ -237,7 +252,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         </div>
       ) : null}
 
-      <details className="group mt-3 tool-panel">
+      <details className="group mt-3 tool-panel" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
         <summary className="details-summary">
           <div>
             <p className="text-sm font-medium text-slate-900">高级筛选与细节</p>
@@ -756,7 +771,7 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         </div>
         </div>
       </details>
-    </article>
+    </details>
   );
 }
 
