@@ -710,6 +710,10 @@ select option {
   color: var(--accent-1) !important;
 }
 
+.text-cyan-300 {
+  color: #1b7f6b !important;
+}
+
 .text-emerald-300 {
   color: #0b7d60 !important;
 }
@@ -738,16 +742,66 @@ select option {
   border-color: rgba(15, 23, 42, 0.12) !important;
 }
 
+.border-cyan-300\/30,
+.border-cyan-300\/35,
+.border-cyan-300\/60 {
+  border-color: rgba(15, 143, 111, 0.18) !important;
+}
+
+.border-emerald-200\/20,
+.border-emerald-200\/30,
+.border-emerald-300\/25,
+.border-emerald-300\/30,
+.border-emerald-300\/40 {
+  border-color: rgba(15, 143, 111, 0.18) !important;
+}
+
+.border-amber-300\/25,
+.border-amber-300\/35,
+.border-amber-300\/40,
+.border-amber-300\/50,
+.border-amber-300\/60 {
+  border-color: rgba(217, 119, 6, 0.18) !important;
+}
+
+.border-rose-300\/30,
+.border-rose-300\/35,
+.border-rose-300\/50,
+.border-rose-300\/60 {
+  border-color: rgba(217, 92, 92, 0.18) !important;
+}
+
 .bg-black\/20,
 .bg-black\/25,
 .bg-black\/30 {
-  background-color: rgba(247, 247, 243, 0.92) !important;
+  background: rgba(250, 250, 246, 0.94) !important;
+}
+
+.bg-white\/5 {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+.bg-cyan-500\/10,
+.bg-cyan-500\/15 {
+  background: rgba(15, 143, 111, 0.06) !important;
+}
+
+.bg-emerald-500\/10 {
+  background: rgba(15, 143, 111, 0.08) !important;
+}
+
+.bg-amber-500\/10 {
+  background: rgba(245, 158, 11, 0.08) !important;
+}
+
+.bg-rose-500\/10 {
+  background: rgba(239, 68, 68, 0.06) !important;
 }
 
 .bg-white\/5,
 .bg-white\/10,
 .bg-white\/15 {
-  background-color: rgba(15, 23, 42, 0.04) !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
 }
 
 .hover\:bg-white\/10:hover {

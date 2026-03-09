@@ -214,7 +214,6 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
         <div>
           <p className="panel-kicker">Role Overview</p>
           <h3 className="panel-title !text-xl">角色概览总览</h3>
-          <p className="panel-subtitle">先做快速录入，再看每个角色当前还能执行的具体任务。</p>
         </div>
       </div>
       <div className="soft-card mb-4 p-4">

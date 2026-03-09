@@ -6,6 +6,8 @@ interface DashboardLeftSidebarProps {
   state: AppState;
   selectedAccount: AppState["accounts"][number] | null;
   selected: CharacterState;
+  collapsed: boolean;
+  onToggleSidebar: () => void;
   newAccountName: string;
   newAccountRegion: string;
   onNewAccountNameChange: (value: string) => void;
@@ -43,6 +45,8 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
     state,
     selectedAccount,
     selected,
+    collapsed,
+    onToggleSidebar,
     newAccountName,
     newAccountRegion,
     onNewAccountNameChange,
@@ -75,12 +79,64 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
   } = props;
   const compactManagement = viewMode !== "dashboard";
 
+  if (collapsed) {
+    return (
+      <aside className="glass-panel rounded-[30px] p-3">
+        <div className="flex flex-col items-center gap-3">
+          <button className="icon-btn" onClick={onToggleSidebar} disabled={busy} title="展开侧栏" aria-label="展开侧栏">
+            {'>>'}
+          </button>
+          <button
+            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "overview" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchOverview}
+            disabled={busy}
+            title="角色总览"
+          >
+            总
+          </button>
+          <button
+            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "character" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchCharacter}
+            disabled={busy}
+            title="角色操作"
+          >
+            角
+          </button>
+          <button
+            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "workshop" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchWorkshop}
+            disabled={busy}
+            title="工坊"
+          >
+            工
+          </button>
+          <button
+            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "settings" ? "pill-btn-active" : ""}`}
+            onClick={onSwitchSettings}
+            disabled={busy}
+            title="设置页"
+          >
+            设
+          </button>
+          <div className="context-card w-full px-2 py-3 text-center">
+            <p className="context-label">账号</p>
+            <p className="mt-1 truncate text-xs font-semibold">{selectedAccount?.name ?? "--"}</p>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="glass-panel rounded-[30px] p-5">
-      <div className="mb-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
         <p className="panel-kicker">Roster</p>
         <h1 className="panel-title !mt-1 !text-[1.18rem]">AION 2</h1>
-        <p className="panel-subtitle">左侧只做账号和角色上下文，避免把操作入口堆在这里。</p>
+        </div>
+        <button className="icon-btn" onClick={onToggleSidebar} disabled={busy} title="收起侧栏" aria-label="收起侧栏">
+          {'<<'}
+        </button>
       </div>
       <div className="soft-card mb-4 p-4">
         <p className="panel-kicker !tracking-[0.08em]">Workspace</p>
@@ -119,16 +175,11 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
       <div className="soft-card mb-4 p-4">
         <p className="panel-kicker !tracking-[0.08em]">Context</p>
         <h2 className="panel-title !mt-1 !text-sm">当前账号</h2>
-        <div className="mt-3 grid gap-2">
+        <div className="mt-3">
           <div className="context-card">
             <p className="context-label">账号</p>
             <p className="context-value">{selectedAccount?.name ?? "--"}</p>
             <p className="context-meta">{selectedAccount?.regionTag ? `${selectedAccount.regionTag} · ` : ""}角色 {selectedAccountCharacterCount}/{maxCharactersPerAccount}</p>
-          </div>
-          <div className="context-card">
-            <p className="context-label">角色</p>
-            <p className="context-value">{selected.name}</p>
-            <p className="context-meta">奥德 {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}</p>
           </div>
         </div>
       </div>

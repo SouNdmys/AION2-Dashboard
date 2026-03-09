@@ -75,6 +75,7 @@ export function App(): JSX.Element {
   const [workshopHistoryJumpSnapshotId, setWorkshopHistoryJumpSnapshotId] = useState<string | null>(null);
   const [workshopHistoryJumpNonce, setWorkshopHistoryJumpNonce] = useState(0);
   const [workshopPriceChangeNonce, setWorkshopPriceChangeNonce] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -231,8 +232,12 @@ export function App(): JSX.Element {
   const sanctumBoxTask = taskById.get("sanctum_box");
   const showRightSidebar = viewMode === "dashboard";
   const appGridClass = showRightSidebar
-    ? "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-6"
-    : "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)] 2xl:gap-6";
+    ? sidebarCollapsed
+      ? "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[88px_minmax(0,1fr)_340px] 2xl:grid-cols-[88px_minmax(0,1fr)_400px] 2xl:gap-6"
+      : "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-6"
+    : sidebarCollapsed
+      ? "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[88px_minmax(0,1fr)] 2xl:grid-cols-[88px_minmax(0,1fr)] 2xl:gap-6"
+      : "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)] 2xl:gap-6";
 
   const canAddCharacterInSelectedAccount = selectedAccountCharacterCount < MAX_CHARACTERS_PER_ACCOUNT;
   const {
@@ -378,6 +383,8 @@ export function App(): JSX.Element {
           state={state}
           selectedAccount={selectedAccount}
           selected={selected}
+          collapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
           newAccountName={newAccountName}
           newAccountRegion={newAccountRegion}
           onNewAccountNameChange={setNewAccountName}

@@ -43,7 +43,6 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
         <div>
           <p className="panel-kicker">Settings</p>
           <h3 className="panel-title !mt-1 !text-base">设置页</h3>
-          <p className="panel-subtitle">把收益、阈值、优先级和数据操作收成几个短分组，减少整页输入框平铺。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="task-btn" onClick={onSaveSettings} disabled={busy}>
