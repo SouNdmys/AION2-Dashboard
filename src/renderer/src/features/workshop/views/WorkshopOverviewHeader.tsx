@@ -15,16 +15,16 @@ export function WorkshopOverviewHeader(props: WorkshopOverviewHeaderProps): JSX.
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="panel-kicker">Workshop</p>
-          <h3 className="panel-title !text-[1.2rem]">工坊（内置配方库）</h3>
-          <p className="panel-subtitle">默认只保留装备制作主流程，抓价、市场分析、历史价格和库存修正全部进入展开区。</p>
+          <h3 className="panel-title !text-[1.2rem]">装备制作工作台</h3>
+          <p className="panel-subtitle">默认只回答一件事: 这件装备现在值不值得做。抓价、市场分析和历史管理全部后撤到专业工具。</p>
         </div>
-        <span className="pill-btn pill-static">制作主流程</span>
+        <span className="pill-btn pill-static">单任务视图</span>
       </div>
-      <p className="mt-4 summary-note">
-        {state.items.length} 个物品 · {state.recipes.length} 条配方 · {state.prices.length} 条价格快照 · {state.inventory.length} 条库存记录 · 重点关注 {starCount} 项
+      <p className="mt-4 inline-note">
+        当前配方库 {state.recipes.length} 条，重点关注 {starCount} 项。其余库存、历史价格和 OCR 抓价只在你需要时展开。
       </p>
-      {message ? <p className="mt-3 text-xs text-emerald-300">{message}</p> : null}
-      {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
+      {message ? <p className="banner-positive mt-3 rounded-xl px-3 py-2 text-xs">{message}</p> : null}
+      {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
     </article>
   );
 }

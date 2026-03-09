@@ -115,21 +115,21 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-3">
             <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               value={renameName}
               onChange={(event) => onRenameNameChange(event.target.value)}
               disabled={busy}
               placeholder="角色名称"
             />
             <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               value={profileClassTagInput}
               onChange={(event) => onProfileClassTagInputChange(event.target.value)}
               disabled={busy}
               placeholder="职业(示例: 剑星)"
             />
             <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               value={profileGearScoreInput}
               onChange={(event) => onProfileGearScoreInputChange(event.target.value)}
               disabled={busy}

@@ -51,13 +51,13 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
         <div className="data-pill">全角色超越次数: {weeklyTransRuns} (阈值 {transcendenceWarnThreshold})</div>
         <div className="data-pill">本轮统计起点: {new Date(cycleStartedAt).toLocaleString()}</div>
       </div>
-      <p className="mt-2 text-xs text-slate-300">周收益统计会在每周三 05:00 自动重置，也可手动重置。</p>
-      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-        <p className="text-xs font-semibold tracking-wide text-slate-200">当前角色周次数校准（远征/超越）</p>
-        <p className="mt-1 text-xs text-slate-300">用于误清空后回填游戏内真实已完成次数。</p>
+      <p className="mt-2 summary-note">周收益统计会在每周三 05:00 自动重置，也可手动重置。</p>
+      <div className="section-card mt-3">
+        <p className="text-xs font-semibold tracking-wide text-slate-700">当前角色周次数校准（远征/超越）</p>
+        <p className="mt-1 summary-note">用于误清空后回填游戏内真实已完成次数。</p>
         <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
           <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control"
             value={weeklyExpeditionCompletedInput}
             onChange={(event) => onWeeklyExpeditionCompletedInputChange(event.target.value)}
             disabled={busy}
@@ -69,7 +69,7 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
             ))}
           </select>
           <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control"
             value={weeklyTranscendenceCompletedInput}
             onChange={(event) => onWeeklyTranscendenceCompletedInputChange(event.target.value)}
             disabled={busy}
@@ -86,12 +86,12 @@ export function WeeklyStatsPanel(props: WeeklyStatsPanelProps): JSX.Element | nu
         </div>
       </div>
       {expeditionOverRewardThreshold ? (
-        <p className="mt-3 text-xs text-amber-300">
+        <p className="banner-warning mt-3 rounded-xl px-3 py-2 text-xs">
           警示: 远征已超过阈值 {expeditionWarnThreshold}，后续副本奖励将进入折扣区间（金币收益会下降）。
         </p>
       ) : null}
       {transcendenceOverThreshold ? (
-        <p className="mt-2 text-xs text-amber-300">
+        <p className="banner-warning mt-2 rounded-xl px-3 py-2 text-xs">
           提醒: 超越次数已超过阈值 {transcendenceWarnThreshold}，请按你的策略确认是否继续投入。
         </p>
       ) : null}

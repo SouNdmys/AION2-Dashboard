@@ -184,81 +184,90 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
 
   return (
     <article className="glass-panel rounded-[30px] p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="panel-kicker">Role Overview</p>
           <h3 className="panel-title !text-xl">角色概览总览</h3>
-          <p className="panel-subtitle">按优先级筛选后可进入角色；也可先做一次快速录入。</p>
+          <p className="panel-subtitle">默认先看最高优先的可执行项，次级信息下沉成摘要。</p>
         </div>
-        <span className="pill-btn pill-static">批量视图</span>
+        <div className="flex flex-wrap gap-2">
+          <span className="pill-btn pill-static">角色 {numberFormatter.format(overviewRowsFiltered.length)}</span>
+          <details className="group">
+            <summary className="details-summary details-summary-inline pill-btn">
+              <span className="group-open:hidden">快速录入</span>
+              <span className="hidden group-open:inline">收起快速录入</span>
+            </summary>
+            <div className="soft-card mt-3 p-4">
+              <div className="grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
+                <select className="field-control-sm" value={quickCharacterId} onChange={(event) => onQuickCharacterIdChange(event.target.value)} disabled={busy}>
+                  {state.characters.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({accountNameById.get(item.accountId) ?? "账号"})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="field-control-sm"
+                  value={quickTaskId}
+                  onChange={(event) => onQuickTaskIdChange(event.target.value as QuickTaskId)}
+                  disabled={busy}
+                >
+                  {TASK_DEFINITIONS.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
+                  <option value="corridor_lower">回廊完成(下层)</option>
+                  <option value="corridor_middle">回廊完成(中层)</option>
+                </select>
+                <select
+                  className="field-control-sm"
+                  value={quickAction}
+                  onChange={(event) => onQuickActionChange(event.target.value as TaskActionKind)}
+                  disabled={busy || quickActionOptions.length === 0}
+                >
+                  {quickActionOptions.map((action) => (
+                    <option key={action} value={action}>
+                      {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "输入已完成"}
+                    </option>
+                  ))}
+                </select>
+                <select className="field-control-sm" value={quickAmount} onChange={(event) => onQuickAmountChange(event.target.value)} disabled={busy}>
+                  {quickAmountOptions.map((value) => (
+                    <option key={`quick-amount-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="task-btn task-btn-soft px-4"
+                  onClick={onApplyQuickAction}
+                  disabled={busy || !quickCharacterId || (!quickTaskExists && !quickCorridorTask)}
+                >
+                  提交录入
+                </button>
+              </div>
+              {quickAction === "set_completed" ? (
+                <p className="mt-2 summary-note">当前内容总量 {quickCorridorTask ? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。</p>
+              ) : null}
+            </div>
+          </details>
+        </div>
       </div>
       <div className="soft-card mb-4 p-4">
-        <p className="panel-kicker !tracking-[0.08em]">Quick Entry</p>
-        <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
-        <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
-          <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
-            value={quickCharacterId}
-            onChange={(event) => onQuickCharacterIdChange(event.target.value)}
-            disabled={busy}
-          >
-            {state.characters.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ({accountNameById.get(item.accountId) ?? "账号"})
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
-            value={quickTaskId}
-            onChange={(event) => onQuickTaskIdChange(event.target.value as QuickTaskId)}
-            disabled={busy}
-          >
-            {TASK_DEFINITIONS.map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
-            ))}
-            <option value="corridor_lower">回廊完成(下层)</option>
-            <option value="corridor_middle">回廊完成(中层)</option>
-          </select>
-          <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
-            value={quickAction}
-            onChange={(event) => onQuickActionChange(event.target.value as TaskActionKind)}
-            disabled={busy || quickActionOptions.length === 0}
-          >
-            {quickActionOptions.map((action) => (
-              <option key={action} value={action}>
-                {action === "complete_once" ? "完成次数" : action === "use_ticket" ? "挑战券增加" : "输入已完成"}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
-            value={quickAmount}
-            onChange={(event) => onQuickAmountChange(event.target.value)}
-            disabled={busy}
-          >
-            {quickAmountOptions.map((value) => (
-              <option key={`quick-amount-${value}`} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-          <button className="task-btn px-4" onClick={onApplyQuickAction} disabled={busy || !quickCharacterId || (!quickTaskExists && !quickCorridorTask)}>
-            提交录入
-          </button>
-        </div>
-        {quickAction === "set_completed" ? (
-          <p className="mt-2 text-xs text-slate-300">
-            当前内容总量 {quickCorridorTask ? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Overview Controls</p>
+            <h4 className="panel-title !mt-1 !text-sm">筛选与排序</h4>
+          </div>
+          <p className="summary-note">
+            当前命中 {overviewRowsFiltered.length} 个角色。
+            {overviewSortKey === "manual" ? " 当前支持拖拽卡片调整顺序。" : " 切到“按手动排序”后可拖拽调整顺序。"}
           </p>
-        ) : null}
-      </div>
-      <div className="grid grid-cols-2 gap-2 2xl:grid-cols-4">
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 2xl:grid-cols-4">
         <select
-          className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm"
           value={overviewSortKey}
           onChange={(event) => onOverviewSortKeyChange(event.target.value as OverviewSortKey)}
           disabled={busy}
@@ -269,7 +278,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           <option value="region">按大区排序</option>
         </select>
         <select
-          className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm"
           value={overviewTaskFilter}
           onChange={(event) => onOverviewTaskFilterChange(event.target.value as OverviewTaskFilter)}
           disabled={busy}
@@ -280,7 +289,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           <option value="mission">任务类型: 使命</option>
         </select>
         <select
-          className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm"
           value={overviewAccountFilter}
           onChange={(event) => onOverviewAccountFilterChange(event.target.value)}
           disabled={busy}
@@ -293,7 +302,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           ))}
         </select>
         <select
-          className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+          className="field-control-sm"
           value={overviewRegionFilter}
           onChange={(event) => onOverviewRegionFilterChange(event.target.value)}
           disabled={busy}
@@ -307,18 +316,16 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           ))}
         </select>
       </div>
-      <p className="mt-2 text-xs text-slate-300">
-        当前命中 {overviewRowsFiltered.length} 个角色，可直接进入操作页。
-        {overviewSortKey === "manual" ? " 当前支持拖拽卡片调整顺序。" : " 切到“按手动排序”后可拖拽调整顺序。"}
-      </p>
+      </div>
       <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
         {overviewRowsFiltered.map((entry) => {
           const allMetrics = buildOverviewMetricChips(entry, isWeeklyCriticalWindow);
           const actionableMetrics = allMetrics
             .filter((metric) => metric.current > 0)
             .sort((left, right) => Number(right.urgent) - Number(left.urgent) || right.current - left.current || left.label.localeCompare(right.label, "zh-CN"));
-          const visibleMetrics = actionableMetrics.slice(0, 8);
-          const hiddenMetricCount = Math.max(0, actionableMetrics.length - visibleMetrics.length);
+          const visibleMetrics = actionableMetrics.slice(0, 3);
+          const secondaryMetric = actionableMetrics[3] ?? null;
+          const hiddenMetricCount = Math.max(0, actionableMetrics.length - visibleMetrics.length - (secondaryMetric ? 1 : 0));
           const filteredReadyCount =
             overviewTaskFilter === "dungeon"
               ? entry.dungeonReadyBuckets
@@ -338,27 +345,27 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
               onDragOver={(event) => onOverviewCardDragOver(event, entry.character.id)}
               onDrop={(event) => onOverviewCardDrop(event, entry.character.id)}
               onDragEnd={onOverviewCardDragEnd}
-              className={`rounded-3xl border bg-white/5 p-4 text-left transition hover:border-white/30 hover:bg-white/10 ${
-                dragging ? "border-cyan-300/70 opacity-65" : dragOver ? "border-cyan-200/70 bg-cyan-500/10" : "border-white/15"
+              className={`soft-card rounded-3xl p-4 text-left transition ${
+                dragging ? "border-[rgba(15,143,111,0.38)] opacity-65" : dragOver ? "border-[rgba(15,143,111,0.28)] bg-[rgba(15,143,111,0.05)]" : ""
               } ${dragEnabled ? "cursor-move" : ""}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{entry.character.name}</p>
-                  <p className="text-xs text-slate-300">
+                  <p className="text-xs text-slate-500">
                     {entry.account.name}
                     {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="summary-note">
                     职业: {entry.character.classTag?.trim() || "未填写"} | 装分:{" "}
                     {entry.character.gearScore === undefined ? "未填写" : numberFormatter.format(entry.character.gearScore)}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={`text-xs font-semibold ${getUrgentBoardToneClass(entry.aodeBaseEnergyCurrent, entry.aodeBaseEnergyCap, entry.aodeBaseEnergyOverflow)}`}>
+                  <span className={getUrgentBoardToneClass(entry.aodeBaseEnergyCurrent, entry.aodeBaseEnergyCap, entry.aodeBaseEnergyOverflow)}>
                     奥德 {entry.aodeBaseEnergyCurrent}(+{entry.aodeBonusEnergyCurrent})/{entry.aodeBaseEnergyCap}
                   </span>
-                  <span className="text-xs text-cyan-200">
+                  <span className="summary-note">
                     可执行项 {filteredReadyCount}
                     {overviewTaskFilter === "all" ? "" : overviewTaskFilter === "dungeon" ? " / 副本" : overviewTaskFilter === "weekly" ? " / 周常" : " / 使命"}
                   </span>
@@ -376,15 +383,22 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                     <span className="summary-note">当前主要项目已基本清空，可直接进入角色确认细节。</span>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="summary-note">副本可执行 {entry.dungeonReadyBuckets}</span>
-                  <span className="summary-note">周常可执行 {entry.weeklyReadyBuckets}</span>
-                  <span className="summary-note">使命可执行 {entry.missionReadyBuckets}</span>
-                  <span className="summary-note">已折叠 {hiddenMetricCount} 项次级信息</span>
+                <div className="rounded-2xl border border-[rgba(15,23,42,0.06)] bg-white/70 px-3 py-2">
+                  {secondaryMetric ? (
+                    <p className="inline-note">
+                      次级关注: <span className="font-semibold text-slate-700">{secondaryMetric.label}</span> {formatCounter(secondaryMetric.current, secondaryMetric.total)}
+                    </p>
+                  ) : null}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="summary-note">副本 {entry.dungeonReadyBuckets}</span>
+                    <span className="summary-note">周常 {entry.weeklyReadyBuckets}</span>
+                    <span className="summary-note">使命 {entry.missionReadyBuckets}</span>
+                    <span className="summary-note">已折叠 {hiddenMetricCount} 项</span>
+                  </div>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2">
-                <button className="task-btn" onClick={() => onSelectCharacter(entry.character.id)} disabled={busy}>
+                <button className="task-btn task-btn-soft" onClick={() => onSelectCharacter(entry.character.id)} disabled={busy}>
                   进入角色
                 </button>
               </div>
@@ -392,7 +406,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           );
         })}
         {overviewRowsFiltered.length === 0 ? (
-          <div className="col-span-2 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">当前筛选条件下没有可显示角色。</div>
+          <div className="col-span-2 rounded-2xl border border-[rgba(15,23,42,0.08)] bg-white/80 p-4 text-sm text-slate-500">当前筛选条件下没有可显示角色。</div>
         ) : null}
       </div>
     </article>

@@ -66,7 +66,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-2">
               <p className="text-xs text-slate-300">远征单次金币（万）</p>
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={settingsDraft.expeditionGoldPerRun}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionGoldPerRun: event.target.value })}
                 disabled={busy}
@@ -75,7 +75,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-2">
               <p className="text-xs text-slate-300">超越单次金币（万）</p>
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={settingsDraft.transcendenceGoldPerRun}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceGoldPerRun: event.target.value })}
                 disabled={busy}
@@ -84,7 +84,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-2">
               <p className="text-xs text-slate-300">远征阈值</p>
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={settingsDraft.expeditionWarnThreshold}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionWarnThreshold: event.target.value })}
                 disabled={busy}
@@ -95,7 +95,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-2">
               <p className="text-xs text-slate-300">超越阈值</p>
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={settingsDraft.transcendenceWarnThreshold}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceWarnThreshold: event.target.value })}
                 disabled={busy}
@@ -103,35 +103,35 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             </div>
             <div className="grid grid-cols-5 gap-2">
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="field-control-sm"
                 value={settingsDraft.expeditionRunCap}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, expeditionRunCap: event.target.value })}
                 disabled={busy}
                 placeholder="远征上限"
               />
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="field-control-sm"
                 value={settingsDraft.transcendenceRunCap}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, transcendenceRunCap: event.target.value })}
                 disabled={busy}
                 placeholder="超越上限"
               />
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="field-control-sm"
                 value={settingsDraft.nightmareRunCap}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, nightmareRunCap: event.target.value })}
                 disabled={busy}
                 placeholder="恶梦上限"
               />
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="field-control-sm"
                 value={settingsDraft.awakeningRunCap}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, awakeningRunCap: event.target.value })}
                 disabled={busy}
                 placeholder="觉醒上限"
               />
               <input
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="field-control-sm"
                 value={settingsDraft.suppressionRunCap}
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, suppressionRunCap: event.target.value })}
                 disabled={busy}
@@ -150,7 +150,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
               <label key={item.key} className="space-y-1 text-xs text-slate-300">
                 <span>{item.label}</span>
                 <select
-                  className="w-full rounded-xl border border-white/20 bg-black/25 px-2 py-2 text-xs outline-none focus:border-cyan-300/60"
+                  className="field-control-sm"
                   value={settingsDraft[item.key]}
                   onChange={(event) =>
                     onSettingsDraftChange({
@@ -191,7 +191,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-1">
               <p className="text-xs text-slate-300">下层数量</p>
               <select
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={corridorDraft.lowerAvailable}
                 onChange={(event) => onCorridorDraftChange({ ...corridorDraft, lowerAvailable: event.target.value })}
                 disabled={busy}
@@ -206,7 +206,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
             <div className="space-y-1">
               <p className="text-xs text-slate-300">中层数量</p>
               <select
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                className="field-control"
                 value={corridorDraft.middleAvailable}
                 onChange={(event) => onCorridorDraftChange({ ...corridorDraft, middleAvailable: event.target.value })}
                 disabled={busy}
@@ -226,7 +226,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]">
             <select
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               value={corridorDraft.completeLane}
               onChange={(event) =>
                 onCorridorDraftChange({ ...corridorDraft, completeLane: event.target.value as "lower" | "middle" })
@@ -237,7 +237,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
               <option value="middle">完成层级: 中层</option>
             </select>
             <select
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               value={corridorDraft.completeAmount}
               onChange={(event) => onCorridorDraftChange({ ...corridorDraft, completeAmount: event.target.value })}
               disabled={busy}

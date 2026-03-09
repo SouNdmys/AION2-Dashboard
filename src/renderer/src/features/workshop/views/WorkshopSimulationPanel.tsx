@@ -54,12 +54,12 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
   } = props;
 
   const recommendationTone = !simulation
-    ? "text-slate-200"
+    ? "text-slate-900"
     : simulation.unknownPriceItemIds.length > 0
-      ? "text-amber-300"
+      ? "tone-warning"
       : (simulation.estimatedProfit ?? 0) > 0
-        ? "text-emerald-300"
-        : "text-rose-300";
+        ? "tone-positive"
+        : "tone-danger";
   const recommendationLabel = !simulation
     ? "等待模拟"
     : simulation.unknownPriceItemIds.length > 0
@@ -76,118 +76,109 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
         : "库存不足，需要先补材料再制作。";
 
   return (
-    <article className="order-1 glass-panel rounded-2xl p-4">
+    <article className="order-1 glass-panel rounded-[30px] p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold">做装模拟器</h4>
+        <div>
+          <p className="panel-kicker">Craft Assistant</p>
+          <h4 className="panel-title !mt-1">做装模拟器</h4>
+          <p className="panel-subtitle">只保留制作目标、售价和税率三个判断入口，先得到结论，再决定要不要展开专业工具。</p>
+        </div>
+        <span className="pill-btn pill-static">装备制作</span>
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-        <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={simulateMainCategory}
-          onChange={(event) => setSimulateMainCategory(event.target.value)}
-          disabled={busy || simulationMainCategoryOptions.length === 0}
-        >
-          {simulationMainCategoryOptions.map((category) => (
-            <option key={`sim-main-category-${category}`} value={category}>
-              大类: {category}
-            </option>
-          ))}
-        </select>
-        <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={simulateSubCategory}
-          onChange={(event) => setSimulateSubCategory(event.target.value)}
-          disabled={busy}
-        >
-          <option value="all">下级分类: 全部</option>
-          {simulationSubCategoryOptions.map((category) => (
-            <option key={`sim-sub-category-${category}`} value={category}>
-              下级分类: {category}
-            </option>
-          ))}
-        </select>
+      <div className="section-card mt-4">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <select
+            className="field-control"
+            value={simulateMainCategory}
+            onChange={(event) => setSimulateMainCategory(event.target.value)}
+            disabled={busy || simulationMainCategoryOptions.length === 0}
+          >
+            {simulationMainCategoryOptions.map((category) => (
+              <option key={`sim-main-category-${category}`} value={category}>
+                大类: {category}
+              </option>
+            ))}
+          </select>
+          <select className="field-control" value={simulateSubCategory} onChange={(event) => setSimulateSubCategory(event.target.value)} disabled={busy}>
+            <option value="all">下级分类: 全部</option>
+            {simulationSubCategoryOptions.map((category) => (
+              <option key={`sim-sub-category-${category}`} value={category}>
+                下级分类: {category}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.58fr)_minmax(0,0.72fr)_minmax(0,0.8fr)_auto]">
+          <select
+            className="field-control"
+            value={simulateRecipeId}
+            onChange={(event) => setSimulateRecipeId(event.target.value)}
+            disabled={busy || filteredSimulationRecipes.length === 0}
+          >
+            {filteredSimulationRecipes.map((recipe) => (
+              <option key={`sim-recipe-${recipe.id}`} value={recipe.id}>
+                [{recipe.subCategory}] {recipe.outputName}
+              </option>
+            ))}
+          </select>
+          <input className="field-control" value={simulateRuns} onChange={(event) => setSimulateRuns(event.target.value)} disabled={busy} placeholder="制作次数" />
+          <input
+            className="field-control"
+            value={simulationOutputPriceDraft}
+            onChange={(event) => setSimulationOutputPriceDraft(event.target.value)}
+            disabled={busy || !simulation}
+            placeholder="成品售价(可改)"
+          />
+          <select className="field-control" value={taxMode} onChange={(event) => setTaxMode(event.target.value as "0.1" | "0.2")} disabled={busy}>
+            <option value="0.1">服务器拍卖行税 10%</option>
+            <option value="0.2">世界交易行税 20%</option>
+          </select>
+          <button className="task-btn task-btn-soft px-4" onClick={() => void onSimulate()} disabled={busy || !simulateRecipeId}>
+            运行模拟
+          </button>
+        </div>
+        {filteredSimulationRecipes.length === 0 ? <p className="banner-warning mt-3 rounded-xl px-3 py-2 text-xs">当前分类下没有可模拟的配方。</p> : null}
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_auto]">
-        <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={simulateRecipeId}
-          onChange={(event) => setSimulateRecipeId(event.target.value)}
-          disabled={busy || filteredSimulationRecipes.length === 0}
-        >
-          {filteredSimulationRecipes.map((recipe) => (
-            <option key={`sim-recipe-${recipe.id}`} value={recipe.id}>
-              [{recipe.subCategory}] {recipe.outputName}
-            </option>
-          ))}
-        </select>
-        <input
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={simulateRuns}
-          onChange={(event) => setSimulateRuns(event.target.value)}
-          disabled={busy}
-          placeholder="制作次数"
-        />
-        <input
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={simulationOutputPriceDraft}
-          onChange={(event) => setSimulationOutputPriceDraft(event.target.value)}
-          disabled={busy || !simulation}
-          placeholder="成品售价(可改)"
-        />
-        <select
-          className="min-w-0 rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          value={taxMode}
-          onChange={(event) => setTaxMode(event.target.value as "0.1" | "0.2")}
-          disabled={busy}
-        >
-          <option value="0.1">服务器拍卖行税 10%</option>
-          <option value="0.2">世界交易行税 20%</option>
-        </select>
-        <button className="task-btn px-4" onClick={() => void onSimulate()} disabled={busy || !simulateRecipeId}>
-          运行模拟
-        </button>
-      </div>
-      {filteredSimulationRecipes.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前分类下没有可模拟的配方。</p> : null}
 
       {simulation ? (
-        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs">
-          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="section-card mt-4 text-xs">
+          <div className="soft-card p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] text-slate-400">模拟结论</p>
+                <p className="text-[11px] text-slate-500">模拟结论</p>
                 <p className={`mt-1 text-base font-semibold ${recommendationTone}`}>{recommendationLabel}</p>
-                <p className="mt-1 text-[11px] text-slate-300">
+                <p className="mt-1 text-[11px] text-slate-500">
                   {simulation.outputItemName} x {simulation.totalOutputQuantity} | 制作 {simulation.runs} 次
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-[11px] text-slate-400">库存状态</p>
-                <p className={`mt-1 text-sm ${simulation.craftableNow ? "text-emerald-300" : "text-amber-300"}`}>
+                <p className="text-[11px] text-slate-500">库存状态</p>
+                <p className={`mt-1 text-sm ${simulation.craftableNow ? "tone-positive" : "tone-warning"}`}>
                   {simulation.craftableNow ? "库存可直接制作" : "库存不足，需补材料"}
                 </p>
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-300">{recommendationDetail}</p>
+            <p className="mt-2 inline-note">{recommendationDetail}</p>
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
             <div className="data-pill">
-              <p className="text-[11px] text-slate-400">材料成本</p>
-              <p className="mt-1 text-sm text-slate-100">{formatGold(simulation.requiredMaterialCost)}</p>
+              <p className="text-[11px] text-slate-500">材料成本</p>
+              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.requiredMaterialCost)}</p>
             </div>
             <div className="data-pill">
-              <p className="text-[11px] text-slate-400">税后收入</p>
-              <p className="mt-1 text-sm text-slate-100">{formatGold(simulation.netRevenueAfterTax)}</p>
+              <p className="text-[11px] text-slate-500">税后收入</p>
+              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.netRevenueAfterTax)}</p>
             </div>
             <div className="data-pill">
-              <p className="text-[11px] text-slate-400">净利润</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfit ?? 0) > 0 ? "text-emerald-300" : "text-rose-300"}`}>
+              <p className="text-[11px] text-slate-500">净利润</p>
+              <p className={`mt-1 text-sm ${(simulation.estimatedProfit ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
                 {formatGold(simulation.estimatedProfit)}
               </p>
             </div>
             <div className="data-pill">
-              <p className="text-[11px] text-slate-400">利润率</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfitRate ?? 0) > 0 ? "text-emerald-300" : "text-rose-300"}`}>
+              <p className="text-[11px] text-slate-500">利润率</p>
+              <p className={`mt-1 text-sm ${(simulation.estimatedProfitRate ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
                 {toPercent(simulation.estimatedProfitRate)}
               </p>
             </div>
@@ -199,31 +190,31 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
           </div>
           {simulation.unknownPriceItemIds.length > 0 ? (
-            <p className="mt-2 rounded-lg border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-amber-300">
+            <p className="banner-warning mt-2 rounded-lg px-3 py-2">
               以下材料缺少价格，利润结果不完整:
               {simulation.unknownPriceItemIds.map((itemId) => resolveItemName(itemId)).join("、")}
             </p>
           ) : null}
           <div className="mt-3">
-            <p className="text-[11px] font-medium text-slate-400">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
-            <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-white/10 bg-black/30">
+            <p className="text-[11px] font-medium text-slate-500">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
+            <div className="surface-table mt-2 max-h-64 overflow-auto">
               <table className="w-full text-left">
-                <thead className="bg-white/5 text-slate-300">
+                <thead>
                   <tr>
-                    <th className="px-2 py-1">材料</th>
-                    <th className="px-2 py-1">需求</th>
-                    <th className="px-2 py-1">库存(可改)</th>
-                    <th className="px-2 py-1">缺口</th>
-                    <th className="px-2 py-1">单价(可改)</th>
-                    <th className="px-2 py-1">取价来源</th>
+                    <th>材料</th>
+                    <th>需求</th>
+                    <th>库存(可改)</th>
+                    <th>缺口</th>
+                    <th>单价(可改)</th>
+                    <th>取价来源</th>
                   </tr>
                 </thead>
                 <tbody>
                   {simulation.materialRows.map((row) => (
-                    <tr key={`sim-material-${row.itemId}`} className="border-t border-white/10">
-                      <td className="px-2 py-1">
+                    <tr key={`sim-material-${row.itemId}`}>
+                      <td>
                         <button
-                          className="text-left text-cyan-200 hover:underline disabled:cursor-not-allowed disabled:text-slate-300"
+                          className="text-left text-[color:var(--accent-1)] hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
                           onClick={() => onFocusSimulationMaterial(row.itemId, row.latestPriceMarket)}
                           disabled={busy}
                           title="联动显示该材料的历史价格与市场分析"
@@ -231,10 +222,10 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                           {row.itemName}
                         </button>
                       </td>
-                      <td className="px-2 py-1">{row.required}</td>
-                      <td className="px-2 py-1">
+                      <td>{row.required}</td>
+                      <td>
                         <input
-                          className="w-24 rounded border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
+                          className="field-control-inline w-24"
                           value={simulationMaterialDraft[row.itemId]?.owned ?? String(row.owned)}
                           onChange={(event) =>
                             setSimulationMaterialDraft((prev) => ({
@@ -248,10 +239,10 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                           disabled={busy}
                         />
                       </td>
-                      <td className={`px-2 py-1 ${row.missing > 0 ? "text-rose-300" : "text-emerald-300"}`}>{row.missing}</td>
-                      <td className="px-2 py-1">
+                      <td className={row.missing > 0 ? "tone-danger" : "tone-positive"}>{row.missing}</td>
+                      <td>
                         <input
-                          className="w-28 rounded border border-white/20 bg-black/25 px-2 py-1 text-xs outline-none focus:border-cyan-300/60"
+                          className="field-control-inline w-28"
                           value={simulationMaterialDraft[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice))}
                           onChange={(event) =>
                             setSimulationMaterialDraft((prev) => ({
@@ -266,7 +257,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                           placeholder="留空=不改"
                         />
                       </td>
-                      <td className="px-2 py-1 text-slate-300">{formatMarketLabel(row.latestPriceMarket)}</td>
+                      <td className="text-slate-500">{formatMarketLabel(row.latestPriceMarket)}</td>
                     </tr>
                   ))}
                 </tbody>

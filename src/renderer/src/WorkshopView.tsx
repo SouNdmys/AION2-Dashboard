@@ -40,16 +40,16 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     <div className="flex flex-col gap-5">
       <WorkshopOverviewHeader state={state} starCount={starCount} message={message} error={error} />
       <WorkshopSimulationPanel {...simulationPanelProps} />
-      <details className="order-2 group rounded-[28px]">
-        <summary aria-controls={expertModeId} className="details-summary soft-card p-5">
+      <details className="order-2 group">
+        <summary aria-controls={expertModeId} className="details-summary soft-card px-4 py-3">
           <div>
-            <p className="panel-kicker">Expert Mode</p>
-            <h4 className="panel-title !mt-1">专业模式</h4>
-            <p className="panel-subtitle">抓价、市场分析、历史价格管理和库存修正全部收进这里，默认首屏只保留装备制作主流程。</p>
+            <p className="panel-kicker">Expert Tools</p>
+            <h4 className="panel-title !mt-1 !text-sm">专业工具</h4>
+            <p className="summary-note mt-1">OCR 抓价、市场分析、历史价格管理和库存修正都在这里，默认不打断做装主流程。</p>
           </div>
           <span className="pill-btn group-open:!border-emerald-700/15 group-open:!bg-emerald-700/5 group-open:!text-slate-900">
-            <span className="group-open:hidden">展开高级区</span>
-            <span className="hidden group-open:inline">收起高级区</span>
+            <span className="group-open:hidden">展开工具</span>
+            <span className="hidden group-open:inline">收起工具</span>
           </span>
         </summary>
         <div id={expertModeId} className="mt-4 space-y-4">

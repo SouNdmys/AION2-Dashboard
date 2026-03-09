@@ -73,6 +73,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
     onSwitchSettings,
     onSwitchWorkshop,
   } = props;
+  const compactManagement = viewMode !== "dashboard";
 
   return (
     <aside className="glass-panel rounded-[30px] p-5">
@@ -112,138 +113,132 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             检查更新
           </button>
         </div>
-        {infoMessage ? <p className="mt-3 text-xs text-emerald-300">{infoMessage}</p> : null}
-        {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
+        {infoMessage ? <p className="banner-positive mt-3 rounded-xl px-3 py-2 text-xs">{infoMessage}</p> : null}
+        {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
       </div>
       <div className="soft-card mb-4 p-4">
-        <p className="text-xs font-semibold tracking-wide text-slate-200">账号管理</p>
-        <div className="mt-2 space-y-2">
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            placeholder="新账号名称"
-            value={newAccountName}
-            onChange={(event) => onNewAccountNameChange(event.target.value)}
-            disabled={busy}
-          />
-          <input
-            className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-            placeholder="大区(可选)"
-            value={newAccountRegion}
-            onChange={(event) => onNewAccountRegionChange(event.target.value)}
-            disabled={busy}
-          />
-          <button className="pill-btn w-full" onClick={onAddAccount} disabled={busy || !newAccountName.trim()}>
-            新增账号
-          </button>
-        </div>
-
-        <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
-          {state.accounts.map((account) => {
-            const active = selectedAccount?.id === account.id;
-            const count = state.characters.filter((item) => item.accountId === account.id).length;
-            return (
-              <button
-                key={account.id}
-                onClick={() => onSelectAccount(account.id)}
-                className={`w-full rounded-xl border px-3 py-2 text-left text-sm transition ${
-                  active ? "border-white/25 bg-white/15" : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
-                }`}
-                disabled={busy}
-              >
-                <p className="truncate font-medium">{account.name}</p>
-                <p className="truncate text-xs text-slate-300">
-                  {account.regionTag ? `${account.regionTag} | ` : ""}
-                  角色 {count}/{maxCharactersPerAccount}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-
-        {selectedAccount ? (
-          <div className="mt-3 space-y-2">
-            <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              value={accountEditor.name}
-              onChange={(event) => onAccountEditorChange({ ...accountEditor, name: event.target.value })}
-              disabled={busy}
-              placeholder="账号名称"
-            />
-            <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-              value={accountEditor.regionTag}
-              onChange={(event) => onAccountEditorChange({ ...accountEditor, regionTag: event.target.value })}
-              disabled={busy}
-              placeholder="大区(可选)"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button className="pill-btn w-full" onClick={onRenameAccount} disabled={busy || !accountEditor.name.trim()}>
-                保存账号
-              </button>
-              <button className="pill-btn w-full" onClick={onDeleteAccount} disabled={busy || state.accounts.length <= 1}>
-                删除账号
-              </button>
-            </div>
+        <p className="panel-kicker !tracking-[0.08em]">Context</p>
+        <h2 className="panel-title !mt-1 !text-sm">当前上下文</h2>
+        <div className="mt-3 grid gap-2">
+          <div className="context-card">
+            <p className="context-label">账号</p>
+            <p className="context-value">{selectedAccount?.name ?? "--"}</p>
+            <p className="context-meta">{selectedAccount?.regionTag ? `${selectedAccount.regionTag} · ` : ""}角色 {selectedAccountCharacterCount}/{maxCharactersPerAccount}</p>
           </div>
-        ) : null}
+          <div className="context-card">
+            <p className="context-label">角色</p>
+            <p className="context-value">{selected.name}</p>
+            <p className="context-meta">奥德 {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}</p>
+          </div>
+        </div>
       </div>
 
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold tracking-wide text-slate-200">角色管理</p>
-        <p className="text-xs text-slate-300">
-          {selectedAccountCharacterCount}/{maxCharactersPerAccount}
-        </p>
-      </div>
-      <div className="mb-4 space-y-2">
-        <input
-          className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-          placeholder={selectedAccount ? `新增到 ${selectedAccount.name}` : "新角色名称"}
-          value={newCharacterName}
-          onChange={(event) => onNewCharacterNameChange(event.target.value)}
-          disabled={busy || !selectedAccount}
-        />
-        <button
-          className="pill-btn w-full"
-          onClick={onAddCharacter}
-          disabled={busy || !selectedAccount || !newCharacterName.trim() || !canAddCharacterInSelectedAccount}
-        >
-          新增角色
-        </button>
-      </div>
+      <details key={compactManagement ? "account-compact" : "account-open"} className="mb-4 group" open={!compactManagement}>
+        <summary className="details-summary soft-card px-4 py-3">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Accounts</p>
+            <h2 className="panel-title !mt-1 !text-sm">账号管理</h2>
+          </div>
+          <span className="pill-btn">
+            <span className="group-open:hidden">展开</span>
+            <span className="hidden group-open:inline">收起</span>
+          </span>
+        </summary>
+        <div className="mt-3 space-y-3">
+          <div className="space-y-2">
+            <input className="field-control" placeholder="新账号名称" value={newAccountName} onChange={(event) => onNewAccountNameChange(event.target.value)} disabled={busy} />
+            <input className="field-control" placeholder="大区(可选)" value={newAccountRegion} onChange={(event) => onNewAccountRegionChange(event.target.value)} disabled={busy} />
+            <button className="pill-btn w-full" onClick={onAddAccount} disabled={busy || !newAccountName.trim()}>
+              新增账号
+            </button>
+          </div>
 
-      <div className="space-y-2">
-        {accountCharacters.map((item) => {
-          const active = item.id === selected.id;
-          return (
-            <div
-              key={item.id}
-              className={`group flex items-center gap-2 rounded-2xl border px-3 py-2 transition ${
-                active ? "border-white/25 bg-white/15" : "border-white/10 bg-black/20 hover:border-white/20 hover:bg-white/10"
-              }`}
-            >
-              <button onClick={() => onSelectCharacter(item.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" disabled={busy}>
-                <div className="avatar-ring">
-                  <span className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{item.name}</p>
-                  <p className="truncate text-xs text-slate-300">
-                    奥德 {item.energy.baseCurrent}(+{item.energy.bonusCurrent})/{item.energy.baseCap}
+          <div className="max-h-40 space-y-2 overflow-auto pr-1">
+            {state.accounts.map((account) => {
+              const active = selectedAccount?.id === account.id;
+              const count = state.characters.filter((item) => item.accountId === account.id).length;
+              return (
+                <button key={account.id} onClick={() => onSelectAccount(account.id)} className={`context-list-item ${active ? "context-list-item-active" : ""}`} disabled={busy}>
+                  <p className="truncate text-sm font-medium">{account.name}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {account.regionTag ? `${account.regionTag} | ` : ""}
+                    角色 {count}/{maxCharactersPerAccount}
                   </p>
-                </div>
-              </button>
-              <button
-                className={`rounded-md px-2 py-1 text-sm ${item.isStarred ? "text-amber-300" : "text-slate-400 hover:text-slate-200"}`}
-                title={item.isStarred ? "取消星标" : "设为星标"}
-                onClick={() => onToggleCharacterStar(item.id, !item.isStarred)}
-                disabled={busy}
-              >
-                {item.isStarred ? "★" : "☆"}
-              </button>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedAccount ? (
+            <div className="space-y-2">
+              <input className="field-control" value={accountEditor.name} onChange={(event) => onAccountEditorChange({ ...accountEditor, name: event.target.value })} disabled={busy} placeholder="账号名称" />
+              <input className="field-control" value={accountEditor.regionTag} onChange={(event) => onAccountEditorChange({ ...accountEditor, regionTag: event.target.value })} disabled={busy} placeholder="大区(可选)" />
+              <div className="grid grid-cols-2 gap-2">
+                <button className="pill-btn w-full" onClick={onRenameAccount} disabled={busy || !accountEditor.name.trim()}>
+                  保存账号
+                </button>
+                <button className="pill-btn w-full" onClick={onDeleteAccount} disabled={busy || state.accounts.length <= 1}>
+                  删除账号
+                </button>
+              </div>
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </div>
+      </details>
+
+      <details key={compactManagement ? "character-compact" : "character-open"} className="group" open={!compactManagement}>
+        <summary className="details-summary soft-card px-4 py-3">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Characters</p>
+            <h2 className="panel-title !mt-1 !text-sm">角色列表</h2>
+          </div>
+          <span className="pill-btn pill-static">
+            {selectedAccountCharacterCount}/{maxCharactersPerAccount}
+          </span>
+        </summary>
+        <div className="mt-3">
+          <div className="mb-3 space-y-2">
+            <input
+              className="field-control"
+              placeholder={selectedAccount ? `新增到 ${selectedAccount.name}` : "新角色名称"}
+              value={newCharacterName}
+              onChange={(event) => onNewCharacterNameChange(event.target.value)}
+              disabled={busy || !selectedAccount}
+            />
+            <button className="pill-btn w-full" onClick={onAddCharacter} disabled={busy || !selectedAccount || !newCharacterName.trim() || !canAddCharacterInSelectedAccount}>
+              新增角色
+            </button>
+          </div>
+          <div className="space-y-2">
+            {accountCharacters.map((item) => {
+              const active = item.id === selected.id;
+              return (
+                <div key={item.id} className={`flex items-center gap-2 rounded-2xl border border-[rgba(15,23,42,0.08)] bg-[rgba(250,250,246,0.88)] px-3 py-2 transition ${active ? "border-[rgba(15,143,111,0.18)] bg-[rgba(15,143,111,0.06)]" : ""}`}>
+                  <button onClick={() => onSelectCharacter(item.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left" disabled={busy}>
+                    <div className="avatar-ring">
+                      <span className="avatar-dot">{item.name.slice(0, 1).toUpperCase()}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{item.name}</p>
+                      <p className="truncate text-xs text-slate-500">
+                        奥德 {item.energy.baseCurrent}(+{item.energy.bonusCurrent})/{item.energy.baseCap}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    className={`icon-btn ${item.isStarred ? "!text-amber-500" : ""}`}
+                    title={item.isStarred ? "取消星标" : "设为星标"}
+                    onClick={() => onToggleCharacterStar(item.id, !item.isStarred)}
+                    disabled={busy}
+                  >
+                    {item.isStarred ? "★" : "☆"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </details>
     </aside>
   );
 }

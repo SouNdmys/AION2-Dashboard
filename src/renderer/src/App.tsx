@@ -229,6 +229,10 @@ export function App(): JSX.Element {
 
   const sanctumRaidTask = taskById.get("sanctum_raid");
   const sanctumBoxTask = taskById.get("sanctum_box");
+  const showRightSidebar = viewMode === "dashboard";
+  const appGridClass = showRightSidebar
+    ? "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-6"
+    : "grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)] 2xl:gap-6";
 
   const canAddCharacterInSelectedAccount = selectedAccountCharacterCount < MAX_CHARACTERS_PER_ACCOUNT;
   const {
@@ -327,8 +331,8 @@ export function App(): JSX.Element {
     return (
       <main className="min-h-screen p-8 text-slate-900">
         <div className="glass-panel mx-auto mt-20 max-w-md rounded-[28px] p-7 text-center">
-          <p className="text-sm text-slate-200">正在加载 AION 2 Dashboard...</p>
-          {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
+          <p className="text-sm text-slate-700">正在加载 AION 2 Dashboard...</p>
+          {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
         </div>
       </main>
     );
@@ -339,17 +343,17 @@ export function App(): JSX.Element {
       <main className="min-h-screen p-8 text-slate-900">
         <div className="hero-strip mx-auto mt-16 max-w-xl rounded-[32px] p-7">
           <h1 className="text-xl font-semibold">AION 2 Dashboard</h1>
-          <p className="mt-2 text-sm text-slate-300">当前没有任何账号或角色数据。请先创建你的第一个账号。</p>
+          <p className="mt-2 text-sm text-slate-500">当前没有任何账号或角色数据。请先创建你的第一个账号。</p>
           <div className="mt-4 space-y-2">
             <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               placeholder="新账号名称"
               value={newAccountName}
               onChange={(event) => setNewAccountName(event.target.value)}
               disabled={busy}
             />
             <input
-              className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+              className="field-control"
               placeholder="大区(可选)"
               value={newAccountRegion}
               onChange={(event) => setNewAccountRegion(event.target.value)}
@@ -359,8 +363,8 @@ export function App(): JSX.Element {
               创建第一个账号
             </button>
           </div>
-          {infoMessage ? <p className="mt-3 text-xs text-emerald-300">{infoMessage}</p> : null}
-          {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
+          {infoMessage ? <p className="banner-positive mt-3 rounded-xl px-3 py-2 text-xs">{infoMessage}</p> : null}
+          {error ? <p className="banner-danger mt-2 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
         </div>
       </main>
     );
@@ -368,7 +372,7 @@ export function App(): JSX.Element {
 
   return (
     <main className="min-h-screen p-6 text-slate-900">
-      <div className="grid min-h-[calc(100vh-3rem)] w-full grid-cols-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_340px] 2xl:grid-cols-[340px_minmax(0,1fr)_400px] 2xl:gap-6">
+      <div className={appGridClass}>
         <DashboardLeftSidebar
           busy={busy}
           state={state}
@@ -557,23 +561,25 @@ export function App(): JSX.Element {
 
         </section>
 
-        <DashboardRightSidebar
-          busy={busy}
-          historyCount={state.history.length}
-          undoSteps={undoSteps}
-          onUndoStepsChange={setUndoSteps}
-          onUndoSingleStep={onUndoSingleStep}
-          onUndoMultiStep={onUndoMultiStep}
-          onClearHistory={onClearHistory}
-          viewMode={viewMode}
-          dashboardMode={dashboardMode}
-          countdownItems={countdownItems}
-          nowMs={nowMs}
-          priorityTodoItems={priorityTodoItems}
-          historyRows={historyRows}
-          characterNameById={characterNameById}
-          pendingLabels={selectedPendingLabels}
-        />
+        {showRightSidebar ? (
+          <DashboardRightSidebar
+            busy={busy}
+            historyCount={state.history.length}
+            undoSteps={undoSteps}
+            onUndoStepsChange={setUndoSteps}
+            onUndoSingleStep={onUndoSingleStep}
+            onUndoMultiStep={onUndoMultiStep}
+            onClearHistory={onClearHistory}
+            viewMode={viewMode}
+            dashboardMode={dashboardMode}
+            countdownItems={countdownItems}
+            nowMs={nowMs}
+            priorityTodoItems={priorityTodoItems}
+            historyRows={historyRows}
+            characterNameById={characterNameById}
+            pendingLabels={selectedPendingLabels}
+          />
+        ) : null}
       </div>
 
       <DashboardDialogModal

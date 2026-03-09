@@ -24,9 +24,9 @@ const WORKSHOP_CARD_HEADINGS = [
 ];
 
 const CARD_REVEAL_ACTIONS = {
-  OCR抓价器: "专业模式",
-  市场分析器: "专业模式",
-  库存管理: "专业模式",
+  OCR抓价器: "专业工具",
+  市场分析器: "专业工具",
+  库存管理: "专业工具",
 };
 
 function ensureDir(dirPath) {
@@ -64,7 +64,7 @@ async function captureCard(page, heading, filePath) {
   const headingLocator = page.getByRole("heading", { name: heading, exact: false }).first();
   const revealAction = CARD_REVEAL_ACTIONS[heading];
   if (!(await headingLocator.isVisible().catch(() => false)) && revealAction) {
-    await page.getByText(revealAction, { exact: false }).first().click();
+    await page.locator("summary").filter({ hasText: revealAction }).first().click();
   }
   await headingLocator.scrollIntoViewIfNeeded();
   const articleLocator = headingLocator.locator("xpath=ancestor::article[1]");
@@ -131,7 +131,7 @@ async function run() {
       }
 
       await clickToolbar(page, "工坊");
-      await waitForVisibleText(page, "工坊（内置配方库）");
+      await waitForVisibleText(page, "装备制作工作台");
       await ensureWorkshopSimulationReady(page);
       {
         const filePath = path.join(OUTPUT_DIR, `${viewport.key}-workshop-overview.jpg`);

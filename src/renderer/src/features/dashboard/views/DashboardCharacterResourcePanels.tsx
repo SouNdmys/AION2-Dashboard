@@ -71,7 +71,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             {selected.energy.baseCurrent}(+{selected.energy.bonusCurrent})/{selected.energy.baseCap}
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full border border-white/10 bg-black/25">
+        <div className="h-2 overflow-hidden rounded-full border border-[rgba(15,23,42,0.08)] bg-[rgba(15,23,42,0.06)]">
           <div
             className="flex h-full"
             style={{
@@ -110,11 +110,11 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
         </p>
         <p className="summary-note mt-1">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
         {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
-          <p className="mt-1 text-xs text-amber-300">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
+          <p className="banner-warning mt-1 rounded-lg px-3 py-2 text-xs">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
         ) : null}
         <div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
           <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control"
             value={shopAodePurchaseUsedInput}
             onChange={(event) => onShopAodePurchaseUsedInputChange(event.target.value)}
             disabled={busy}
@@ -126,7 +126,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             ))}
           </select>
           <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control"
             value={shopDailyDungeonTicketPurchaseUsedInput}
             onChange={(event) => onShopDailyDungeonTicketPurchaseUsedInputChange(event.target.value)}
             disabled={busy}
@@ -159,7 +159,7 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
           <select
-            className="rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+            className="field-control"
             value={transformAodeUsedInput}
             onChange={(event) => onTransformAodeUsedInputChange(event.target.value)}
             disabled={busy}
