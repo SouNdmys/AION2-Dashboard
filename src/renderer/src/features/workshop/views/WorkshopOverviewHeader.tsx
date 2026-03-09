@@ -16,17 +16,13 @@ export function WorkshopOverviewHeader(props: WorkshopOverviewHeaderProps): JSX.
         <div>
           <p className="panel-kicker">Workshop</p>
           <h3 className="panel-title !text-[1.2rem]">工坊（内置配方库）</h3>
-          <p className="panel-subtitle">围绕一次制作决策组织信息，价格、库存、历史和模拟结果都在同一上下文里同步。</p>
+          <p className="panel-subtitle">默认只保留装备制作主流程，抓价、市场分析、历史价格和库存修正全部进入展开区。</p>
         </div>
         <span className="pill-btn pill-static">制作主流程</span>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
-        <div className="metric-card p-4">物品数: {state.items.length}</div>
-        <div className="metric-card p-4">配方数: {state.recipes.length}</div>
-        <div className="metric-card p-4">价格快照: {state.prices.length}</div>
-        <div className="metric-card p-4">库存记录: {state.inventory.length}</div>
-        <div className="metric-card p-4 text-amber-200">重点关注: {starCount}</div>
-      </div>
+      <p className="mt-4 summary-note">
+        {state.items.length} 个物品 · {state.recipes.length} 条配方 · {state.prices.length} 条价格快照 · {state.inventory.length} 条库存记录 · 重点关注 {starCount} 项
+      </p>
       {message ? <p className="mt-3 text-xs text-emerald-300">{message}</p> : null}
       {error ? <p className="mt-3 text-xs text-red-300">{error}</p> : null}
     </article>

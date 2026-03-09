@@ -24,6 +24,8 @@ const WORKSHOP_CARD_HEADINGS = [
 ];
 
 const CARD_REVEAL_ACTIONS = {
+  OCR抓价器: "专业模式",
+  市场分析器: "专业模式",
   库存管理: "专业模式",
 };
 

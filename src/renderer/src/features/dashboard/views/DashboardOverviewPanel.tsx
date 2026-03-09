@@ -61,6 +61,44 @@ export interface DashboardOverviewRow {
   readyBuckets: number;
 }
 
+interface OverviewMetricChip {
+  key: string;
+  label: string;
+  current: number;
+  total: number;
+  urgent: boolean;
+}
+
+function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalWindow: boolean): OverviewMetricChip[] {
+  return [
+    { key: "expedition", label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
+    { key: "transcendence", label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal, urgent: false },
+    { key: "sanctum_raid", label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
+    { key: "sanctum_box", label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
+    { key: "daily_dungeon", label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
+    { key: "nightmare", label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
+    { key: "awakening", label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },
+    { key: "suppression", label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal, urgent: isWeeklyCriticalWindow },
+    { key: "mini_game", label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal, urgent: false },
+    { key: "spirit", label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal, urgent: false },
+    { key: "daily_mission", label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal, urgent: true },
+    { key: "weekly_mission", label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal, urgent: isWeeklyCriticalWindow },
+    { key: "abyss_lower", label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal, urgent: false },
+    { key: "abyss_middle", label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal, urgent: false },
+    { key: "corridor_lower", label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal, urgent: true },
+    { key: "corridor_middle", label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal, urgent: true },
+    { key: "shop_aode", label: "商店-奥德", current: entry.aodeShopAodePurchaseRemaining, total: entry.aodeShopPurchaseLimit, urgent: isWeeklyCriticalWindow },
+    {
+      key: "shop_ticket",
+      label: "商店-副本券",
+      current: entry.aodeShopDailyDungeonTicketPurchaseRemaining,
+      total: entry.aodeShopPurchaseLimit,
+      urgent: isWeeklyCriticalWindow,
+    },
+    { key: "transform_aode", label: "变换-奥德", current: entry.aodeTransformAodeRemaining, total: entry.aodeTransformLimit, urgent: isWeeklyCriticalWindow },
+  ];
+}
+
 interface DashboardOverviewPanelProps {
   visible: boolean;
   busy: boolean;
@@ -275,6 +313,12 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
       </p>
       <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
         {overviewRowsFiltered.map((entry) => {
+          const allMetrics = buildOverviewMetricChips(entry, isWeeklyCriticalWindow);
+          const actionableMetrics = allMetrics
+            .filter((metric) => metric.current > 0)
+            .sort((left, right) => Number(right.urgent) - Number(left.urgent) || right.current - left.current || left.label.localeCompare(right.label, "zh-CN"));
+          const visibleMetrics = actionableMetrics.slice(0, 8);
+          const hiddenMetricCount = Math.max(0, actionableMetrics.length - visibleMetrics.length);
           const filteredReadyCount =
             overviewTaskFilter === "dungeon"
               ? entry.dungeonReadyBuckets
@@ -294,7 +338,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
               onDragOver={(event) => onOverviewCardDragOver(event, entry.character.id)}
               onDrop={(event) => onOverviewCardDrop(event, entry.character.id)}
               onDragEnd={onOverviewCardDragEnd}
-              className={`rounded-2xl border bg-white/5 p-3 text-left transition hover:border-white/30 hover:bg-white/10 ${
+              className={`rounded-3xl border bg-white/5 p-4 text-left transition hover:border-white/30 hover:bg-white/10 ${
                 dragging ? "border-cyan-300/70 opacity-65" : dragOver ? "border-cyan-200/70 bg-cyan-500/10" : "border-white/15"
               } ${dragEnabled ? "cursor-move" : ""}`}
             >
@@ -311,13 +355,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${getUrgentBoardToneClass(
-                      entry.aodeBaseEnergyCurrent,
-                      entry.aodeBaseEnergyCap,
-                      entry.aodeBaseEnergyOverflow,
-                    )}`}
-                  >
+                  <span className={`text-xs font-semibold ${getUrgentBoardToneClass(entry.aodeBaseEnergyCurrent, entry.aodeBaseEnergyCap, entry.aodeBaseEnergyOverflow)}`}>
                     奥德 {entry.aodeBaseEnergyCurrent}(+{entry.aodeBonusEnergyCurrent})/{entry.aodeBaseEnergyCap}
                   </span>
                   <span className="text-xs text-cyan-200">
@@ -326,84 +364,23 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                   </span>
                 </div>
               </div>
-              <div className="mt-2 space-y-2">
+              <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
-                    { label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal, urgent: false },
-                    { label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
-                    { label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
-                  ].map((metric) => (
-                    <span
-                      key={`dungeon-${entry.character.id}-${metric.label}`}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
-                    >
-                      {metric.label} {formatCounter(metric.current, metric.total)}
-                    </span>
-                  ))}
+                  {visibleMetrics.length > 0 ? (
+                    visibleMetrics.map((metric) => (
+                      <span key={`${entry.character.id}-${metric.key}`} className={getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}>
+                        {metric.label} {formatCounter(metric.current, metric.total)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="summary-note">当前主要项目已基本清空，可直接进入角色确认细节。</span>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
-                    { label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
-                    { label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },
-                    { label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal, urgent: isWeeklyCriticalWindow },
-                    { label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal, urgent: false },
-                    { label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal, urgent: false },
-                  ].map((metric) => (
-                    <span
-                      key={`weekly-${entry.character.id}-${metric.label}`}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
-                    >
-                      {metric.label} {formatCounter(metric.current, metric.total)}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal, urgent: true },
-                    { label: "每周指令", current: entry.weeklyMissionCurrent, total: entry.weeklyMissionTotal, urgent: isWeeklyCriticalWindow },
-                    { label: "深渊下层", current: entry.abyssLowerCurrent, total: entry.abyssLowerTotal, urgent: false },
-                    { label: "深渊中层", current: entry.abyssMiddleCurrent, total: entry.abyssMiddleTotal, urgent: false },
-                    { label: "回廊下层", current: entry.corridorLowerCurrent, total: entry.corridorLowerTotal, urgent: true },
-                    { label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal, urgent: true },
-                  ].map((metric) => (
-                    <span
-                      key={`mission-${entry.character.id}-${metric.label}`}
-                      className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(metric.current, metric.total, metric.urgent)}`}
-                    >
-                      {metric.label} {formatCounter(metric.current, metric.total)}
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
-                      entry.aodeShopAodePurchaseRemaining,
-                      entry.aodeShopPurchaseLimit,
-                      isWeeklyCriticalWindow,
-                    )}`}
-                  >
-                    商店-奥德 {formatCounter(entry.aodeShopAodePurchaseUsed, entry.aodeShopPurchaseLimit)}
-                  </span>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
-                      entry.aodeShopDailyDungeonTicketPurchaseRemaining,
-                      entry.aodeShopPurchaseLimit,
-                      isWeeklyCriticalWindow,
-                    )}`}
-                  >
-                    商店-副本券 {formatCounter(entry.aodeShopDailyDungeonTicketPurchaseUsed, entry.aodeShopPurchaseLimit)}
-                  </span>
-                  <span
-                    className={`rounded-full border px-2.5 py-0.5 text-xs ${getUrgentBoardToneClass(
-                      entry.aodeTransformAodeRemaining,
-                      entry.aodeTransformLimit,
-                      isWeeklyCriticalWindow,
-                    )}`}
-                  >
-                    变换-奥德 {formatCounter(entry.aodeTransformAodeUsed, entry.aodeTransformLimit)}
-                  </span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="summary-note">副本可执行 {entry.dungeonReadyBuckets}</span>
+                  <span className="summary-note">周常可执行 {entry.weeklyReadyBuckets}</span>
+                  <span className="summary-note">使命可执行 {entry.missionReadyBuckets}</span>
+                  <span className="summary-note">已折叠 {hiddenMetricCount} 项次级信息</span>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2">

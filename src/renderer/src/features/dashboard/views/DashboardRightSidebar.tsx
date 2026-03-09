@@ -1,7 +1,6 @@
 import type { OperationLogEntry } from "../../../../../shared/types";
 import type { DashboardMode, PriorityTodoItem, ViewMode } from "../dashboard-types";
 import { DashboardCountdownPanel, DashboardHistoryPanel, DashboardPendingPanel, DashboardPriorityTodoPanel } from "./DashboardSidebarPanels";
-import { WorkshopSidebarHistoryCard } from "../../../WorkshopSidebarHistoryCard";
 
 interface CountdownItem {
   key: string;
@@ -19,10 +18,6 @@ interface DashboardRightSidebarProps {
   onClearHistory: () => void;
   viewMode: ViewMode;
   dashboardMode: DashboardMode;
-  workshopHistoryJumpItemId: string | null;
-  workshopHistoryJumpSnapshotId: string | null;
-  workshopHistoryJumpNonce: number;
-  onWorkshopPriceDataChanged: () => void;
   countdownItems: CountdownItem[];
   nowMs: number;
   priorityTodoItems: PriorityTodoItem[];
@@ -42,10 +37,6 @@ export function DashboardRightSidebar(props: DashboardRightSidebarProps): JSX.El
     onClearHistory,
     viewMode,
     dashboardMode,
-    workshopHistoryJumpItemId,
-    workshopHistoryJumpSnapshotId,
-    workshopHistoryJumpNonce,
-    onWorkshopPriceDataChanged,
     countdownItems,
     nowMs,
     priorityTodoItems,
@@ -78,15 +69,6 @@ export function DashboardRightSidebar(props: DashboardRightSidebarProps): JSX.El
           </button>
         </div>
       </article>
-
-      {viewMode === "workshop" ? (
-        <WorkshopSidebarHistoryCard
-          focusItemId={workshopHistoryJumpItemId}
-          focusSnapshotId={workshopHistoryJumpSnapshotId}
-          focusNonce={workshopHistoryJumpNonce}
-          onPriceDataChanged={onWorkshopPriceDataChanged}
-        />
-      ) : null}
 
       <DashboardCountdownPanel visible={viewMode === "dashboard"} countdownItems={countdownItems} nowMs={nowMs} />
       <DashboardPriorityTodoPanel visible={viewMode === "dashboard"} priorityTodoItems={priorityTodoItems} />

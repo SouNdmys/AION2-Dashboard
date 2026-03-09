@@ -154,30 +154,30 @@ export function formatCounter(current: number, total: number): string {
 
 export function getBoardToneClass(current: number, total: number): string {
   if (current <= 0) {
-    return "border-slate-500/40 bg-slate-500/10 text-slate-300";
+    return "semantic-chip semantic-chip-muted";
   }
   const ratio = total > 0 ? current / total : 0;
   if (ratio >= 0.5) {
-    return "border-cyan-300/45 bg-cyan-400/15 text-cyan-100";
+    return "semantic-chip semantic-chip-ready";
   }
-  return "border-amber-300/45 bg-amber-400/15 text-amber-100";
+  return "semantic-chip semantic-chip-watch";
 }
 
 export function getUrgentBoardToneClass(current: number, total: number, urgent: boolean): string {
   if (urgent && current > 0) {
-    return "border-rose-300/55 bg-rose-500/20 text-rose-100";
+    return "semantic-chip semantic-chip-urgent";
   }
   return getBoardToneClass(current, total);
 }
 
 export function getPriorityToneClass(tone: PriorityTone): string {
   if (tone === "high") {
-    return "border-rose-300/45 bg-rose-400/15 text-rose-100";
+    return "semantic-chip semantic-chip-urgent";
   }
   if (tone === "medium") {
-    return "border-amber-300/45 bg-amber-400/15 text-amber-100";
+    return "semantic-chip semantic-chip-watch";
   }
-  return "border-cyan-300/45 bg-cyan-400/15 text-cyan-100";
+  return "semantic-chip semantic-chip-ready";
 }
 
 export function buildCountOptions(min: number, max: number, currentValue?: string): string[] {

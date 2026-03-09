@@ -545,6 +545,10 @@ export function App(): JSX.Element {
           {viewMode === "workshop" ? (
             <WorkshopView
               externalPriceChangeNonce={workshopPriceChangeNonce}
+              historyFocusItemId={workshopHistoryJumpItemId}
+              historyFocusSnapshotId={workshopHistoryJumpSnapshotId}
+              historyFocusNonce={workshopHistoryJumpNonce}
+              onPriceDataChanged={() => setWorkshopPriceChangeNonce((prev) => prev + 1)}
               onJumpToHistoryManager={({ itemId, snapshotId }) => {
                 setViewMode("workshop");
                 setWorkshopHistoryJumpItemId(itemId);
@@ -581,10 +585,6 @@ export function App(): JSX.Element {
           onClearHistory={onClearHistory}
           viewMode={viewMode}
           dashboardMode={dashboardMode}
-          workshopHistoryJumpItemId={workshopHistoryJumpItemId}
-          workshopHistoryJumpSnapshotId={workshopHistoryJumpSnapshotId}
-          workshopHistoryJumpNonce={workshopHistoryJumpNonce}
-          onWorkshopPriceDataChanged={() => setWorkshopPriceChangeNonce((prev) => prev + 1)}
           countdownItems={countdownItems}
           nowMs={nowMs}
           priorityTodoItems={priorityTodoItems}
