@@ -119,6 +119,47 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     sellZoneRows,
   } = props;
 
+  const historyPointCount = (historyServerResult?.sampleCount ?? 0) + (historyWorldResult?.sampleCount ?? 0);
+  const suspectCount = (historyServerResult?.suspectCount ?? 0) + (historyWorldResult?.suspectCount ?? 0);
+  const latestServerCapturedAt = historyServerResult?.latestCapturedAt ?? null;
+  const latestWorldCapturedAt = historyWorldResult?.latestCapturedAt ?? null;
+  const currentItemSignalRow =
+    [...triggeredSignalRows, ...buyZoneRows, ...sellZoneRows].find((row) => row.itemId === historyItemId) ?? null;
+  const trendSummaryLabel = currentItemSignalRow ? trendTagLabel(currentItemSignalRow.trendTag) : "观察";
+  const trendSummaryClass =
+    currentItemSignalRow?.trendTag === "buy-zone"
+      ? "text-emerald-300"
+      : currentItemSignalRow?.trendTag === "sell-zone"
+        ? "text-amber-300"
+        : "text-slate-200";
+  const anomalySummary =
+    suspectCount > 0
+      ? `发现 ${suspectCount} 个可疑点`
+      : historyHasLoaded
+        ? "当前未发现异常提醒"
+        : "等待历史样本";
+  const currentSignalSummary = currentItemSignalRow
+    ? `${formatMarketLabel(currentItemSignalRow.market)} | 星期偏离 ${toSignedPercent(currentItemSignalRow.deviationRatioFromWeekdayAverage)}`
+    : signalResult?.triggeredCount
+      ? `全局已触发 ${signalResult.triggeredCount} 条周期信号`
+      : "当前物品暂无触发中的周期信号";
+  const suspectHighlights = [
+    ...(historyServerResult?.suspectPoints ?? []).map((point) => ({
+      market: "server" as const,
+      id: point.id,
+      capturedAt: point.capturedAt,
+      unitPrice: point.unitPrice,
+    })),
+    ...(historyWorldResult?.suspectPoints ?? []).map((point) => ({
+      market: "world" as const,
+      id: point.id,
+      capturedAt: point.capturedAt,
+      unitPrice: point.unitPrice,
+    })),
+  ]
+    .sort((left, right) => new Date(right.capturedAt).getTime() - new Date(left.capturedAt).getTime())
+    .slice(0, 4);
+
   return (
     <article className="order-3 glass-panel rounded-2xl bg-[rgba(20,20,20,0.58)] p-4 backdrop-blur-2xl backdrop-saturate-150">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -158,20 +199,43 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         </div>
       {filteredHistoryItems.length === 0 ? <p className="mt-2 text-xs text-amber-300">当前搜索条件下没有可查询物品。</p> : null}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-        <div className="data-pill">伺服器最新: {formatGold(historyServerResult?.latestPrice ?? null)}</div>
-        <div className="data-pill">世界最新: {formatGold(historyWorldResult?.latestPrice ?? null)}</div>
-        <div className="data-pill text-emerald-300">进货点: {signalResult?.buyZoneCount ?? 0}</div>
-        <div className="data-pill text-amber-300">出货点: {signalResult?.sellZoneCount ?? 0}</div>
+      <div className="mt-3 grid grid-cols-1 gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
+        <div className="data-pill">
+          <p className="text-[11px] text-slate-400">伺服器最近价格</p>
+          <p className="mt-1 text-sm text-slate-100">{formatGold(historyServerResult?.latestPrice ?? null)}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestServerCapturedAt)}</p>
+        </div>
+        <div className="data-pill">
+          <p className="text-[11px] text-slate-400">世界最近价格</p>
+          <p className="mt-1 text-sm text-slate-100">{formatGold(historyWorldResult?.latestPrice ?? null)}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestWorldCapturedAt)}</p>
+        </div>
+        <div className="data-pill">
+          <p className="text-[11px] text-slate-400">趋势方向</p>
+          <p className={`mt-1 text-sm ${trendSummaryClass}`}>{trendSummaryLabel}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{currentSignalSummary}</p>
+        </div>
+        <div className="data-pill">
+          <p className="text-[11px] text-slate-400">异常提醒</p>
+          <p className={`mt-1 text-sm ${suspectCount > 0 ? "text-rose-300" : "text-slate-100"}`}>{anomalySummary}</p>
+          <p className="mt-1 text-[11px] text-slate-400">当前样本 {historyPointCount}</p>
+        </div>
       </div>
-      {historyHasLoaded ? (
-        <p className="mt-2 text-xs text-slate-300">
-          当前查询区间内，伺服器样本 {historyServerResult?.sampleCount ?? 0} 条，世界样本 {historyWorldResult?.sampleCount ?? 0} 条。
-          {signalResult?.triggeredCount ? ` 已触发 ${signalResult.triggeredCount} 条周期信号。` : " 当前没有触发中的周期信号。"}
-        </p>
-      ) : (
-        <p className="mt-2 text-xs text-slate-300">先选物品，系统会自动同步最近价格、历史样本和周期信号。</p>
-      )}
+      {historyHasLoaded ? <p className="mt-2 text-xs text-slate-300">默认首屏只保留结论摘要；曲线、筛选和信号明细已收进下方展开区。</p> : <p className="mt-2 text-xs text-slate-300">先选物品，系统会自动同步最近价格、历史样本和周期信号。</p>}
+      {suspectHighlights.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {suspectHighlights.map((point) => (
+            <button
+              key={`history-suspect-highlight-${point.market}-${point.id}`}
+              className="pill-btn !border-rose-300/50 !text-rose-200"
+              onClick={() => onJumpHistoryManagerForSnapshot(point.id, point.capturedAt)}
+              disabled={busy}
+            >
+              {formatMarketLabel(point.market)} {formatDateLabel(point.capturedAt)} {formatGold(point.unitPrice)}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <details className="group mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">

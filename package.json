@@ -18,6 +18,7 @@
     "capture:ui-baseline:phase0": "node scripts/ui-baseline-phase0-capture.mjs",
     "capture:ui-baseline:phase1": "node scripts/ui-baseline-phase0-capture.mjs --out-dir artifacts/ui-baseline/phase1",
     "capture:ui-baseline:phase2": "node scripts/ui-baseline-phase0-capture.mjs --out-dir artifacts/ui-baseline/phase2",
+    "capture:ui-baseline:phase3": "node scripts/ui-baseline-phase0-capture.mjs --out-dir artifacts/ui-baseline/phase3",
     "test:smoke": "npm run test:unit && npm run build && npm run smoke:ui",
     "check:prepackage": "node scripts/prepackage-check.mjs",
     "check:release-yml": "node scripts/check-release-latest-yml.mjs",
