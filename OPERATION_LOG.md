@@ -7,6 +7,8 @@
   - `PROJECT_REVIEW.md`
 - 新增正式版个人开发手册：
   - `MY_DEV_PLAYBOOK.md`
+- 新增一页式新项目启动清单：
+  - `NEXT_PROJECT_START_CHECKLIST.md`
 - 同时保留原提纲版文档：
   - `PROJECT_REVIEW_OUTLINE.md`
   - `MY_DEV_PLAYBOOK_OUTLINE.md`
