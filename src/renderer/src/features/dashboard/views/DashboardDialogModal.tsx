@@ -250,7 +250,7 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
           <>
             <h4 className="text-base font-semibold">圣域手动设定</h4>
             <p className="mt-2 text-xs text-slate-300">
-              说明: 挑战剩余 = 本周还能打几次圣域挑战（上限 4）；开箱剩余 = 本周还能开几次奖励箱（上限 2）。
+              说明: 卢德莱与侵蚀净化所都按独立周本处理，两个圣域本周各剩余多少次就填多少（上限都是 2）。
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <select
@@ -259,9 +259,9 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
                 onChange={(event) => onDialogChange({ ...dialog, raidRemaining: event.target.value })}
                 disabled={busy}
               >
-                {buildCountOptions(0, 4, dialog.raidRemaining).map((value) => (
+                {buildCountOptions(0, 2, dialog.raidRemaining).map((value) => (
                   <option key={`dialog-sanctum-raid-${value}`} value={value}>
-                    {value}
+                    卢德莱 {value}
                   </option>
                 ))}
               </select>
@@ -273,7 +273,7 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
               >
                 {buildCountOptions(0, 2, dialog.boxRemaining).map((value) => (
                   <option key={`dialog-sanctum-box-${value}`} value={value}>
-                    {value}
+                    侵蚀净化所 {value}
                   </option>
                 ))}
               </select>

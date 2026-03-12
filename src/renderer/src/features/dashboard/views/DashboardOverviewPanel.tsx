@@ -144,8 +144,8 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
   return [
     { key: "expedition", label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
     { key: "transcendence", label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal, urgent: false },
-    { key: "sanctum_raid", label: "圣域", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
-    { key: "sanctum_box", label: "开箱", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
+    { key: "sanctum_raid", label: "卢德莱", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
+    { key: "sanctum_box", label: "侵蚀净化所", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
     { key: "daily_dungeon", label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
     { key: "nightmare", label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
     { key: "awakening", label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },

@@ -40,7 +40,7 @@ describe("store/store-domain-counters", () => {
     expect(next[0].activities.dailyDungeonTicketStored).toBe(30);
     expect(next[0].activities.miniGameRemaining).toBe(14);
     expect(next[0].activities.spiritInvasionRemaining).toBe(7);
-    expect(next[0].activities.sanctumRaidRemaining).toBe(4);
+    expect(next[0].activities.sanctumRaidRemaining).toBe(2);
     expect(next[0].activities.sanctumBoxRemaining).toBe(2);
   });
 

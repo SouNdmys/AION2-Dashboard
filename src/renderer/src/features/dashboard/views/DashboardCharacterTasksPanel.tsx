@@ -44,10 +44,16 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
         <article key={category} className="task-section space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <h3 className="text-sm font-semibold tracking-wide text-slate-900">{category}任务</h3>
-            <span className="summary-note">
-              {(groupedTasks[category] ?? []).length}
-              {category === "副本" && sanctumRaidTask && sanctumBoxTask ? " + 圣域" : ""} 项
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="summary-note">
+                {(groupedTasks[category] ?? []).length + (category === "副本" && sanctumRaidTask && sanctumBoxTask ? 2 : 0)} 项
+              </span>
+              {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
+                <button className="pill-btn" onClick={onOpenSanctumEditDialog} disabled={busy}>
+                  圣域设定
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
             {(groupedTasks[category] ?? []).map((task) => {
@@ -127,32 +133,42 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
               );
             })}
             {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
-              <div className="task-card">
-                <div className="task-card-header">
-                  <div>
-                    <h3 className="text-sm font-semibold">圣域</h3>
-                    <p className="task-meta-line mt-1">
-                      挑战剩余 {selected.activities.sanctumRaidRemaining}/4 | 开箱剩余 {selected.activities.sanctumBoxRemaining}/2
-                    </p>
+              <>
+                <div className="task-card">
+                  <div className="task-card-header">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{sanctumRaidTask.title}</h3>
+                      <p className="mt-1 task-meta-line">消耗 80 奥德</p>
+                    </div>
+                    <span className="task-progress-pill shrink-0">剩余 {selected.activities.sanctumRaidRemaining}/2</span>
                   </div>
-                  <button className="pill-btn" onClick={onOpenSanctumEditDialog} disabled={busy}>
-                    手动设定
-                  </button>
-                </div>
-                <div className="task-card-actions mt-2.5">
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,0.52fr)_minmax(0,0.48fr)]">
-                    <div className="grid gap-2">
-                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域挑战")} disabled={busy}>
-                        挑战完成
-                      </button>
-                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域开箱")} disabled={busy}>
-                        开箱完成(80奥德)
+                  <p className="task-card-note mt-2">{sanctumRaidTask.description}</p>
+                  <div className="task-card-actions mt-2.5">
+                    <div className="task-action-row">
+                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_raid", sanctumRaidTask.title)} disabled={busy}>
+                        圣域完成
                       </button>
                     </div>
-                    <div className="hidden md:block" />
                   </div>
                 </div>
-              </div>
+                <div className="task-card">
+                  <div className="task-card-header">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{sanctumBoxTask.title}</h3>
+                      <p className="mt-1 task-meta-line">消耗 80 奥德</p>
+                    </div>
+                    <span className="task-progress-pill shrink-0">剩余 {selected.activities.sanctumBoxRemaining}/2</span>
+                  </div>
+                  <p className="task-card-note mt-2">{sanctumBoxTask.description}</p>
+                  <div className="task-card-actions mt-2.5">
+                    <div className="task-action-row">
+                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_box", sanctumBoxTask.title)} disabled={busy}>
+                        圣域完成
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : null}
           </div>
         </article>

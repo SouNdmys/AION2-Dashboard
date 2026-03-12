@@ -168,7 +168,7 @@ describe("shared/engine refreshCharacterState", () => {
     expect(next.activities.awakeningRemaining).toBe(3);
     expect(next.activities.suppressionRemaining).toBe(3);
     expect(next.activities.dailyDungeonRemaining).toBe(7);
-    expect(next.activities.sanctumRaidRemaining).toBe(4);
+    expect(next.activities.sanctumRaidRemaining).toBe(2);
     expect(next.activities.sanctumBoxRemaining).toBe(2);
     expect(next.activities.expeditionBossRemaining).toBe(35);
     expect(next.activities.transcendenceBossRemaining).toBe(28);

@@ -187,7 +187,7 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
           : base.activities.transcendenceBossRemaining,
       sanctumRaidRemaining:
         typeof activitiesRaw?.sanctumRaidRemaining === "number"
-          ? clamp(activitiesRaw.sanctumRaidRemaining, 0, 4)
+          ? clamp(activitiesRaw.sanctumRaidRemaining, 0, 2)
           : base.activities.sanctumRaidRemaining,
       sanctumBoxRemaining:
         typeof activitiesRaw?.sanctumBoxRemaining === "number"

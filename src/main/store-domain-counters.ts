@@ -123,7 +123,7 @@ export function applyRaidCountsUpdate(
             : item.activities.spiritInvasionRemaining,
         sanctumRaidRemaining:
           typeof payload.sanctumRaidRemaining === "number"
-            ? clamp(payload.sanctumRaidRemaining, 0, 4)
+            ? clamp(payload.sanctumRaidRemaining, 0, 2)
             : item.activities.sanctumRaidRemaining,
         sanctumBoxRemaining:
           typeof payload.sanctumBoxRemaining === "number"

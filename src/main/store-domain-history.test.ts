@@ -33,7 +33,7 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
       transcendenceRemaining: 14,
       transcendenceTicketBonus: 0,
       transcendenceBossRemaining: 28,
-      sanctumRaidRemaining: 4,
+      sanctumRaidRemaining: 2,
       sanctumBoxRemaining: 2,
       miniGameRemaining: 14,
       miniGameTicketBonus: 0,

@@ -106,7 +106,7 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const transcendenceBossTotal = 28;
 
             const sanctumRaidCurrent = item.activities.sanctumRaidRemaining;
-            const sanctumRaidTotal = 4;
+            const sanctumRaidTotal = 2;
             const sanctumBoxCurrent = item.activities.sanctumBoxRemaining;
             const sanctumBoxTotal = 2;
 
@@ -415,7 +415,15 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
 
       const sanctumPending = entry.sanctumRaidCurrent + entry.sanctumBoxCurrent;
       if (sanctumPending > 0) {
-        pushItem(entry, "sanctum", "圣域（周本）", 1000 + sanctumPending, "high", "sanctum", `挑战 ${entry.sanctumRaidCurrent}/4，开箱 ${entry.sanctumBoxCurrent}/2`);
+        pushItem(
+          entry,
+          "sanctum",
+          "圣域（周本）",
+          1000 + sanctumPending,
+          "high",
+          "sanctum",
+          `卢德莱 ${entry.sanctumRaidCurrent}/2，侵蚀净化所 ${entry.sanctumBoxCurrent}/2`,
+        );
       }
 
       const corridorPending = entry.corridorLowerCurrent + entry.corridorMiddleCurrent;
