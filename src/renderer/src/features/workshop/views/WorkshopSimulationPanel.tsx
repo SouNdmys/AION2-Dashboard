@@ -57,7 +57,8 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     setSimulationMaterialDraft,
   } = props;
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
-  const [goldRatioDraft, setGoldRatioDraft] = useState("53");
+  const [goldPerRmbDraft, setGoldPerRmbDraft] = useState("53");
+  const [rmbPerTenThousandGoldDraft, setRmbPerTenThousandGoldDraft] = useState("0.0189");
   const [tradeTaxCorrectionDraft, setTradeTaxCorrectionDraft] = useState("10");
 
   const recommendationTone = !simulation
@@ -92,18 +93,47 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
       : missingRowsUnknownPriceCount > 0
         ? `待补价 ${missingRowsUnknownPriceCount} 项`
         : formatGold(missingRows.reduce((acc, row) => acc + (row.missingCost ?? 0), 0));
-  const goldRatioValue = Number(goldRatioDraft);
+  const goldPerRmbValue = Number(goldPerRmbDraft);
+  const rmbPerTenThousandGoldValue = Number(rmbPerTenThousandGoldDraft);
   const tradeTaxCorrectionValue = Number(tradeTaxCorrectionDraft);
-  const normalizedGoldRatio = Number.isFinite(goldRatioValue) && goldRatioValue > 0 ? goldRatioValue : null;
+  const normalizedGoldPerRmb =
+    Number.isFinite(goldPerRmbValue) && goldPerRmbValue > 0
+      ? goldPerRmbValue
+      : Number.isFinite(rmbPerTenThousandGoldValue) && rmbPerTenThousandGoldValue > 0
+        ? 1 / rmbPerTenThousandGoldValue
+        : null;
   const normalizedTradeTaxCorrection =
     Number.isFinite(tradeTaxCorrectionValue) && tradeTaxCorrectionValue >= 0 && tradeTaxCorrectionValue < 100 ? tradeTaxCorrectionValue / 100 : null;
-  const netGoldPerRmb = normalizedGoldRatio === null || normalizedTradeTaxCorrection === null ? null : normalizedGoldRatio * (1 - normalizedTradeTaxCorrection);
+  const netGoldPerRmb =
+    normalizedGoldPerRmb === null || normalizedTradeTaxCorrection === null ? null : normalizedGoldPerRmb * (1 - normalizedTradeTaxCorrection);
+  const netRmbPerTenThousandGold = netGoldPerRmb === null || netGoldPerRmb <= 0 ? null : 1 / netGoldPerRmb;
   const estimatedRmbForMissingPurchase =
     simulation?.missingPurchaseCost === null || netGoldPerRmb === null || netGoldPerRmb <= 0
       ? null
       : (simulation?.missingPurchaseCost ?? 0) / (netGoldPerRmb * 10000);
-  const goldValueFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const currencyFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const goldValueFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  const currencyFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+  const formatRatioDraft = (value: number, digits = 4): string => {
+    const fixed = value.toFixed(digits);
+    return fixed.replace(/\.?0+$/u, "");
+  };
+
+  const handleGoldPerRmbChange = (value: string): void => {
+    setGoldPerRmbDraft(value);
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setRmbPerTenThousandGoldDraft(formatRatioDraft(1 / parsed));
+    }
+  };
+
+  const handleRmbPerTenThousandGoldChange = (value: string): void => {
+    setRmbPerTenThousandGoldDraft(value);
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setGoldPerRmbDraft(formatRatioDraft(1 / parsed));
+    }
+  };
 
   const handleCopyPurchaseList = async (): Promise<void> => {
     if (missingRows.length === 0) {
@@ -199,93 +229,83 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
 
       {simulation ? (
         <div className="section-card mt-4 text-xs">
-          <div className="soft-card p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] text-slate-500">模拟结论</p>
-                <p className={`mt-1 text-base font-semibold ${recommendationTone}`}>{recommendationLabel}</p>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {simulation.outputItemName} x {simulation.totalOutputQuantity} | 制作 {simulation.runs} 次
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-slate-500">库存状态</p>
-                <p className={`mt-1 text-sm ${simulation.craftableNow ? "tone-positive" : "tone-warning"}`}>
-                  {simulation.craftableNow ? "库存可直接制作" : "库存不足，需补材料"}
-                </p>
-              </div>
+          <div>
+            <p className="text-[11px] font-medium text-slate-500">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
+            <div className="surface-table mt-2 max-h-64 overflow-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr>
+                    <th>材料</th>
+                    <th>需求</th>
+                    <th>库存(可改)</th>
+                    <th>缺口</th>
+                    <th>单价(可改)</th>
+                    <th>取价来源</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simulation.materialRows.map((row) => (
+                    <tr key={`sim-material-${row.itemId}`}>
+                      <td>
+                        <button
+                          className="text-left text-[color:var(--accent-1)] hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
+                          onClick={() => onFocusSimulationMaterial(row.itemId, row.latestPriceMarket)}
+                          disabled={busy}
+                          title="联动显示该材料的历史价格与市场分析"
+                        >
+                          {row.itemName}
+                        </button>
+                      </td>
+                      <td>{row.required}</td>
+                      <td>
+                        <input
+                          className="field-control-inline w-24"
+                          value={simulationMaterialDraft[row.itemId]?.owned ?? String(row.owned)}
+                          onChange={(event) =>
+                            setSimulationMaterialDraft((prev) => ({
+                              ...prev,
+                              [row.itemId]: {
+                                unitPrice: prev[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice)),
+                                owned: event.target.value,
+                              },
+                            }))
+                          }
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className={row.missing > 0 ? "tone-danger" : "tone-positive"}>{row.missing}</td>
+                      <td>
+                        <input
+                          className="field-control-inline w-28"
+                          value={simulationMaterialDraft[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice))}
+                          onChange={(event) =>
+                            setSimulationMaterialDraft((prev) => ({
+                              ...prev,
+                              [row.itemId]: {
+                                unitPrice: event.target.value,
+                                owned: prev[row.itemId]?.owned ?? String(row.owned),
+                              },
+                            }))
+                          }
+                          disabled={busy}
+                          placeholder="留空=不改"
+                        />
+                      </td>
+                      <td className="text-slate-500">{formatMarketLabel(row.latestPriceMarket)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p className="mt-2 inline-note">{recommendationDetail}</p>
           </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">材料成本</p>
-              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.requiredMaterialCost)}</p>
-            </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">税后收入</p>
-              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.netRevenueAfterTax)}</p>
-            </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">净利润</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfit ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
-                {formatGold(simulation.estimatedProfit)}
-              </p>
-            </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">利润率</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfitRate ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
-                {toPercent(simulation.estimatedProfitRate)}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
-            <div className="data-pill">成品单价: {formatGold(simulation.outputUnitPrice)}</div>
-            <div className="data-pill">缺口补齐成本: {formatGold(simulation.missingPurchaseCost)}</div>
-            <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
-          </div>
-          <div className="mt-3 soft-card p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-medium text-slate-500">金价换算辅助</p>
-                <p className="mt-1 inline-note">按你的收金比例估算，补齐当前材料缺口大约还要收多少 RMB。</p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,1.1fr)]">
-              <input
-                className="field-control"
-                value={goldRatioDraft}
-                onChange={(event) => setGoldRatioDraft(event.target.value)}
-                disabled={busy}
-                placeholder="金价比例 1:X"
-              />
-              <input
-                className="field-control"
-                value={tradeTaxCorrectionDraft}
-                onChange={(event) => setTradeTaxCorrectionDraft(event.target.value)}
-                disabled={busy}
-                placeholder="交易行税后修正 %"
-              />
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">税后每 1 RMB 到手</p>
-                <p className="mt-1 text-sm text-slate-900">
-                  {netGoldPerRmb === null ? "--" : `${goldValueFormatter.format(netGoldPerRmb)} 万金币`}
-                </p>
-              </div>
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">补齐缺口约需 RMB</p>
-                <p className={`mt-1 text-sm ${estimatedRmbForMissingPurchase === null ? "tone-warning" : "text-slate-900"}`}>
-                  {estimatedRmbForMissingPurchase === null ? "--" : `¥${currencyFormatter.format(estimatedRmbForMissingPurchase)}`}
-                </p>
-              </div>
-            </div>
-            <p className="mt-2 inline-note">
-              输入示例: 金价比例填 53 表示 `1:53`，100 元约能收到 5300 万；税后修正填 10 表示交易行扣 10% 后按到手金币估算。
+          {simulation.unknownPriceItemIds.length > 0 ? (
+            <p className="banner-warning mt-2 rounded-lg px-3 py-2">
+              以下材料缺少价格，利润结果不完整:
+              {simulation.unknownPriceItemIds.map((itemId) => resolveItemName(itemId)).join("、")}
             </p>
-          </div>
-          <div className="mt-3 soft-card p-3">
+          ) : null}
+
+          <div className="soft-card p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-medium text-slate-500">材料缺口与采购清单</p>
@@ -354,80 +374,105 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
               </div>
             )}
           </div>
-          {simulation.unknownPriceItemIds.length > 0 ? (
-            <p className="banner-warning mt-2 rounded-lg px-3 py-2">
-              以下材料缺少价格，利润结果不完整:
-              {simulation.unknownPriceItemIds.map((itemId) => resolveItemName(itemId)).join("、")}
-            </p>
-          ) : null}
-          <div className="mt-3">
-            <p className="text-[11px] font-medium text-slate-500">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
-            <div className="surface-table mt-2 max-h-64 overflow-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr>
-                    <th>材料</th>
-                    <th>需求</th>
-                    <th>库存(可改)</th>
-                    <th>缺口</th>
-                    <th>单价(可改)</th>
-                    <th>取价来源</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {simulation.materialRows.map((row) => (
-                    <tr key={`sim-material-${row.itemId}`}>
-                      <td>
-                        <button
-                          className="text-left text-[color:var(--accent-1)] hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
-                          onClick={() => onFocusSimulationMaterial(row.itemId, row.latestPriceMarket)}
-                          disabled={busy}
-                          title="联动显示该材料的历史价格与市场分析"
-                        >
-                          {row.itemName}
-                        </button>
-                      </td>
-                      <td>{row.required}</td>
-                      <td>
-                        <input
-                          className="field-control-inline w-24"
-                          value={simulationMaterialDraft[row.itemId]?.owned ?? String(row.owned)}
-                          onChange={(event) =>
-                            setSimulationMaterialDraft((prev) => ({
-                              ...prev,
-                              [row.itemId]: {
-                                unitPrice: prev[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice)),
-                                owned: event.target.value,
-                              },
-                            }))
-                          }
-                          disabled={busy}
-                        />
-                      </td>
-                      <td className={row.missing > 0 ? "tone-danger" : "tone-positive"}>{row.missing}</td>
-                      <td>
-                        <input
-                          className="field-control-inline w-28"
-                          value={simulationMaterialDraft[row.itemId]?.unitPrice ?? (row.latestUnitPrice === null ? "" : String(row.latestUnitPrice))}
-                          onChange={(event) =>
-                            setSimulationMaterialDraft((prev) => ({
-                              ...prev,
-                              [row.itemId]: {
-                                unitPrice: event.target.value,
-                                owned: prev[row.itemId]?.owned ?? String(row.owned),
-                              },
-                            }))
-                          }
-                          disabled={busy}
-                          placeholder="留空=不改"
-                        />
-                      </td>
-                      <td className="text-slate-500">{formatMarketLabel(row.latestPriceMarket)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+          <div className="soft-card p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] text-slate-500">模拟结论</p>
+                <p className={`mt-1 text-base font-semibold ${recommendationTone}`}>{recommendationLabel}</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {simulation.outputItemName} x {simulation.totalOutputQuantity} | 制作 {simulation.runs} 次
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-slate-500">库存状态</p>
+                <p className={`mt-1 text-sm ${simulation.craftableNow ? "tone-positive" : "tone-warning"}`}>
+                  {simulation.craftableNow ? "库存可直接制作" : "库存不足，需补材料"}
+                </p>
+              </div>
             </div>
+            <p className="mt-2 inline-note">{recommendationDetail}</p>
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="data-pill">
+              <p className="text-[11px] text-slate-500">材料成本</p>
+              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.requiredMaterialCost)}</p>
+            </div>
+            <div className="data-pill">
+              <p className="text-[11px] text-slate-500">税后收入</p>
+              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.netRevenueAfterTax)}</p>
+            </div>
+            <div className="data-pill">
+              <p className="text-[11px] text-slate-500">净利润</p>
+              <p className={`mt-1 text-sm ${(simulation.estimatedProfit ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
+                {formatGold(simulation.estimatedProfit)}
+              </p>
+            </div>
+            <div className="data-pill">
+              <p className="text-[11px] text-slate-500">利润率</p>
+              <p className={`mt-1 text-sm ${(simulation.estimatedProfitRate ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
+                {toPercent(simulation.estimatedProfitRate)}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="data-pill">成品单价: {formatGold(simulation.outputUnitPrice)}</div>
+            <div className="data-pill">缺口补齐成本: {formatGold(simulation.missingPurchaseCost)}</div>
+            <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
+          </div>
+          <div className="mt-3 soft-card p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-medium text-slate-500">金价换算辅助</p>
+                <p className="mt-1 inline-note">按你的收金比例估算，补齐当前材料缺口大约还要收多少 RMB。</p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,1.1fr)]">
+              <input
+                className="field-control"
+                value={goldPerRmbDraft}
+                onChange={(event) => handleGoldPerRmbChange(event.target.value)}
+                disabled={busy}
+                placeholder="1元=XX万基纳"
+              />
+              <input
+                className="field-control"
+                value={rmbPerTenThousandGoldDraft}
+                onChange={(event) => handleRmbPerTenThousandGoldChange(event.target.value)}
+                disabled={busy}
+                placeholder="1万基纳=XX元"
+              />
+              <input
+                className="field-control"
+                value={tradeTaxCorrectionDraft}
+                onChange={(event) => setTradeTaxCorrectionDraft(event.target.value)}
+                disabled={busy}
+                placeholder="交易行税后修正 %"
+              />
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">税后 1 元可到手</p>
+                <p className="mt-1 text-sm text-slate-900">
+                  {netGoldPerRmb === null ? "--" : `${goldValueFormatter.format(netGoldPerRmb)} 万金币`}
+                </p>
+              </div>
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">税后 1 万基纳约合</p>
+                <p className="mt-1 text-sm text-slate-900">
+                  {netRmbPerTenThousandGold === null ? "--" : `¥${currencyFormatter.format(netRmbPerTenThousandGold)}`}
+                </p>
+              </div>
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">补齐缺口约需 RMB</p>
+                <p className={`mt-1 text-sm ${estimatedRmbForMissingPurchase === null ? "tone-warning" : "text-slate-900"}`}>
+                  {estimatedRmbForMissingPurchase === null ? "--" : `¥${currencyFormatter.format(estimatedRmbForMissingPurchase)}`}
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 inline-note">
+              两个换算输入可以互相推导；税后修正会把显示结果改成实际到手金币口径，再估算补齐材料缺口大约还要收多少 RMB。
+            </p>
           </div>
         </div>
       ) : null}
