@@ -57,6 +57,8 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     setSimulationMaterialDraft,
   } = props;
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [goldRatioDraft, setGoldRatioDraft] = useState("53");
+  const [tradeTaxCorrectionDraft, setTradeTaxCorrectionDraft] = useState("10");
 
   const recommendationTone = !simulation
     ? "text-slate-900"
@@ -90,6 +92,18 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
       : missingRowsUnknownPriceCount > 0
         ? `待补价 ${missingRowsUnknownPriceCount} 项`
         : formatGold(missingRows.reduce((acc, row) => acc + (row.missingCost ?? 0), 0));
+  const goldRatioValue = Number(goldRatioDraft);
+  const tradeTaxCorrectionValue = Number(tradeTaxCorrectionDraft);
+  const normalizedGoldRatio = Number.isFinite(goldRatioValue) && goldRatioValue > 0 ? goldRatioValue : null;
+  const normalizedTradeTaxCorrection =
+    Number.isFinite(tradeTaxCorrectionValue) && tradeTaxCorrectionValue >= 0 && tradeTaxCorrectionValue < 100 ? tradeTaxCorrectionValue / 100 : null;
+  const netGoldPerRmb = normalizedGoldRatio === null || normalizedTradeTaxCorrection === null ? null : normalizedGoldRatio * (1 - normalizedTradeTaxCorrection);
+  const estimatedRmbForMissingPurchase =
+    simulation?.missingPurchaseCost === null || netGoldPerRmb === null || netGoldPerRmb <= 0
+      ? null
+      : (simulation?.missingPurchaseCost ?? 0) / (netGoldPerRmb * 10000);
+  const goldValueFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const currencyFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleCopyPurchaseList = async (): Promise<void> => {
     if (missingRows.length === 0) {
@@ -231,6 +245,45 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             <div className="data-pill">成品单价: {formatGold(simulation.outputUnitPrice)}</div>
             <div className="data-pill">缺口补齐成本: {formatGold(simulation.missingPurchaseCost)}</div>
             <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
+          </div>
+          <div className="mt-3 soft-card p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-medium text-slate-500">金价换算辅助</p>
+                <p className="mt-1 inline-note">按你的收金比例估算，补齐当前材料缺口大约还要收多少 RMB。</p>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.95fr)_minmax(0,1.1fr)_minmax(0,1.1fr)]">
+              <input
+                className="field-control"
+                value={goldRatioDraft}
+                onChange={(event) => setGoldRatioDraft(event.target.value)}
+                disabled={busy}
+                placeholder="金价比例 1:X"
+              />
+              <input
+                className="field-control"
+                value={tradeTaxCorrectionDraft}
+                onChange={(event) => setTradeTaxCorrectionDraft(event.target.value)}
+                disabled={busy}
+                placeholder="交易行税后修正 %"
+              />
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">税后每 1 RMB 到手</p>
+                <p className="mt-1 text-sm text-slate-900">
+                  {netGoldPerRmb === null ? "--" : `${goldValueFormatter.format(netGoldPerRmb)} 万金币`}
+                </p>
+              </div>
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">补齐缺口约需 RMB</p>
+                <p className={`mt-1 text-sm ${estimatedRmbForMissingPurchase === null ? "tone-warning" : "text-slate-900"}`}>
+                  {estimatedRmbForMissingPurchase === null ? "--" : `¥${currencyFormatter.format(estimatedRmbForMissingPurchase)}`}
+                </p>
+              </div>
+            </div>
+            <p className="mt-2 inline-note">
+              输入示例: 金价比例填 53 表示 `1:53`，100 元约能收到 5300 万；税后修正填 10 表示交易行扣 10% 后按到手金币估算。
+            </p>
           </div>
           <div className="mt-3 soft-card p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
