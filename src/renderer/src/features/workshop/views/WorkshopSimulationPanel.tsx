@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { WorkshopCraftSimulationResult, WorkshopPriceMarket } from "../../../../../shared/types";
 import { formatGold, formatMarketLabel, toPercent, type SimulationRecipeOption } from "../workshop-view-helpers";
 
@@ -56,6 +56,7 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
     simulationMaterialDraft,
     setSimulationMaterialDraft,
   } = props;
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
   const recommendationTone = !simulation
     ? "text-slate-900"
@@ -78,6 +79,43 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
       : simulation.craftableNow
         ? "当前库存可直接启动制作。"
         : "库存不足，需要先补材料再制作。";
+  const missingRows = useMemo(() => simulation?.materialRows.filter((row) => row.missing > 0) ?? [], [simulation]);
+  const missingItemCount = missingRows.length;
+  const missingTotalQuantity = missingRows.reduce((acc, row) => acc + row.missing, 0);
+  const missingRowsWithUnknownPrice = missingRows.filter((row) => row.latestUnitPrice === null);
+  const missingRowsUnknownPriceCount = missingRowsWithUnknownPrice.length;
+  const purchaseListCostLabel =
+    missingItemCount === 0
+      ? formatGold(0)
+      : missingRowsUnknownPriceCount > 0
+        ? `待补价 ${missingRowsUnknownPriceCount} 项`
+        : formatGold(missingRows.reduce((acc, row) => acc + (row.missingCost ?? 0), 0));
+
+  const handleCopyPurchaseList = async (): Promise<void> => {
+    if (missingRows.length === 0) {
+      setCopyMessage("当前没有缺口材料。");
+      return;
+    }
+    if (!navigator.clipboard?.writeText) {
+      setCopyMessage("当前环境不支持复制，请手动查看采购清单。");
+      return;
+    }
+    const lines = [
+      `${simulation?.outputItemName ?? "当前配方"} 采购清单`,
+      `制作 ${simulation?.runs ?? 0} 次 / 缺料 ${missingItemCount} 项 / 缺口总量 ${missingTotalQuantity}`,
+      ...missingRows.map((row) => {
+        const priceLabel = row.latestUnitPrice === null ? "待补价" : formatGold(row.latestUnitPrice);
+        const costLabel = row.missingCost === null ? "待补价" : formatGold(row.missingCost);
+        return `${row.itemName} | 缺口 ${row.missing} | 单价 ${priceLabel} | 采购成本 ${costLabel}`;
+      }),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopyMessage("采购清单已复制。");
+    } catch {
+      setCopyMessage("复制失败，请稍后再试。");
+    }
+  };
 
   return (
     <article className="order-1 glass-panel rounded-[30px] p-5">
@@ -193,6 +231,75 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             <div className="data-pill">成品单价: {formatGold(simulation.outputUnitPrice)}</div>
             <div className="data-pill">缺口补齐成本: {formatGold(simulation.missingPurchaseCost)}</div>
             <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
+          </div>
+          <div className="mt-3 soft-card p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-medium text-slate-500">材料缺口与采购清单</p>
+                <p className="mt-1 inline-note">先看缺多少，再决定是否补价或直接采购。点击材料名仍可联动到市场工具。</p>
+              </div>
+              <button className="task-btn task-btn-soft task-btn-compact px-3" onClick={() => void handleCopyPurchaseList()} disabled={busy || missingItemCount === 0}>
+                复制采购清单
+              </button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">缺料种类</p>
+                <p className="mt-1 text-sm text-slate-900">{missingItemCount} 项</p>
+              </div>
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">总缺口数量</p>
+                <p className="mt-1 text-sm text-slate-900">{missingTotalQuantity}</p>
+              </div>
+              <div className="data-pill">
+                <p className="text-[11px] text-slate-500">预计采购成本</p>
+                <p className={`mt-1 text-sm ${missingRowsUnknownPriceCount > 0 ? "tone-warning" : "text-slate-900"}`}>{purchaseListCostLabel}</p>
+              </div>
+            </div>
+            {copyMessage ? <p className="mt-2 inline-note">{copyMessage}</p> : null}
+            {missingItemCount === 0 ? (
+              <p className="banner-positive mt-3 rounded-lg px-3 py-2">当前库存已满足本次制作，不需要额外采购材料。</p>
+            ) : (
+              <div className="surface-table mt-3 overflow-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr>
+                      <th>材料</th>
+                      <th>需求</th>
+                      <th>库存</th>
+                      <th>缺口</th>
+                      <th>参考单价</th>
+                      <th>采购成本</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingRows.map((row) => (
+                      <tr key={`purchase-row-${row.itemId}`}>
+                        <td>
+                          <button
+                            className="text-left text-[color:var(--accent-1)] hover:underline disabled:cursor-not-allowed disabled:text-slate-400"
+                            onClick={() => onFocusSimulationMaterial(row.itemId, row.latestPriceMarket)}
+                            disabled={busy}
+                            title="联动显示该材料的历史价格与市场分析"
+                          >
+                            {row.itemName}
+                          </button>
+                        </td>
+                        <td>{row.required}</td>
+                        <td>{row.owned}</td>
+                        <td className="tone-danger">{row.missing}</td>
+                        <td className={row.latestUnitPrice === null ? "tone-warning" : "text-slate-500"}>
+                          {row.latestUnitPrice === null ? "待补价" : formatGold(row.latestUnitPrice)}
+                        </td>
+                        <td className={row.missingCost === null ? "tone-warning" : "text-slate-900"}>
+                          {row.missingCost === null ? "待补价" : formatGold(row.missingCost)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
           {simulation.unknownPriceItemIds.length > 0 ? (
             <p className="banner-warning mt-2 rounded-lg px-3 py-2">
