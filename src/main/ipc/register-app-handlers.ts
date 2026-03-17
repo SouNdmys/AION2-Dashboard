@@ -9,6 +9,7 @@ export function registerAppIpcHandlers(): void {
   registerIpcHandler(IPC_CHANNELS.getState, () => getAppState());
   registerIpcHandler(IPC_CHANNELS.getBuildInfo, () => APP_BUILD_INFO);
   registerIpcHandler(IPC_CHANNELS.checkAppUpdate, async () => checkForAppUpdate({ installOnDownload: true, source: "manual" }));
+  registerIpcHandler(IPC_CHANNELS.checkStartupAppUpdate, async () => checkForAppUpdate({ installOnDownload: true, source: "startup" }));
   registerIpcHandler(IPC_CHANNELS.resetWeeklyStats, () => resetWeeklyStats());
   registerIpcHandler(IPC_CHANNELS.undoOperations, (_event, payload: unknown) => {
     const channel = IPC_CHANNELS.undoOperations;

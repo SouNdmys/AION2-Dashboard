@@ -90,6 +90,7 @@ export const IPC_INVOKE_SPECS = {
   getState: noPayloadSpec<AppState>(IPC_CHANNELS.getState),
   getBuildInfo: noPayloadSpec<AppBuildInfo>(IPC_CHANNELS.getBuildInfo),
   checkAppUpdate: noPayloadSpec<AppUpdateCheckResult>(IPC_CHANNELS.checkAppUpdate),
+  checkStartupAppUpdate: noPayloadSpec<AppUpdateCheckResult>(IPC_CHANNELS.checkStartupAppUpdate),
   resetWeeklyStats: noPayloadSpec<AppState>(IPC_CHANNELS.resetWeeklyStats),
   undoOperations: defineInvokeSpec<[steps?: number], { steps: number }, AppState>(IPC_CHANNELS.undoOperations, (steps = 1) => ({ steps })),
   clearHistory: noPayloadSpec<AppState>(IPC_CHANNELS.clearHistory),

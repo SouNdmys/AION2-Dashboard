@@ -9,6 +9,33 @@ async function waitForVisibleText(page, text, timeout = 20_000) {
   await locator.first().waitFor({ state: "visible", timeout });
 }
 
+async function waitForAnyVisibleText(page, texts, timeout = 30_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    for (const text of texts) {
+      const visible = await page
+        .getByText(text, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (visible) {
+        return text;
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+  fail(`timed out waiting for any of: ${texts.join(", ")}`);
+}
+
+async function ensureDashboardReady(page) {
+  const firstVisible = await waitForAnyVisibleText(page, ["角色总览", "创建第一个账号"], 30_000);
+  if (firstVisible === "创建第一个账号") {
+    await page.getByPlaceholder("新账号名称").fill("Smoke-Account");
+    await page.getByRole("button", { name: "创建第一个账号" }).first().click();
+    await waitForVisibleText(page, "角色总览");
+  }
+}
+
 async function run() {
   /** @type {import('playwright').ElectronApplication | null} */
   let app = null;
@@ -20,8 +47,8 @@ async function run() {
 
     const page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded", { timeout: 20_000 });
+    await ensureDashboardReady(page);
 
-    await waitForVisibleText(page, "角色总览");
     await waitForVisibleText(page, "操作中心");
 
     await page.getByRole("button", { name: "设置页" }).click();

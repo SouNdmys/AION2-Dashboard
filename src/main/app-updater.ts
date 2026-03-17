@@ -61,8 +61,6 @@ export function initializeAutoUpdater(): void {
   autoUpdater.on("update-downloaded", (info) => {
     console.log("[aion2-dashboard] update downloaded:", info.version);
   });
-
-  void checkForAppUpdate({ installOnDownload: false, source: "startup" });
 }
 
 interface CheckForAppUpdateOptions {
@@ -96,7 +94,7 @@ export async function checkForAppUpdate(options: CheckForAppUpdateOptions = {}):
 
       if (installOnDownload) {
         setTimeout(() => {
-          autoUpdater.quitAndInstall();
+          autoUpdater.quitAndInstall(true, true);
         }, 1200);
         return buildResult(
           "update-downloaded",
@@ -122,4 +120,3 @@ export async function checkForAppUpdate(options: CheckForAppUpdateOptions = {}):
     checkInFlight = null;
   }
 }
-

@@ -34,6 +34,8 @@ import { DashboardRightSidebar } from "./features/dashboard/views/DashboardRight
 import { DashboardSettingsPanel } from "./features/dashboard/views/DashboardSettingsPanel";
 import { WorkshopView } from "./WorkshopView";
 
+type StartupPhase = "checking-update" | "installing-update" | "loading-state" | "ready";
+
 export function App(): JSX.Element {
   const appActions = useAppActions();
   const [state, setState] = useState<AppState | null>(null);
@@ -76,17 +78,58 @@ export function App(): JSX.Element {
   const [workshopHistoryJumpNonce, setWorkshopHistoryJumpNonce] = useState(0);
   const [workshopPriceChangeNonce, setWorkshopPriceChangeNonce] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [startupPhase, setStartupPhase] = useState<StartupPhase>("checking-update");
+  const [startupMessage, setStartupMessage] = useState("正在检查新版本...");
+  const [startupDetail, setStartupDetail] = useState<string | null>("若发现更新，将先自动安装后再进入主界面。");
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
+      const buildInfoPromise = appActions.getBuildInfo().catch(() => null);
       try {
-        const [next, buildMeta] = await Promise.all([appActions.getState(), appActions.getBuildInfo()]);
+        const startupUpdateResult = await appActions.checkStartupAppUpdate();
+        const buildMeta = await buildInfoPromise;
+        if (cancelled) {
+          return;
+        }
+        if (buildMeta) {
+          setBuildInfo(buildMeta);
+        }
+
+        if (startupUpdateResult.status === "update-downloaded" && startupUpdateResult.installTriggered) {
+          setStartupPhase("installing-update");
+          setStartupMessage(`正在更新到 v${startupUpdateResult.latestVersion ?? "--"}...`);
+          setStartupDetail("更新包已下载完成，程序将静默安装并自动重启。若长时间未自动重启，可手动关闭当前程序完成安装。");
+          return;
+        }
+
+        if (startupUpdateResult.status === "error") {
+          setStartupDetail(`${startupUpdateResult.message} 已继续进入当前版本。`);
+        }
+
+        setStartupPhase("loading-state");
+        setStartupMessage("正在载入本地数据...");
+        setStartupDetail("更新检查已完成，正在初始化角色数据与做装数据。");
+
+        const next = await appActions.getState();
+        if (cancelled) {
+          return;
+        }
         setState(next);
-        setBuildInfo(buildMeta);
+        setStartupPhase("ready");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "初始化失败");
+        if (cancelled) {
+          return;
+        }
+        const message = err instanceof Error ? err.message : "初始化失败";
+        setError(message);
+        setStartupMessage("启动失败");
+        setStartupDetail(message);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [appActions]);
 
   useEffect(() => {
@@ -350,6 +393,30 @@ export function App(): JSX.Element {
     setNewCharacterName,
     confirm: window.confirm,
   });
+
+  if (startupPhase !== "ready") {
+    return (
+      <main className="min-h-screen p-8 text-slate-900">
+        <div className="glass-panel mx-auto mt-20 max-w-md rounded-[28px] p-7 text-center">
+          <p className="panel-kicker text-center">AION 2 Dashboard</p>
+          <h1 className="mt-2 text-xl font-semibold text-slate-900">
+            {startupPhase === "installing-update" ? "正在安装更新" : "启动中"}
+          </h1>
+          <p className="mt-3 text-sm text-slate-700">{startupMessage}</p>
+          {startupDetail ? <p className="mt-2 text-xs text-slate-500">{startupDetail}</p> : null}
+          {buildInfo?.version ? <p className="mt-4 text-[11px] text-slate-400">当前版本 v{buildInfo.version}</p> : null}
+          {error ? (
+            <>
+              <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p>
+              <button className="task-btn task-btn-soft mt-4 w-full" onClick={() => window.location.reload()}>
+                重新尝试启动
+              </button>
+            </>
+          ) : null}
+        </div>
+      </main>
+    );
+  }
 
   if (!state || !settingsDraft) {
     return (

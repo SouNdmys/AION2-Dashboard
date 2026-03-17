@@ -37,7 +37,26 @@ async function waitForVisibleText(page, text, timeout = 20_000) {
   await page.getByText(text, { exact: false }).first().waitFor({ state: "visible", timeout });
 }
 
+async function waitForAnyVisibleText(page, texts, timeout = 30_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    for (const text of texts) {
+      const visible = await page
+        .getByText(text, { exact: false })
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (visible) {
+        return text;
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`timed out waiting for any of: ${texts.join(", ")}`);
+}
+
 async function ensureDashboardReady(page) {
+  await waitForAnyVisibleText(page, ["角色总览", "创建第一个账号"], 30_000);
   const createFirstAccountButton = page.getByRole("button", { name: "创建第一个账号" }).first();
   if (await createFirstAccountButton.isVisible().catch(() => false)) {
     await page.getByPlaceholder("新账号名称").fill("Baseline-Phase0");
