@@ -81,13 +81,13 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
 
   if (collapsed) {
     return (
-      <aside className="glass-panel rounded-[30px] p-3">
+      <aside className="sidebar-shell rounded-[30px] p-3">
         <div className="flex flex-col items-center gap-3">
           <button className="icon-btn" onClick={onToggleSidebar} disabled={busy} title="展开侧栏" aria-label="展开侧栏">
             {'>>'}
           </button>
           <button
-            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "overview" ? "pill-btn-active" : ""}`}
+            className={`nav-item h-10 w-10 !justify-center !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "overview" ? "nav-item-active" : ""}`}
             onClick={onSwitchOverview}
             disabled={busy}
             title="角色总览"
@@ -95,7 +95,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             总
           </button>
           <button
-            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "character" ? "pill-btn-active" : ""}`}
+            className={`nav-item h-10 w-10 !justify-center !rounded-2xl !px-0 ${viewMode === "dashboard" && dashboardMode === "character" ? "nav-item-active" : ""}`}
             onClick={onSwitchCharacter}
             disabled={busy}
             title="角色操作"
@@ -103,7 +103,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             角
           </button>
           <button
-            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "workshop" ? "pill-btn-active" : ""}`}
+            className={`nav-item h-10 w-10 !justify-center !rounded-2xl !px-0 ${viewMode === "workshop" ? "nav-item-active" : ""}`}
             onClick={onSwitchWorkshop}
             disabled={busy}
             title="做装模拟"
@@ -111,7 +111,7 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
             工
           </button>
           <button
-            className={`pill-btn h-10 w-10 !rounded-2xl !px-0 ${viewMode === "settings" ? "pill-btn-active" : ""}`}
+            className={`nav-item h-10 w-10 !justify-center !rounded-2xl !px-0 ${viewMode === "settings" ? "nav-item-active" : ""}`}
             onClick={onSwitchSettings}
             disabled={busy}
             title="设置页"
@@ -128,46 +128,61 @@ export function DashboardLeftSidebar(props: DashboardLeftSidebarProps): JSX.Elem
   }
 
   return (
-    <aside className="glass-panel rounded-[30px] p-5">
+    <aside className="sidebar-shell rounded-[30px] p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-        <p className="panel-kicker">Roster</p>
-        <h1 className="panel-title !mt-1 !text-[1.18rem]">AION 2</h1>
+        <div className="app-identity">
+          <p className="panel-kicker">Dashboard</p>
+          <h1 className="app-identity-title">AION2 Dashboard</h1>
+          <p className="app-identity-subtitle">任务管理与做装工作台</p>
         </div>
         <button className="icon-btn" onClick={onToggleSidebar} disabled={busy} title="收起侧栏" aria-label="收起侧栏">
           {'<<'}
         </button>
       </div>
-      <div className="soft-card mb-4 p-4">
-        <p className="panel-kicker !tracking-[0.08em]">Workspace</p>
-        <h2 className="panel-title !mt-1 !text-sm">目录导航</h2>
-        <div className="mt-3 space-y-2">
+
+      <div className="workbench-panel mb-4 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="panel-kicker !tracking-[0.08em]">Workspace</p>
+            <h2 className="panel-title !mt-1 !text-sm">主导航</h2>
+          </div>
+          <span className="pill-btn pill-static whitespace-nowrap">v{buildVersion ?? "--"}</span>
+        </div>
+
+        <div className="nav-stack mt-3">
           <button
-            className={`pill-btn w-full justify-start ${viewMode === "dashboard" && dashboardMode === "overview" ? "pill-btn-active" : ""}`}
+            className={`nav-item ${viewMode === "dashboard" && dashboardMode === "overview" ? "nav-item-active" : ""}`}
             onClick={onSwitchOverview}
             disabled={busy}
           >
-            角色总览
+            <span className="nav-item-label">角色总览</span>
+            <span className="nav-item-meta">Overview</span>
           </button>
           <button
-            className={`pill-btn w-full justify-start ${viewMode === "dashboard" && dashboardMode === "character" ? "pill-btn-active" : ""}`}
+            className={`nav-item ${viewMode === "dashboard" && dashboardMode === "character" ? "nav-item-active" : ""}`}
             onClick={onSwitchCharacter}
             disabled={busy}
           >
-            角色操作
+            <span className="nav-item-label">角色操作</span>
+            <span className="nav-item-meta">Character</span>
           </button>
-          <button className={`pill-btn w-full justify-start ${viewMode === "workshop" ? "pill-btn-active" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
-            做装模拟
+          <button className={`nav-item ${viewMode === "workshop" ? "nav-item-active" : ""}`} onClick={onSwitchWorkshop} disabled={busy}>
+            <span className="nav-item-label">做装模拟</span>
+            <span className="nav-item-meta">Craft</span>
           </button>
-          <button className={`pill-btn w-full justify-start ${viewMode === "settings" ? "pill-btn-active" : ""}`} onClick={onSwitchSettings} disabled={busy}>
-            设置页
+          <button className={`nav-item ${viewMode === "settings" ? "nav-item-active" : ""}`} onClick={onSwitchSettings} disabled={busy}>
+            <span className="nav-item-label">设置页</span>
+            <span className="nav-item-meta">Settings</span>
           </button>
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <span className="pill-btn pill-static">版本: {buildVersion ? `v${buildVersion}` : "--"}</span>
+
+        <div className="section-rule mt-3">
+          <div className="toolbar-inline">
           <button className="pill-btn" onClick={onCheckAppUpdate} disabled={busy}>
             检查更新
           </button>
+          <span className="summary-note">安装版支持启动即静默更新</span>
+          </div>
         </div>
         {infoMessage ? <p className="banner-positive mt-3 rounded-xl px-3 py-2 text-xs">{infoMessage}</p> : null}
         {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}

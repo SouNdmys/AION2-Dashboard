@@ -40,12 +40,13 @@ export function WorkshopView(props: WorkshopViewProps = {}): JSX.Element {
     <div className="flex flex-col gap-5">
       <WorkshopSimulationPanel {...simulationPanelProps} message={message} error={error} />
       <details className="order-2 group">
-        <summary aria-controls={expertModeId} className="details-summary soft-card px-4 py-3">
-          <div>
+        <summary aria-controls={expertModeId} className="details-summary workbench-panel px-4 py-3">
+          <div className="min-w-0">
             <p className="panel-kicker">Market Tools</p>
             <h4 className="panel-title !mt-1 !text-sm">市场工具</h4>
+            <p className="summary-note mt-1">OCR 抓价、市场分析、历史价格和库存都后撤到这里，默认不打断做装主流程。</p>
           </div>
-          <span className="pill-btn group-open:!border-emerald-700/15 group-open:!bg-emerald-700/5 group-open:!text-slate-900">
+          <span className="pill-btn group-open:!border-slate-900/10 group-open:!bg-slate-900/6 group-open:!text-slate-900">
             <span className="group-open:hidden">展开工具</span>
             <span className="hidden group-open:inline">收起工具</span>
           </span>

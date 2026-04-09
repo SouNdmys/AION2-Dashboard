@@ -281,22 +281,27 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
 
   return (
     <article className="glass-panel rounded-[30px] p-6">
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="panel-kicker">Role Overview</p>
           <h3 className="panel-title !text-xl">角色概览总览</h3>
         </div>
+        <div className="toolbar-inline">
+          <span className="pill-btn pill-static">角色 {overviewRowsFiltered.length}</span>
+          <span className="summary-note">先扫一眼优先项，再决定进入哪个角色</span>
+        </div>
       </div>
-      <div className="soft-card mb-4 p-4">
+
+      <div className="workbench-panel mb-4 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="panel-kicker !tracking-[0.08em]">Quick Entry</p>
             <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
           </div>
-          <p className="summary-note">
-            当前命中 {overviewRowsFiltered.length} 个角色。
-            {overviewSortKey === "manual" ? " 当前支持拖拽卡片调整顺序。" : " 切到“按手动排序”后可拖拽调整顺序。"}
-          </p>
+          <div className="toolbar-inline">
+            <span className="pill-btn pill-static">{overviewSortKey === "manual" ? "支持拖拽排序" : "当前为智能排序"}</span>
+            <span className="summary-note">录入优先留在总览，避免频繁切页。</span>
+          </div>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-[1.25fr_1fr_1fr_0.8fr_auto]">
           <select className="field-control-sm" value={quickCharacterId} onChange={(event) => onQuickCharacterIdChange(event.target.value)} disabled={busy}>
@@ -352,8 +357,9 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
             当前内容总量 {quickCorridorTask ? quickCorridorSetCompletedTotal ?? 3 : quickTaskSetCompletedTotal ?? COUNT_SELECT_MAX}，输入超过将自动按上限处理。
           </p>
         ) : null}
-        <div className="overview-filter-row mt-3 flex flex-wrap items-center gap-2">
-          <span className="summary-note">筛选</span>
+        <div className="section-rule mt-3">
+          <div className="toolbar-inline">
+          <span className="summary-note">筛选与排序</span>
           <select
             className="field-control-inline min-w-[130px]"
             value={overviewSortKey}
@@ -403,6 +409,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
               </option>
             ))}
           </select>
+          </div>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-3 2xl:grid-cols-2">
@@ -452,7 +459,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">{entry.character.name}</p>
+                  <p className="text-[0.95rem] font-semibold tracking-[-0.01em]">{entry.character.name}</p>
                   <p className="text-xs text-slate-500">
                     {entry.account.name}
                     {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
@@ -462,11 +469,11 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                     {entry.character.gearScore === undefined ? "未填写" : numberFormatter.format(entry.character.gearScore)}
                   </p>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <span className={getUrgentBoardToneClass(entry.aodeBaseEnergyCurrent, entry.aodeBaseEnergyCap, entry.aodeBaseEnergyOverflow)}>
                     奥德 {entry.aodeBaseEnergyCurrent}(+{entry.aodeBonusEnergyCurrent})/{entry.aodeBaseEnergyCap}
                   </span>
-                  <span className="summary-note">可执行项 {filteredReadyCount}</span>
+                  <span className="pill-btn pill-static !px-2.5">可执行项 {filteredReadyCount}</span>
                 </div>
               </div>
               <div className="mt-3 space-y-3">

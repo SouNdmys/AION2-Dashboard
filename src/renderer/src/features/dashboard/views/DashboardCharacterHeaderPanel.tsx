@@ -94,7 +94,7 @@ export function DashboardCharacterHeaderPanel(props: DashboardCharacterHeaderPan
 
   return (
     <div className="space-y-2.5">
-      <section className="soft-card rounded-[28px] p-4">
+      <section className="workbench-panel rounded-[28px] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="panel-kicker">Current Character</p>
