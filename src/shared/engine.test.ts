@@ -149,7 +149,6 @@ describe("shared/engine refreshCharacterState", () => {
     character.missions.abyssLowerRemaining = 0;
     character.missions.abyssMiddleRemaining = 0;
     character.activities.awakeningRemaining = 0;
-    character.activities.suppressionRemaining = 0;
     character.activities.dailyDungeonRemaining = 0;
     character.activities.sanctumRaidRemaining = 0;
     character.activities.sanctumBoxRemaining = 0;
@@ -166,8 +165,7 @@ describe("shared/engine refreshCharacterState", () => {
     expect(next.missions.abyssLowerRemaining).toBe(20);
     expect(next.missions.abyssMiddleRemaining).toBe(5);
     expect(next.activities.awakeningRemaining).toBe(3);
-    expect(next.activities.suppressionRemaining).toBe(3);
-    expect(next.activities.dailyDungeonRemaining).toBe(7);
+    expect(next.activities.dailyDungeonRemaining).toBe(14);
     expect(next.activities.sanctumRaidRemaining).toBe(2);
     expect(next.activities.sanctumBoxRemaining).toBe(2);
     expect(next.activities.expeditionBossRemaining).toBe(35);
@@ -187,6 +185,6 @@ describe("shared/engine task helpers", () => {
     character.activities.expeditionTicketBonus = 2;
 
     const task = getTask("expedition");
-    expect(getTaskProgressText(character, task, DEFAULT_SETTINGS)).toBe("7(+2)/21");
+    expect(getTaskProgressText(character, task, DEFAULT_SETTINGS)).toBe("7(+2)/14");
   });
 });

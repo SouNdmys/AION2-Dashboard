@@ -5,7 +5,6 @@ import {
   addCharacterAction,
   applyCorridorCompletionFromSettingsAction,
   applyCorridorSettingsAction,
-  assignExtraAodeCharacterAction,
   deleteAccountAction,
   deleteCharacterAction,
   renameAccountAction,
@@ -37,10 +36,11 @@ interface CreateDashboardAccountResourceHandlersParams {
   profileClassTagInput: string;
   profileGearScoreInput: string;
   corridorDraft: CorridorDraft;
-  selectedAodePurchaseLimit: number;
-  selectedAodeConvertLimit: number;
   shopAodePurchaseUsedInput: string;
-  shopDailyDungeonTicketPurchaseUsedInput: string;
+  shopUnknownChallengeTicketUsedInput: string;
+  shopExpeditionChoiceBoxUsedInput: string;
+  shopNightmareInstantUsedInput: string;
+  shopAbyssReplenishUsedInput: string;
   transformAodeUsedInput: string;
   appActions: AppActions;
   sync: SyncRunner;
@@ -67,7 +67,6 @@ interface AccountResourceHandlers {
   onApplyCorridorCompletionFromSettings: () => void;
   onSaveShopPlan: () => void;
   onSaveTransformPlan: () => void;
-  onAssignExtraAodeCharacter: (assignExtra: boolean) => void;
 }
 
 export function createDashboardAccountResourceHandlers(
@@ -86,10 +85,11 @@ export function createDashboardAccountResourceHandlers(
     profileClassTagInput,
     profileGearScoreInput,
     corridorDraft,
-    selectedAodePurchaseLimit,
-    selectedAodeConvertLimit,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     appActions,
     sync,
@@ -115,30 +115,15 @@ export function createDashboardAccountResourceHandlers(
   }
 
   function onSelectAccount(accountId: string): void {
-    selectAccountAction({
-      accountId,
-      appActions,
-      sync,
-    });
+    selectAccountAction({ accountId, appActions, sync });
   }
 
   function onRenameAccount(): void {
-    renameAccountAction({
-      selectedAccount,
-      accountNameInput,
-      accountRegionInput,
-      appActions,
-      sync,
-    });
+    renameAccountAction({ selectedAccount, accountNameInput, accountRegionInput, appActions, sync });
   }
 
   function onDeleteAccount(): void {
-    deleteAccountAction({
-      selectedAccount,
-      appActions,
-      sync,
-      confirm,
-    });
+    deleteAccountAction({ selectedAccount, appActions, sync, confirm });
   }
 
   function onAddCharacter(): void {
@@ -154,12 +139,7 @@ export function createDashboardAccountResourceHandlers(
   }
 
   function onRenameCharacter(): void {
-    renameCharacterAction({
-      selectedCharacter,
-      renameInput,
-      appActions,
-      sync,
-    });
+    renameCharacterAction({ selectedCharacter, renameInput, appActions, sync });
   }
 
   function onSaveCharacterProfile(): void {
@@ -174,12 +154,7 @@ export function createDashboardAccountResourceHandlers(
   }
 
   function onDeleteCharacter(): void {
-    deleteCharacterAction({
-      selectedCharacter,
-      appActions,
-      sync,
-      confirm,
-    });
+    deleteCharacterAction({ selectedCharacter, appActions, sync, confirm });
   }
 
   function onSelectCharacter(characterId: string): void {
@@ -192,12 +167,7 @@ export function createDashboardAccountResourceHandlers(
   }
 
   function onToggleCharacterStar(characterId: string, isStarred: boolean): void {
-    toggleCharacterStarAction({
-      characterId,
-      isStarred,
-      appActions,
-      sync,
-    });
+    toggleCharacterStarAction({ characterId, isStarred, appActions, sync });
   }
 
   function onApplyCorridorSettings(): void {
@@ -224,8 +194,10 @@ export function createDashboardAccountResourceHandlers(
     void saveShopPlanAction({
       selectedCharacterId: selectedCharacter?.id ?? null,
       shopAodePurchaseUsedInput,
-      shopDailyDungeonTicketPurchaseUsedInput,
-      purchaseLimit: selectedAodePurchaseLimit,
+      shopUnknownChallengeTicketUsedInput,
+      shopExpeditionChoiceBoxUsedInput,
+      shopNightmareInstantUsedInput,
+      shopAbyssReplenishUsedInput,
       appActions,
       sync,
       onError: (message) => setError(message),
@@ -236,19 +208,9 @@ export function createDashboardAccountResourceHandlers(
     void saveTransformPlanAction({
       selectedCharacterId: selectedCharacter?.id ?? null,
       transformAodeUsedInput,
-      convertLimit: selectedAodeConvertLimit,
       appActions,
       sync,
       onError: (message) => setError(message),
-    });
-  }
-
-  function onAssignExtraAodeCharacter(assignExtra: boolean): void {
-    void assignExtraAodeCharacterAction({
-      selectedCharacterId: selectedCharacter?.id ?? null,
-      assignExtra,
-      appActions,
-      sync,
     });
   }
 
@@ -267,6 +229,5 @@ export function createDashboardAccountResourceHandlers(
     onApplyCorridorCompletionFromSettings,
     onSaveShopPlan,
     onSaveTransformPlan,
-    onAssignExtraAodeCharacter,
   };
 }

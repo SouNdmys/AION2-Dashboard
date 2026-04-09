@@ -28,7 +28,7 @@ interface DashboardCharacterModePanelsProps {
   onOpenCompleteDialog: (taskId: TaskId, title: string) => void;
   onOpenUseTicketDialog: (taskId: TaskId, title: string) => void;
   onOpenTaskEditDialog: (
-    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game",
+    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "daily_dungeon" | "mini_game",
   ) => void;
   onOpenSanctumEditDialog: () => void;
 }

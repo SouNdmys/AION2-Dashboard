@@ -66,9 +66,6 @@ function getTaskCapDisplay(task: TaskDefinition, settings?: AppSettings): number
   if (task.id === "awakening") {
     return settings.awakeningRunCap ?? task.baseCapDisplay ?? "-";
   }
-  if (task.id === "suppression") {
-    return settings.suppressionRunCap ?? task.baseCapDisplay ?? "-";
-  }
   return task.baseCapDisplay ?? "-";
 }
 
@@ -271,14 +268,16 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
     next.missions.abyssMiddleRemaining = 5;
     next.activities.awakeningRemaining = 3;
     next.activities.awakeningTicketBonus = 0;
-    next.activities.suppressionRemaining = 3;
-    next.activities.dailyDungeonRemaining = 7;
+    next.activities.dailyDungeonRemaining = 14;
     next.activities.sanctumRaidRemaining = 2;
     next.activities.sanctumBoxRemaining = 2;
     next.activities.expeditionBossRemaining = EXPEDITION_BOSS_MAX;
     next.activities.transcendenceBossRemaining = TRANSCENDENCE_BOSS_MAX;
     next.aodePlan.shopAodePurchaseUsed = 0;
-    next.aodePlan.shopDailyDungeonTicketPurchaseUsed = 0;
+    next.aodePlan.shopUnknownChallengeTicketUsed = 0;
+    next.aodePlan.shopExpeditionChoiceBoxUsed = 0;
+    next.aodePlan.shopNightmareInstantUsed = 0;
+    next.aodePlan.shopAbyssReplenishUsed = 0;
     next.aodePlan.transformAodeUsed = 0;
     next.stats = createEmptyWeeklyStats(now.toISOString());
   }
@@ -309,7 +308,6 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
 
   next.activities.nightmareTicketBonus = clamp(next.activities.nightmareTicketBonus, 0, 999);
   next.activities.awakeningTicketBonus = clamp(next.activities.awakeningTicketBonus, 0, 999);
-  next.activities.suppressionTicketBonus = clamp(next.activities.suppressionTicketBonus, 0, 999);
   next.activities.dailyDungeonTicketStored = clamp(next.activities.dailyDungeonTicketStored, 0, 30);
   next.activities.miniGameTicketBonus = clamp(next.activities.miniGameTicketBonus, 0, 999);
   next.activities.expeditionTicketBonus = clamp(next.activities.expeditionTicketBonus, 0, 999);
@@ -343,7 +341,6 @@ export function buildCharacterSummary(character: CharacterState, settings: AppSe
     pendingLabels.push("奥德能量>800，建议清体力");
   }
   if (character.activities.awakeningRemaining + character.activities.awakeningTicketBonus > 0) pendingLabels.push("觉醒战可打");
-  if (character.activities.suppressionRemaining + character.activities.suppressionTicketBonus > 0) pendingLabels.push("讨伐战可打");
   if (character.activities.nightmareRemaining + character.activities.nightmareTicketBonus > 0) pendingLabels.push("恶梦可打");
   if (character.activities.corridorLowerAvailable > 0) pendingLabels.push("下层回廊可打");
   if (character.activities.corridorMiddleAvailable > 0) pendingLabels.push("中层回廊可打");
@@ -363,7 +360,6 @@ export function buildCharacterSummary(character: CharacterState, settings: AppSe
     hasWeeklyMissionLeft: character.missions.weeklyRemaining > 0,
     canRunNightmare: character.activities.nightmareRemaining + character.activities.nightmareTicketBonus > 0,
     canRunAwakening: character.activities.awakeningRemaining + character.activities.awakeningTicketBonus > 0,
-    canRunSuppression: character.activities.suppressionRemaining + character.activities.suppressionTicketBonus > 0,
     pendingLabels,
   };
 }

@@ -100,7 +100,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
                 disabled={busy}
               />
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <input
                 className="field-control-sm"
                 value={settingsDraft.expeditionRunCap}
@@ -128,13 +128,6 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
                 onChange={(event) => onSettingsDraftChange({ ...settingsDraft, awakeningRunCap: event.target.value })}
                 disabled={busy}
                 placeholder="觉醒上限"
-              />
-              <input
-                className="field-control-sm"
-                value={settingsDraft.suppressionRunCap}
-                onChange={(event) => onSettingsDraftChange({ ...settingsDraft, suppressionRunCap: event.target.value })}
-                disabled={busy}
-                placeholder="讨伐上限"
               />
             </div>
           </div>

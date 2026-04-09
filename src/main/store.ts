@@ -43,7 +43,7 @@ import {
   restoreAppStateByDelta,
 } from "./store-domain-history";
 import {
-  applyTaskActionToCharacters,
+  applyTaskActionToState,
   buildTaskActionDescription,
   resetWeeklyStatsForCharacters,
 } from "./store-domain-progression";
@@ -65,7 +65,11 @@ import {
   resolveSelectionForAccount,
   resolveSelectionForCharacter,
 } from "./store-domain-selection";
-import { normalizeAppState } from "./store-domain-snapshot";
+import {
+  normalizeAppState,
+  syncAccountSharedStateFromCharacters,
+  syncAccountSharedStateToCharacters,
+} from "./store-domain-snapshot";
 import { buildExportPayload, buildImportedState, parseImportPayload } from "./store-domain-transfer";
 import {
   buildDefaultExportPath as buildDefaultExportPathByInfra,
@@ -168,9 +172,12 @@ function maybeCreateDailyAutoBackup(state: AppState): void {
 
 export function getAppState(): AppState {
   const current = normalizeAppState(store.store);
+  const refreshedCharacters = refreshAllCharacters(current.characters, current.settings);
+  const refreshedAccounts = syncAccountSharedStateFromCharacters(current.accounts, refreshedCharacters);
   return {
     ...current,
-    characters: refreshAllCharacters(current.characters, current.settings),
+    accounts: refreshedAccounts,
+    characters: syncAccountSharedStateToCharacters(refreshedAccounts, refreshedCharacters),
   };
 }
 
@@ -378,7 +385,9 @@ export function applyAction(input: ApplyTaskActionInput): AppState {
       description: buildTaskActionDescription(input),
     },
     (draft) => {
-      draft.characters = applyTaskActionToCharacters(draft.characters, draft.settings, input);
+      const next = applyTaskActionToState(draft.accounts, draft.characters, draft.settings, input);
+      draft.accounts = next.accounts;
+      draft.characters = next.characters;
       return draft;
     },
   );
@@ -434,7 +443,9 @@ export function updateRaidCounts(
   return commitMutation(
     { action: "手动设定次数", characterId },
     (draft) => {
-      draft.characters = applyRaidCountsUpdate(draft.characters, draft.settings, characterId, payload);
+      const next = applyRaidCountsUpdate(draft.accounts, draft.characters, draft.settings, characterId, payload);
+      draft.accounts = next.accounts;
+      draft.characters = next.characters;
       return draft;
     },
   );

@@ -62,7 +62,8 @@ describe("workshop/pricing-history-orchestrator", () => {
   it("builds history result with market filter and suspect exclusion by default", () => {
     const result = buildWorkshopPriceHistoryResult(BASE_STATE, {
       itemId: "item-1",
-      days: 30,
+      fromAt: "2026-02-24T00:00:00.000Z",
+      toAt: "2026-02-27T00:00:00.000Z",
       market: "server",
     });
 

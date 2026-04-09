@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 import {
+  ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
+  AODE_CONVERT_SERVER_LIMIT,
+  AODE_SHOP_SERVER_LIMIT,
   APP_STATE_VERSION,
   createDefaultAccount,
   createDefaultCharacter,
   createEmptyWeeklyStats,
+  DAILY_DUNGEON_SHARED_MAX,
+  EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
   ENERGY_BASE_CAP,
   ENERGY_BONUS_CAP,
+  NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+  UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
 } from "../shared/constants";
 import type {
   AccountState,
@@ -77,14 +84,6 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
     typeof aodePlanRaw?.weeklyPurchaseUsed === "number" ? clamp(Math.floor(aodePlanRaw.weeklyPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD) : 0;
   const legacyWeeklyConvertUsed =
     typeof aodePlanRaw?.weeklyConvertUsed === "number" ? clamp(Math.floor(aodePlanRaw.weeklyConvertUsed), 0, SETTINGS_MAX_THRESHOLD) : 0;
-  const suppressionRaw =
-    typeof activitiesRaw?.suppressionRemaining === "number" ? Math.max(0, Math.floor(activitiesRaw.suppressionRemaining)) : 3;
-  const suppressionBonusRaw =
-    typeof activitiesRaw?.suppressionTicketBonus === "number"
-      ? clamp(activitiesRaw.suppressionTicketBonus, 0, 999)
-      : typeof activitiesRaw?.suppressionTicketStored === "number"
-        ? clamp(activitiesRaw.suppressionTicketStored, 0, 999)
-        : Math.max(0, suppressionRaw - 3);
 
   return {
     id,
@@ -108,10 +107,24 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
         typeof aodePlanRaw?.shopAodePurchaseUsed === "number"
           ? clamp(Math.floor(aodePlanRaw.shopAodePurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
           : legacyWeeklyPurchaseUsed,
-      shopDailyDungeonTicketPurchaseUsed:
-        typeof aodePlanRaw?.shopDailyDungeonTicketPurchaseUsed === "number"
-          ? clamp(Math.floor(aodePlanRaw.shopDailyDungeonTicketPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
-          : base.aodePlan.shopDailyDungeonTicketPurchaseUsed,
+      shopUnknownChallengeTicketUsed:
+        typeof aodePlanRaw?.shopUnknownChallengeTicketUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopUnknownChallengeTicketUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : typeof aodePlanRaw?.shopDailyDungeonTicketPurchaseUsed === "number"
+            ? clamp(Math.floor(aodePlanRaw.shopDailyDungeonTicketPurchaseUsed), 0, SETTINGS_MAX_THRESHOLD)
+            : base.aodePlan.shopUnknownChallengeTicketUsed,
+      shopExpeditionChoiceBoxUsed:
+        typeof aodePlanRaw?.shopExpeditionChoiceBoxUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopExpeditionChoiceBoxUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.shopExpeditionChoiceBoxUsed,
+      shopNightmareInstantUsed:
+        typeof aodePlanRaw?.shopNightmareInstantUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopNightmareInstantUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.shopNightmareInstantUsed,
+      shopAbyssReplenishUsed:
+        typeof aodePlanRaw?.shopAbyssReplenishUsed === "number"
+          ? clamp(Math.floor(aodePlanRaw.shopAbyssReplenishUsed), 0, SETTINGS_MAX_THRESHOLD)
+          : base.aodePlan.shopAbyssReplenishUsed,
       transformAodeUsed:
         typeof aodePlanRaw?.transformAodeUsed === "number"
           ? clamp(Math.floor(aodePlanRaw.transformAodeUsed), 0, SETTINGS_MAX_THRESHOLD)
@@ -148,11 +161,6 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
         typeof activitiesRaw?.awakeningTicketBonus === "number"
           ? clamp(activitiesRaw.awakeningTicketBonus, 0, 999)
           : base.activities.awakeningTicketBonus,
-      suppressionRemaining:
-        typeof activitiesRaw?.suppressionRemaining === "number"
-          ? clamp(activitiesRaw.suppressionRemaining, 0, 3)
-          : base.activities.suppressionRemaining,
-      suppressionTicketBonus: suppressionBonusRaw,
       dailyDungeonRemaining:
         typeof activitiesRaw?.dailyDungeonRemaining === "number"
           ? clamp(activitiesRaw.dailyDungeonRemaining, 0, 999)
@@ -266,6 +274,8 @@ function normalizeAccount(raw: unknown, index: number): AccountState {
   const id = typeof entity?.id === "string" && entity.id.trim() ? entity.id : randomUUID();
   const name =
     typeof entity?.name === "string" && entity.name.trim() ? entity.name.trim() : `账号 ${index + 1}`;
+  const sharedActivitiesRaw = entity?.sharedActivities as Record<string, unknown> | undefined;
+  const breezePlanRaw = entity?.breezePlan as Record<string, unknown> | undefined;
   return {
     id,
     name,
@@ -274,6 +284,54 @@ function normalizeAccount(raw: unknown, index: number): AccountState {
       typeof entity?.extraAodeCharacterId === "string" && entity.extraAodeCharacterId.trim()
         ? entity.extraAodeCharacterId.trim()
         : undefined,
+    sharedActivities: {
+      dailyDungeonRemaining:
+        typeof sharedActivitiesRaw?.dailyDungeonRemaining === "number"
+          ? clamp(Math.floor(sharedActivitiesRaw.dailyDungeonRemaining), 0, DAILY_DUNGEON_SHARED_MAX)
+          : DAILY_DUNGEON_SHARED_MAX,
+      dailyDungeonTicketStored:
+        typeof sharedActivitiesRaw?.dailyDungeonTicketStored === "number"
+          ? clamp(Math.floor(sharedActivitiesRaw.dailyDungeonTicketStored), 0, 30)
+          : 0,
+      weeklyRemaining:
+        typeof sharedActivitiesRaw?.weeklyRemaining === "number"
+          ? clamp(Math.floor(sharedActivitiesRaw.weeklyRemaining), 0, 12)
+          : 12,
+      abyssLowerRemaining:
+        typeof sharedActivitiesRaw?.abyssLowerRemaining === "number"
+          ? clamp(Math.floor(sharedActivitiesRaw.abyssLowerRemaining), 0, 20)
+          : 20,
+      abyssMiddleRemaining:
+        typeof sharedActivitiesRaw?.abyssMiddleRemaining === "number"
+          ? clamp(Math.floor(sharedActivitiesRaw.abyssMiddleRemaining), 0, 5)
+          : 5,
+    },
+    breezePlan: {
+      shopAodePurchaseUsed:
+        typeof breezePlanRaw?.shopAodePurchaseUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.shopAodePurchaseUsed), 0, AODE_SHOP_SERVER_LIMIT)
+          : 0,
+      shopUnknownChallengeTicketUsed:
+        typeof breezePlanRaw?.shopUnknownChallengeTicketUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.shopUnknownChallengeTicketUsed), 0, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT)
+          : 0,
+      shopExpeditionChoiceBoxUsed:
+        typeof breezePlanRaw?.shopExpeditionChoiceBoxUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.shopExpeditionChoiceBoxUsed), 0, EXPEDITION_CHOICE_BOX_SERVER_LIMIT)
+          : 0,
+      shopNightmareInstantUsed:
+        typeof breezePlanRaw?.shopNightmareInstantUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.shopNightmareInstantUsed), 0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT)
+          : 0,
+      shopAbyssReplenishUsed:
+        typeof breezePlanRaw?.shopAbyssReplenishUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.shopAbyssReplenishUsed), 0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)
+          : 0,
+      transformAodeUsed:
+        typeof breezePlanRaw?.transformAodeUsed === "number"
+          ? clamp(Math.floor(breezePlanRaw.transformAodeUsed), 0, AODE_CONVERT_SERVER_LIMIT)
+          : 0,
+    },
   };
 }
 
@@ -287,6 +345,80 @@ function alignAccountExtraAodeCharacter(accounts: AccountState[], characters: Ch
       return account;
     }
     return { ...account, extraAodeCharacterId: undefined };
+  });
+}
+
+export function syncAccountSharedStateToCharacters(accounts: AccountState[], characters: CharacterState[]): CharacterState[] {
+  return characters.map((character) => {
+    const account = accounts.find((item) => item.id === character.accountId);
+    if (!account) {
+      return character;
+    }
+    return {
+      ...character,
+      activities: {
+        ...character.activities,
+        dailyDungeonRemaining: account.sharedActivities.dailyDungeonRemaining,
+        dailyDungeonTicketStored: account.sharedActivities.dailyDungeonTicketStored,
+      },
+      missions: {
+        ...character.missions,
+        weeklyRemaining: account.sharedActivities.weeklyRemaining,
+        abyssLowerRemaining: account.sharedActivities.abyssLowerRemaining,
+        abyssMiddleRemaining: account.sharedActivities.abyssMiddleRemaining,
+      },
+      aodePlan: {
+        shopAodePurchaseUsed: account.breezePlan.shopAodePurchaseUsed,
+        shopUnknownChallengeTicketUsed: account.breezePlan.shopUnknownChallengeTicketUsed,
+        shopExpeditionChoiceBoxUsed: account.breezePlan.shopExpeditionChoiceBoxUsed,
+        shopNightmareInstantUsed: account.breezePlan.shopNightmareInstantUsed,
+        shopAbyssReplenishUsed: account.breezePlan.shopAbyssReplenishUsed,
+        transformAodeUsed: account.breezePlan.transformAodeUsed,
+      },
+    };
+  });
+}
+
+export function syncAccountSharedStateFromCharacters(accounts: AccountState[], characters: CharacterState[]): AccountState[] {
+  return accounts.map((account) => {
+    const firstCharacter = characters.find((character) => character.accountId === account.id);
+    if (!firstCharacter) {
+      return account;
+    }
+    return {
+      ...account,
+      sharedActivities: {
+        dailyDungeonRemaining: clamp(firstCharacter.activities.dailyDungeonRemaining, 0, DAILY_DUNGEON_SHARED_MAX),
+        dailyDungeonTicketStored: clamp(firstCharacter.activities.dailyDungeonTicketStored, 0, 30),
+        weeklyRemaining: clamp(firstCharacter.missions.weeklyRemaining, 0, 12),
+        abyssLowerRemaining: clamp(firstCharacter.missions.abyssLowerRemaining, 0, 20),
+        abyssMiddleRemaining: clamp(firstCharacter.missions.abyssMiddleRemaining, 0, 5),
+      },
+      breezePlan: {
+        shopAodePurchaseUsed: clamp(firstCharacter.aodePlan.shopAodePurchaseUsed, 0, AODE_SHOP_SERVER_LIMIT),
+        shopUnknownChallengeTicketUsed: clamp(
+          firstCharacter.aodePlan.shopUnknownChallengeTicketUsed,
+          0,
+          UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
+        ),
+        shopExpeditionChoiceBoxUsed: clamp(
+          firstCharacter.aodePlan.shopExpeditionChoiceBoxUsed,
+          0,
+          EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
+        ),
+        shopNightmareInstantUsed: clamp(
+          firstCharacter.aodePlan.shopNightmareInstantUsed,
+          0,
+          NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+        ),
+        shopAbyssReplenishUsed: clamp(
+          firstCharacter.aodePlan.shopAbyssReplenishUsed,
+          0,
+          ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
+        ),
+        transformAodeUsed: clamp(firstCharacter.aodePlan.transformAodeUsed, 0, AODE_CONVERT_SERVER_LIMIT),
+      },
+    };
   });
 }
 
@@ -312,13 +444,14 @@ function normalizeSnapshot(raw: unknown): AppStateSnapshot {
     ...item,
     accountId: accountIds.has(item.accountId) ? item.accountId : safeFallbackAccountId,
   }));
-  const accountsAligned = alignAccountExtraAodeCharacter(accounts, characters);
+  const accountsAligned = syncAccountSharedStateFromCharacters(alignAccountExtraAodeCharacter(accounts, characters), characters);
+  const syncedCharacters = syncAccountSharedStateToCharacters(accountsAligned, characters);
   const selectedCharacterIdRaw = entity.selectedCharacterId;
   const selectedCharacterId =
-    typeof selectedCharacterIdRaw === "string" && characters.some((item) => item.id === selectedCharacterIdRaw)
+    typeof selectedCharacterIdRaw === "string" && syncedCharacters.some((item) => item.id === selectedCharacterIdRaw)
       ? selectedCharacterIdRaw
-      : characters[0]?.id ?? null;
-  const selectedCharacter = characters.find((item) => item.id === selectedCharacterId) ?? characters[0];
+      : syncedCharacters[0]?.id ?? null;
+  const selectedCharacter = syncedCharacters.find((item) => item.id === selectedCharacterId) ?? syncedCharacters[0];
   const selectedAccountIdRaw = entity.selectedAccountId;
   const selectedAccountId =
     typeof selectedAccountIdRaw === "string" && accountIds.has(selectedAccountIdRaw)
@@ -330,7 +463,7 @@ function normalizeSnapshot(raw: unknown): AppStateSnapshot {
     selectedCharacterId,
     settings,
     accounts: accountsAligned,
-    characters,
+    characters: syncedCharacters,
   };
 }
 
@@ -482,7 +615,8 @@ export function normalizeAppState(raw: unknown): AppState {
   if (sourceVersion < 4) {
     characters = characters.map((item) => migrateDailyDungeonLegacy(item));
   }
-  const accountsAligned = alignAccountExtraAodeCharacter(accounts, characters);
+  const accountsAligned = syncAccountSharedStateFromCharacters(alignAccountExtraAodeCharacter(accounts, characters), characters);
+  characters = syncAccountSharedStateToCharacters(accountsAligned, characters);
 
   const selectedCharacterIdRaw = entity.selectedCharacterId;
   const selectedCharacterId =

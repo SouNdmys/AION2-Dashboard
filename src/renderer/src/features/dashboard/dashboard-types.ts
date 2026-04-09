@@ -22,7 +22,7 @@ export type DialogState =
   | { kind: "corridor_complete"; lane: "lower" | "middle"; amount: string }
   | {
       kind: "task_edit";
-      taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game";
+      taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "daily_dungeon" | "mini_game";
       title: string;
       remainingLabel: string;
       bonusLabel: string;
@@ -40,7 +40,6 @@ export interface SettingsDraft {
   transcendenceRunCap: string;
   nightmareRunCap: string;
   awakeningRunCap: string;
-  suppressionRunCap: string;
   expeditionWarnThreshold: string;
   transcendenceWarnThreshold: string;
   priorityWeightAode: string;

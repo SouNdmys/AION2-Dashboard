@@ -25,8 +25,6 @@ export interface DashboardOverviewRow {
   nightmareTotal: number;
   awakeningCurrent: number;
   awakeningTotal: number;
-  suppressionCurrent: number;
-  suppressionTotal: number;
   miniGameCurrent: number;
   miniGameTotal: number;
   spiritCurrent: number;
@@ -48,10 +46,16 @@ export interface DashboardOverviewRow {
   aodeBaseEnergyCap: number;
   aodeBaseEnergyOverflow: boolean;
   aodeShopAodePurchaseUsed: number;
-  aodeShopDailyDungeonTicketPurchaseUsed: number;
+  aodeShopUnknownChallengeTicketUsed: number;
+  aodeShopExpeditionChoiceBoxUsed: number;
+  aodeShopNightmareInstantUsed: number;
+  aodeShopAbyssReplenishUsed: number;
   aodeTransformAodeUsed: number;
   aodeShopAodePurchaseRemaining: number;
-  aodeShopDailyDungeonTicketPurchaseRemaining: number;
+  aodeShopUnknownChallengeTicketRemaining: number;
+  aodeShopExpeditionChoiceBoxRemaining: number;
+  aodeShopNightmareInstantRemaining: number;
+  aodeShopAbyssReplenishRemaining: number;
   aodeTransformAodeRemaining: number;
   aodeShopPurchaseLimit: number;
   aodeTransformLimit: number;
@@ -111,7 +115,7 @@ function getOverviewMetricGroupKey(metricKey: string): OverviewMetricGroupKey {
     return "dungeon";
   }
   if (
-    ["daily_dungeon", "nightmare", "awakening", "suppression", "weekly_mission", "abyss_lower", "abyss_middle", "shop_aode", "shop_ticket", "transform_aode"].includes(
+    ["daily_dungeon", "nightmare", "awakening", "weekly_mission", "abyss_lower", "abyss_middle", "shop_aode", "shop_unknown_ticket", "shop_expedition_box", "shop_nightmare_ticket", "shop_abyss_ticket", "transform_aode"].includes(
       metricKey,
     )
   ) {
@@ -149,7 +153,6 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
     { key: "daily_dungeon", label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
     { key: "nightmare", label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
     { key: "awakening", label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },
-    { key: "suppression", label: "讨伐", current: entry.suppressionCurrent, total: entry.suppressionTotal, urgent: isWeeklyCriticalWindow },
     { key: "mini_game", label: "小游戏", current: entry.miniGameCurrent, total: entry.miniGameTotal, urgent: false },
     { key: "spirit", label: "精灵", current: entry.spiritCurrent, total: entry.spiritTotal, urgent: false },
     { key: "daily_mission", label: "每日使命", current: entry.dailyMissionCurrent, total: entry.dailyMissionTotal, urgent: true },
@@ -160,10 +163,31 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
     { key: "corridor_middle", label: "回廊中层", current: entry.corridorMiddleCurrent, total: entry.corridorMiddleTotal, urgent: true },
     { key: "shop_aode", label: "商店-奥德", current: entry.aodeShopAodePurchaseRemaining, total: entry.aodeShopPurchaseLimit, urgent: isWeeklyCriticalWindow },
     {
-      key: "shop_ticket",
-      label: "商店-副本券",
-      current: entry.aodeShopDailyDungeonTicketPurchaseRemaining,
-      total: entry.aodeShopPurchaseLimit,
+      key: "shop_unknown_ticket",
+      label: "商店-未知键队券",
+      current: entry.aodeShopUnknownChallengeTicketRemaining,
+      total: 21,
+      urgent: isWeeklyCriticalWindow,
+    },
+    {
+      key: "shop_expedition_box",
+      label: "商店-远征/超越箱",
+      current: entry.aodeShopExpeditionChoiceBoxRemaining,
+      total: 21,
+      urgent: isWeeklyCriticalWindow,
+    },
+    {
+      key: "shop_nightmare_ticket",
+      label: "商店-恶梦完成券",
+      current: entry.aodeShopNightmareInstantRemaining,
+      total: 14,
+      urgent: isWeeklyCriticalWindow,
+    },
+    {
+      key: "shop_abyss_ticket",
+      label: "商店-深渊重镇券",
+      current: entry.aodeShopAbyssReplenishRemaining,
+      total: 1,
       urgent: isWeeklyCriticalWindow,
     },
     { key: "transform_aode", label: "变换-奥德", current: entry.aodeTransformAodeRemaining, total: entry.aodeTransformLimit, urgent: isWeeklyCriticalWindow },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { APP_STATE_VERSION, DEFAULT_SETTINGS, createDefaultAccount, createDefaultCharacter } from "../shared/constants";
 import type { AppSettings, CharacterState } from "../shared/types";
 import {
-  applyTaskActionToCharacters,
+  applyTaskActionToState,
   buildTaskActionDescription,
   resetWeeklyStatsForCharacters,
 } from "./store-domain-progression";
@@ -39,32 +39,54 @@ describe("store/store-domain-progression", () => {
   });
 
   it("applies task action to target character", () => {
+    const accounts = [createDefaultAccount("账号-1", "acc-1")];
     const characters = createCharacters();
     const settings = createSettings();
 
-    const next = applyTaskActionToCharacters(characters, settings, {
+    const next = applyTaskActionToState(accounts, characters, settings, {
       characterId: "char-1",
       taskId: "daily_mission",
       action: "complete_once",
       amount: 1,
     });
 
-    expect(next[0].missions.dailyRemaining).toBe(characters[0].missions.dailyRemaining - 1);
-    expect(next[0].stats.completions.daily_mission).toBe(characters[0].stats.completions.daily_mission + 1);
+    expect(next.characters[0].missions.dailyRemaining).toBe(characters[0].missions.dailyRemaining - 1);
+    expect(next.characters[0].stats.completions.daily_mission).toBe(characters[0].stats.completions.daily_mission + 1);
   });
 
   it("throws engine validation error when action is not allowed", () => {
+    const accounts = [createDefaultAccount("账号-1", "acc-1")];
     const characters = createCharacters();
     const settings = createSettings();
 
     expect(() =>
-      applyTaskActionToCharacters(characters, settings, {
+      applyTaskActionToState(accounts, characters, settings, {
         characterId: "char-1",
         taskId: "spirit_invasion",
         action: "set_completed",
         amount: 1,
       }),
     ).toThrowError("该任务不支持录入已完成次数");
+  });
+
+  it("mirrors shared weekly order progress to all characters in the same account", () => {
+    const accounts = [createDefaultAccount("账号-1", "acc-1")];
+    const characters = [
+      createDefaultCharacter("角色-1", "2026-02-26T00:00:00.000Z", "char-1", "acc-1"),
+      createDefaultCharacter("角色-2", "2026-02-26T00:00:00.000Z", "char-2", "acc-1"),
+    ];
+    const settings = createSettings();
+
+    const next = applyTaskActionToState(accounts, characters, settings, {
+      characterId: "char-1",
+      taskId: "weekly_order",
+      action: "set_completed",
+      amount: 4,
+    });
+
+    expect(next.accounts[0].sharedActivities.weeklyRemaining).toBe(8);
+    expect(next.characters[0].missions.weeklyRemaining).toBe(8);
+    expect(next.characters[1].missions.weeklyRemaining).toBe(8);
   });
 
   it("resets weekly stats for all characters", () => {

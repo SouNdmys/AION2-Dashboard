@@ -71,7 +71,10 @@ export function App(): JSX.Element {
   const [weeklyExpeditionCompletedInput, setWeeklyExpeditionCompletedInput] = useState("0");
   const [weeklyTranscendenceCompletedInput, setWeeklyTranscendenceCompletedInput] = useState("0");
   const [shopAodePurchaseUsedInput, setShopAodePurchaseUsedInput] = useState("0");
-  const [shopDailyDungeonTicketPurchaseUsedInput, setShopDailyDungeonTicketPurchaseUsedInput] = useState("0");
+  const [shopUnknownChallengeTicketUsedInput, setShopUnknownChallengeTicketUsedInput] = useState("0");
+  const [shopExpeditionChoiceBoxUsedInput, setShopExpeditionChoiceBoxUsedInput] = useState("0");
+  const [shopNightmareInstantUsedInput, setShopNightmareInstantUsedInput] = useState("0");
+  const [shopAbyssReplenishUsedInput, setShopAbyssReplenishUsedInput] = useState("0");
   const [transformAodeUsedInput, setTransformAodeUsedInput] = useState("0");
   const [workshopHistoryJumpItemId, setWorkshopHistoryJumpItemId] = useState<string | null>(null);
   const [workshopHistoryJumpSnapshotId, setWorkshopHistoryJumpSnapshotId] = useState<string | null>(null);
@@ -165,6 +168,9 @@ export function App(): JSX.Element {
     selectedIsAodeExtra,
     selectedShopAodePurchaseRemaining,
     selectedShopDailyDungeonTicketPurchaseRemaining,
+    selectedShopExpeditionChoiceBoxRemaining,
+    selectedShopNightmareInstantRemaining,
+    selectedShopAbyssReplenishRemaining,
     selectedTransformAodeRemaining,
   } = useDashboardDerivedModels({
     state,
@@ -227,12 +233,18 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!selected) return;
     setShopAodePurchaseUsedInput(String(selected.aodePlan.shopAodePurchaseUsed));
-    setShopDailyDungeonTicketPurchaseUsedInput(String(selected.aodePlan.shopDailyDungeonTicketPurchaseUsed));
+    setShopUnknownChallengeTicketUsedInput(String(selected.aodePlan.shopUnknownChallengeTicketUsed));
+    setShopExpeditionChoiceBoxUsedInput(String(selected.aodePlan.shopExpeditionChoiceBoxUsed));
+    setShopNightmareInstantUsedInput(String(selected.aodePlan.shopNightmareInstantUsed));
+    setShopAbyssReplenishUsedInput(String(selected.aodePlan.shopAbyssReplenishUsed));
     setTransformAodeUsedInput(String(selected.aodePlan.transformAodeUsed));
   }, [
     selected?.id,
     selected?.aodePlan.shopAodePurchaseUsed,
-    selected?.aodePlan.shopDailyDungeonTicketPurchaseUsed,
+    selected?.aodePlan.shopUnknownChallengeTicketUsed,
+    selected?.aodePlan.shopExpeditionChoiceBoxUsed,
+    selected?.aodePlan.shopNightmareInstantUsed,
+    selected?.aodePlan.shopAbyssReplenishUsed,
     selected?.aodePlan.transformAodeUsed,
   ]);
 
@@ -341,7 +353,6 @@ export function App(): JSX.Element {
     onApplyCorridorCompletionFromSettings,
     onSaveShopPlan,
     onSaveTransformPlan,
-    onAssignExtraAodeCharacter,
   } = useDashboardHandlers({
     appActions,
     state,
@@ -373,10 +384,11 @@ export function App(): JSX.Element {
     renameInput: renameName,
     profileClassTagInput,
     profileGearScoreInput,
-    selectedAodePurchaseLimit: selectedAodeLimits.purchaseLimit,
-    selectedAodeConvertLimit: selectedAodeLimits.convertLimit,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     setBusy,
     setError,
@@ -587,9 +599,15 @@ export function App(): JSX.Element {
             selectedAccountExtraCharacterName={selectedAccountExtraCharacterName}
             selectedShopAodePurchaseRemaining={selectedShopAodePurchaseRemaining}
             selectedShopDailyDungeonTicketPurchaseRemaining={selectedShopDailyDungeonTicketPurchaseRemaining}
+            selectedShopExpeditionChoiceBoxRemaining={selectedShopExpeditionChoiceBoxRemaining}
+            selectedShopNightmareInstantRemaining={selectedShopNightmareInstantRemaining}
+            selectedShopAbyssReplenishRemaining={selectedShopAbyssReplenishRemaining}
             selectedTransformAodeRemaining={selectedTransformAodeRemaining}
             shopAodePurchaseUsedInput={shopAodePurchaseUsedInput}
-            shopDailyDungeonTicketPurchaseUsedInput={shopDailyDungeonTicketPurchaseUsedInput}
+            shopUnknownChallengeTicketUsedInput={shopUnknownChallengeTicketUsedInput}
+            shopExpeditionChoiceBoxUsedInput={shopExpeditionChoiceBoxUsedInput}
+            shopNightmareInstantUsedInput={shopNightmareInstantUsedInput}
+            shopAbyssReplenishUsedInput={shopAbyssReplenishUsedInput}
             transformAodeUsedInput={transformAodeUsedInput}
             onSwitchToOverview={onSwitchToOverview}
             onRenameNameChange={setRenameName}
@@ -606,10 +624,12 @@ export function App(): JSX.Element {
             onWeeklyTranscendenceCompletedInputChange={setWeeklyTranscendenceCompletedInput}
             onSaveWeeklyCompletions={onSaveWeeklyCompletions}
             onShopAodePurchaseUsedInputChange={setShopAodePurchaseUsedInput}
-            onShopDailyDungeonTicketPurchaseUsedInputChange={setShopDailyDungeonTicketPurchaseUsedInput}
+            onShopUnknownChallengeTicketUsedInputChange={setShopUnknownChallengeTicketUsedInput}
+            onShopExpeditionChoiceBoxUsedInputChange={setShopExpeditionChoiceBoxUsedInput}
+            onShopNightmareInstantUsedInputChange={setShopNightmareInstantUsedInput}
+            onShopAbyssReplenishUsedInputChange={setShopAbyssReplenishUsedInput}
             onTransformAodeUsedInputChange={setTransformAodeUsedInput}
             onSaveShopPlan={onSaveShopPlan}
-            onAssignExtraAodeCharacter={onAssignExtraAodeCharacter}
             onSaveTransformPlan={onSaveTransformPlan}
           />
 

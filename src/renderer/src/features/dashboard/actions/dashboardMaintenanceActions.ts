@@ -120,7 +120,6 @@ export async function saveDashboardSettingsAction(params: SaveDashboardSettingsP
   const transcendenceRunCap = parseOptionalCap(settingsDraft.transcendenceRunCap);
   const nightmareRunCap = parseOptionalCap(settingsDraft.nightmareRunCap);
   const awakeningRunCap = parseOptionalCap(settingsDraft.awakeningRunCap);
-  const suppressionRunCap = parseOptionalCap(settingsDraft.suppressionRunCap);
   const priorityWeightAode = toInt(settingsDraft.priorityWeightAode);
   const priorityWeightSanctum = toInt(settingsDraft.priorityWeightSanctum);
   const priorityWeightCorridor = toInt(settingsDraft.priorityWeightCorridor);
@@ -149,8 +148,7 @@ export async function saveDashboardSettingsAction(params: SaveDashboardSettingsP
     expeditionRunCap === "invalid" ||
     transcendenceRunCap === "invalid" ||
     nightmareRunCap === "invalid" ||
-    awakeningRunCap === "invalid" ||
-    suppressionRunCap === "invalid"
+    awakeningRunCap === "invalid"
   ) {
     onError("次数上限参数无效，请填写正整数或留空");
     return;
@@ -190,7 +188,6 @@ export async function saveDashboardSettingsAction(params: SaveDashboardSettingsP
       transcendenceRunCap,
       nightmareRunCap,
       awakeningRunCap,
-      suppressionRunCap,
       expeditionWarnThreshold: expeditionWarn,
       transcendenceWarnThreshold: transcendenceWarn,
       priorityWeightAode,

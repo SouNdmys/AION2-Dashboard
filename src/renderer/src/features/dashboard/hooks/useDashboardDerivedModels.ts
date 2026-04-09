@@ -1,12 +1,17 @@
 import { useMemo } from "react";
 import {
+  ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
   AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD,
+  AODE_CONVERT_SERVER_LIMIT,
   AODE_ENERGY_SCHEDULE_HOURS,
-  AODE_WEEKLY_BASE_CONVERT_MAX,
-  AODE_WEEKLY_BASE_PURCHASE_MAX,
+  AODE_SHOP_SERVER_LIMIT,
+  DAILY_DUNGEON_SHARED_MAX,
+  EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
   EXPEDITION_SCHEDULE_HOURS,
   TASK_DEFINITIONS,
   TRANSCENDENCE_SCHEDULE_HOURS,
+  NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+  UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
 } from "../../../../../shared/constants";
 import { buildCharacterSummary } from "../../../../../shared/engine";
 import { getNextDailyReset, getNextScheduledTick, getNextUnifiedCorridorRefresh, getNextWeeklyReset } from "../../../../../shared/time";
@@ -58,15 +63,12 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
 
   const selectedAodeLimits = useMemo(() => {
     if (!state || !selected) {
-      return { purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX, convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX };
+      return { purchaseLimit: AODE_SHOP_SERVER_LIMIT, convertLimit: AODE_CONVERT_SERVER_LIMIT };
     }
     return getCharacterAodeLimits(state, selected.id);
   }, [state, selected?.id]);
 
-  const selectedAccountExtraCharacterName = useMemo(() => {
-    if (!state || !selectedAccount?.extraAodeCharacterId) return null;
-    return state.characters.find((item) => item.id === selectedAccount.extraAodeCharacterId)?.name ?? null;
-  }, [state, selectedAccount?.extraAodeCharacterId]);
+  const selectedAccountExtraCharacterName = useMemo(() => null, []);
 
   const summary = useMemo(() => {
     if (!state) return [];
@@ -84,7 +86,6 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
     const transcendenceCap = state.settings.transcendenceRunCap ?? 14;
     const nightmareCap = state.settings.nightmareRunCap ?? 14;
     const awakeningCap = state.settings.awakeningRunCap ?? 3;
-    const suppressionCap = state.settings.suppressionRunCap ?? 3;
     return state.accounts
       .map((account) => {
         const characters = state.characters
@@ -110,14 +111,12 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const sanctumBoxCurrent = item.activities.sanctumBoxRemaining;
             const sanctumBoxTotal = 2;
 
-            const dailyDungeonCurrent = item.activities.dailyDungeonRemaining + item.activities.dailyDungeonTicketStored;
-            const dailyDungeonTotal = 7 + item.activities.dailyDungeonTicketStored;
+            const dailyDungeonCurrent = account.sharedActivities.dailyDungeonRemaining + account.sharedActivities.dailyDungeonTicketStored;
+            const dailyDungeonTotal = DAILY_DUNGEON_SHARED_MAX + account.sharedActivities.dailyDungeonTicketStored;
             const nightmareCurrent = item.activities.nightmareRemaining + item.activities.nightmareTicketBonus;
             const nightmareTotal = nightmareCap + item.activities.nightmareTicketBonus;
             const awakeningCurrent = item.activities.awakeningRemaining + item.activities.awakeningTicketBonus;
             const awakeningTotal = awakeningCap + item.activities.awakeningTicketBonus;
-            const suppressionCurrent = item.activities.suppressionRemaining + item.activities.suppressionTicketBonus;
-            const suppressionTotal = suppressionCap + item.activities.suppressionTicketBonus;
             const miniGameCurrent = item.activities.miniGameRemaining + item.activities.miniGameTicketBonus;
             const miniGameTotal = 14 + item.activities.miniGameTicketBonus;
             const spiritCurrent = item.activities.spiritInvasionRemaining;
@@ -125,11 +124,11 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
 
             const dailyMissionCurrent = item.missions.dailyRemaining;
             const dailyMissionTotal = 5;
-            const weeklyMissionCurrent = item.missions.weeklyRemaining;
+            const weeklyMissionCurrent = account.sharedActivities.weeklyRemaining;
             const weeklyMissionTotal = 12;
-            const abyssLowerCurrent = item.missions.abyssLowerRemaining;
+            const abyssLowerCurrent = account.sharedActivities.abyssLowerRemaining;
             const abyssLowerTotal = 20;
-            const abyssMiddleCurrent = item.missions.abyssMiddleRemaining;
+            const abyssMiddleCurrent = account.sharedActivities.abyssMiddleRemaining;
             const abyssMiddleTotal = 5;
 
             const corridorLowerCurrent = item.activities.corridorLowerAvailable;
@@ -141,14 +140,17 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const aodeBonusEnergyCurrent = item.energy.bonusCurrent;
             const aodeBaseEnergyCap = item.energy.baseCap;
             const aodeBaseEnergyOverflow = aodeBaseEnergyCurrent > AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD;
-            const aodeShopAodePurchaseUsed = item.aodePlan.shopAodePurchaseUsed;
-            const aodeShopDailyDungeonTicketPurchaseUsed = item.aodePlan.shopDailyDungeonTicketPurchaseUsed;
-            const aodeTransformAodeUsed = item.aodePlan.transformAodeUsed;
+            const aodeShopAodePurchaseUsed = account.breezePlan.shopAodePurchaseUsed;
+            const aodeShopUnknownChallengeTicketUsed = account.breezePlan.shopUnknownChallengeTicketUsed;
+            const aodeShopExpeditionChoiceBoxUsed = account.breezePlan.shopExpeditionChoiceBoxUsed;
+            const aodeShopNightmareInstantUsed = account.breezePlan.shopNightmareInstantUsed;
+            const aodeShopAbyssReplenishUsed = account.breezePlan.shopAbyssReplenishUsed;
+            const aodeTransformAodeUsed = account.breezePlan.transformAodeUsed;
             const aodeShopAodePurchaseRemaining = Math.max(0, aodeLimits.purchaseLimit - aodeShopAodePurchaseUsed);
-            const aodeShopDailyDungeonTicketPurchaseRemaining = Math.max(
-              0,
-              aodeLimits.purchaseLimit - aodeShopDailyDungeonTicketPurchaseUsed,
-            );
+            const aodeShopUnknownChallengeTicketRemaining = Math.max(0, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT - aodeShopUnknownChallengeTicketUsed);
+            const aodeShopExpeditionChoiceBoxRemaining = Math.max(0, EXPEDITION_CHOICE_BOX_SERVER_LIMIT - aodeShopExpeditionChoiceBoxUsed);
+            const aodeShopNightmareInstantRemaining = Math.max(0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT - aodeShopNightmareInstantUsed);
+            const aodeShopAbyssReplenishRemaining = Math.max(0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT - aodeShopAbyssReplenishUsed);
             const aodeTransformAodeRemaining = Math.max(0, aodeLimits.convertLimit - aodeTransformAodeUsed);
             const dungeonReadyBuckets = [expeditionCurrent, transcendenceCurrent, sanctumRaidCurrent, sanctumBoxCurrent].filter(
               (value) => value > 0,
@@ -157,7 +159,6 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
               dailyDungeonCurrent,
               nightmareCurrent,
               awakeningCurrent,
-              suppressionCurrent,
               miniGameCurrent,
               spiritCurrent,
               weeklyMissionCurrent,
@@ -187,8 +188,6 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
               nightmareTotal,
               awakeningCurrent,
               awakeningTotal,
-              suppressionCurrent,
-              suppressionTotal,
               miniGameCurrent,
               miniGameTotal,
               spiritCurrent,
@@ -210,10 +209,16 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
               aodeBaseEnergyCap,
               aodeBaseEnergyOverflow,
               aodeShopAodePurchaseUsed,
-              aodeShopDailyDungeonTicketPurchaseUsed,
+              aodeShopUnknownChallengeTicketUsed,
+              aodeShopExpeditionChoiceBoxUsed,
+              aodeShopNightmareInstantUsed,
+              aodeShopAbyssReplenishUsed,
               aodeTransformAodeUsed,
               aodeShopAodePurchaseRemaining,
-              aodeShopDailyDungeonTicketPurchaseRemaining,
+              aodeShopUnknownChallengeTicketRemaining,
+              aodeShopExpeditionChoiceBoxRemaining,
+              aodeShopNightmareInstantRemaining,
+              aodeShopAbyssReplenishRemaining,
               aodeTransformAodeRemaining,
               aodeShopPurchaseLimit: aodeLimits.purchaseLimit,
               aodeTransformLimit: aodeLimits.convertLimit,
@@ -318,12 +323,11 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
       daily_dungeon: 1,
       nightmare: 2,
       awakening: 3,
-      suppression: 4,
-      weekly_order: 5,
-      abyss_lower: 6,
-      abyss_middle: 7,
-      mini_game: 8,
-      spirit_invasion: 9,
+      weekly_order: 4,
+      abyss_lower: 5,
+      abyss_middle: 6,
+      mini_game: 7,
+      spirit_invasion: 8,
     };
     if (base["周常"]) {
       base["周常"] = [...base["周常"]].sort((left, right) => {
@@ -447,10 +451,6 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
         pushItem(entry, "awakening-weekly-due", "觉醒战（周刷新前）", 1000 + entry.awakeningCurrent, "high", "weekly", `剩余 ${formatCounter(entry.awakeningCurrent, entry.awakeningTotal)}，48 小时内优先清理`);
       }
 
-      if (weeklyCriticalWindow && entry.suppressionCurrent > 0) {
-        pushItem(entry, "suppression-weekly-due", "讨伐战（周刷新前）", 995 + entry.suppressionCurrent, "high", "weekly", `剩余 ${formatCounter(entry.suppressionCurrent, entry.suppressionTotal)}，48 小时内优先清理`);
-      }
-
       if (entry.expeditionCurrent > 0) {
         const nearCap = entry.expeditionCurrent >= Math.max(1, entry.expeditionTotal - 2);
         pushItem(entry, "expedition", nearCap ? "远征（接近满次）" : "远征（清体力收益）", (nearCap ? 860 : 820) + entry.expeditionCurrent, nearCap ? "high" : "medium", "dungeon", `剩余 ${formatCounter(entry.expeditionCurrent, entry.expeditionTotal)}`);
@@ -479,8 +479,17 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
       if (weeklyCriticalWindow && entry.aodeShopAodePurchaseRemaining > 0) {
         pushItem(entry, "shop-aode-weekly-due", "商店-奥德（周刷新前）", 980 + entry.aodeShopAodePurchaseRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopAodePurchaseRemaining, entry.aodeShopPurchaseLimit)}`);
       }
-      if (weeklyCriticalWindow && entry.aodeShopDailyDungeonTicketPurchaseRemaining > 0) {
-        pushItem(entry, "shop-ticket-weekly-due", "商店-副本券（周刷新前）", 978 + entry.aodeShopDailyDungeonTicketPurchaseRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopDailyDungeonTicketPurchaseRemaining, entry.aodeShopPurchaseLimit)}`);
+      if (weeklyCriticalWindow && entry.aodeShopUnknownChallengeTicketRemaining > 0) {
+        pushItem(entry, "shop-unknown-ticket-weekly-due", "商店-未知键队券（周刷新前）", 978 + entry.aodeShopUnknownChallengeTicketRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopUnknownChallengeTicketRemaining, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT)}`);
+      }
+      if (weeklyCriticalWindow && entry.aodeShopExpeditionChoiceBoxRemaining > 0) {
+        pushItem(entry, "shop-expedition-box-weekly-due", "商店-远征/超越箱（周刷新前）", 977 + entry.aodeShopExpeditionChoiceBoxRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopExpeditionChoiceBoxRemaining, EXPEDITION_CHOICE_BOX_SERVER_LIMIT)}`);
+      }
+      if (weeklyCriticalWindow && entry.aodeShopNightmareInstantRemaining > 0) {
+        pushItem(entry, "shop-nightmare-ticket-weekly-due", "商店-恶梦完成券（周刷新前）", 975 + entry.aodeShopNightmareInstantRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopNightmareInstantRemaining, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT)}`);
+      }
+      if (weeklyCriticalWindow && entry.aodeShopAbyssReplenishRemaining > 0) {
+        pushItem(entry, "shop-abyss-refill-weekly-due", "商店-深渊重镇补充券（周刷新前）", 974 + entry.aodeShopAbyssReplenishRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopAbyssReplenishRemaining, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)}`);
       }
       if (weeklyCriticalWindow && entry.aodeTransformAodeRemaining > 0) {
         pushItem(entry, "transform-aode-weekly-due", "变换-奥德（周刷新前）", 976 + entry.aodeTransformAodeRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeTransformAodeRemaining, entry.aodeTransformLimit)}`);
@@ -510,7 +519,7 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
   const readyCharacters = summary.filter((item) => item.canRunExpedition).length;
   const weeklyGold = summary.reduce((acc, item) => acc + item.estimatedGoldIfClearEnergy, 0);
   const pendingDaily = summary.filter((item) => item.hasDailyMissionLeft).length;
-  const pendingWeekly = summary.filter((item) => item.hasWeeklyMissionLeft).length;
+  const pendingWeekly = state?.accounts.filter((item) => item.sharedActivities.weeklyRemaining > 0).length ?? 0;
   const weeklyEarned = summary.reduce((acc, item) => acc + item.weeklyGoldEarned, 0);
   const weeklyExpeditionRuns = state?.characters.reduce((acc, item) => acc + item.stats.completions.expedition, 0) ?? 0;
   const weeklyTransRuns = state?.characters.reduce((acc, item) => acc + item.stats.completions.transcendence, 0) ?? 0;
@@ -519,12 +528,21 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
   const expeditionOverRewardThreshold = weeklyExpeditionRuns > expeditionWarnThreshold;
   const transcendenceOverThreshold = weeklyTransRuns > transcendenceWarnThreshold;
   const selectedAccountCharacterCount = accountCharacters.length;
-  const selectedIsAodeExtra = selectedAccount?.extraAodeCharacterId === selected?.id;
+  const selectedIsAodeExtra = false;
   const selectedShopAodePurchaseRemaining = selected
     ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.shopAodePurchaseUsed)
     : 0;
   const selectedShopDailyDungeonTicketPurchaseRemaining = selected
-    ? Math.max(0, selectedAodeLimits.purchaseLimit - selected.aodePlan.shopDailyDungeonTicketPurchaseUsed)
+    ? Math.max(0, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT - selected.aodePlan.shopUnknownChallengeTicketUsed)
+    : 0;
+  const selectedShopExpeditionChoiceBoxRemaining = selected
+    ? Math.max(0, EXPEDITION_CHOICE_BOX_SERVER_LIMIT - selected.aodePlan.shopExpeditionChoiceBoxUsed)
+    : 0;
+  const selectedShopNightmareInstantRemaining = selected
+    ? Math.max(0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT - selected.aodePlan.shopNightmareInstantUsed)
+    : 0;
+  const selectedShopAbyssReplenishRemaining = selected
+    ? Math.max(0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT - selected.aodePlan.shopAbyssReplenishUsed)
     : 0;
   const selectedTransformAodeRemaining = selected
     ? Math.max(0, selectedAodeLimits.convertLimit - selected.aodePlan.transformAodeUsed)
@@ -564,6 +582,9 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
     selectedIsAodeExtra,
     selectedShopAodePurchaseRemaining,
     selectedShopDailyDungeonTicketPurchaseRemaining,
+    selectedShopExpeditionChoiceBoxRemaining,
+    selectedShopNightmareInstantRemaining,
+    selectedShopAbyssReplenishRemaining,
     selectedTransformAodeRemaining,
   };
 }

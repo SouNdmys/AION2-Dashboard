@@ -1,6 +1,6 @@
 import type { AccountState, AppSettings, CharacterState, TaskDefinition } from "./types";
 
-export const APP_STATE_VERSION = 7;
+export const APP_STATE_VERSION = 9;
 
 export const ENERGY_TICK_HOURS = 3;
 export const ENERGY_PER_TICK = 15;
@@ -19,17 +19,20 @@ export const TRANSCENDENCE_SCHEDULE_HOURS = [5, 17] as const;
 export const CORRIDOR_UNIFIED_REFRESH_HOUR = 21;
 export const CORRIDOR_UNIFIED_REFRESH_DAYS = [2, 4, 6] as const;
 
-export const EXPEDITION_REWARD_MAX = 21;
+export const EXPEDITION_REWARD_MAX = 14;
 export const EXPEDITION_BOSS_MAX = 35;
-export const TRANSCENDENCE_REWARD_MAX = 14;
+export const TRANSCENDENCE_REWARD_MAX = 7;
 export const TRANSCENDENCE_BOSS_MAX = 28;
+export const DAILY_DUNGEON_SHARED_MAX = 14;
 export const NIGHTMARE_MAX = 14;
 export const MINI_GAME_MAX = 14;
 export const SPIRIT_INVASION_MAX = 7;
-export const AODE_WEEKLY_BASE_PURCHASE_MAX = 5;
-export const AODE_WEEKLY_BASE_CONVERT_MAX = 5;
-export const AODE_WEEKLY_EXTRA_PURCHASE_MAX = 8;
-export const AODE_WEEKLY_EXTRA_CONVERT_MAX = 8;
+export const AODE_SHOP_SERVER_LIMIT = 21;
+export const UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT = 21;
+export const EXPEDITION_CHOICE_BOX_SERVER_LIMIT = 21;
+export const NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT = 14;
+export const ABYSS_REPLENISH_TICKET_SERVER_LIMIT = 1;
+export const AODE_CONVERT_SERVER_LIMIT = 20;
 export const AODE_POINT_PER_OPERATION = 40;
 export const AODE_BASE_ENERGY_OVERFLOW_WARN_THRESHOLD = 800;
 
@@ -40,9 +43,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   transcendenceRunCap: null,
   nightmareRunCap: null,
   awakeningRunCap: null,
-  suppressionRunCap: null,
-  expeditionWarnThreshold: 84,
-  transcendenceWarnThreshold: 56,
+  expeditionWarnThreshold: 63,
+  transcendenceWarnThreshold: 42,
   priorityWeightAode: 3,
   priorityWeightSanctum: 3,
   priorityWeightCorridor: 3,
@@ -65,7 +67,6 @@ export const TASK_IDS = [
   "abyss_middle",
   "nightmare",
   "awakening",
-  "suppression",
   "daily_dungeon",
 ] as const;
 
@@ -183,7 +184,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   {
     id: "weekly_order",
     title: "每周指令书",
-    description: "每周 12 次，周三凌晨 5 点刷新。",
+    description: "当前伺服器共享每周 12 次，周三凌晨 5 点刷新。",
     category: "周常",
     energyCost: 0,
     goldReward: 0,
@@ -198,7 +199,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   {
     id: "abyss_lower",
     title: "深渊下层指令",
-    description: "每周 20 次，周三凌晨 5 点刷新。",
+    description: "当前伺服器共享每周 20 次，周三凌晨 5 点刷新。",
     category: "周常",
     energyCost: 0,
     goldReward: 0,
@@ -213,7 +214,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
   {
     id: "abyss_middle",
     title: "深渊中层指令",
-    description: "每周 5 次，周三凌晨 5 点刷新。",
+    description: "当前伺服器共享每周 5 次，周三凌晨 5 点刷新。",
     category: "周常",
     energyCost: 0,
     goldReward: 0,
@@ -256,24 +257,9 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
     useBonusDisplay: true,
   },
   {
-    id: "suppression",
-    title: "讨伐战",
-    description: "每周重置基础挑战次数，可叠加券储存。",
-    category: "周常",
-    energyCost: 0,
-    goldReward: 0,
-    counterTargets: [{ scope: "activities", key: "suppressionRemaining" }],
-    allowComplete: true,
-    allowUseTicket: true,
-    allowSetCompleted: false,
-    ticketTarget: { key: "suppressionTicketBonus", increment: 1 },
-    baseCapDisplay: 3,
-    useBonusDisplay: true,
-  },
-  {
     id: "daily_dungeon",
     title: "每日副本",
-    description: "每周 7 次，补充券可额外储存。",
+    description: "当前伺服器共享每周 14 次，补充券库存同样按伺服器共享。",
     category: "周常",
     energyCost: 0,
     goldReward: 0,
@@ -282,7 +268,7 @@ export const TASK_DEFINITIONS: TaskDefinition[] = [
     allowUseTicket: true,
     allowSetCompleted: false,
     ticketTarget: { key: "dailyDungeonTicketStored", increment: 1 },
-    baseCapDisplay: 7,
+    baseCapDisplay: DAILY_DUNGEON_SHARED_MAX,
     useBonusDisplay: true,
   },
 ];
@@ -309,6 +295,21 @@ export function createDefaultAccount(name: string, id: string): AccountState {
   return {
     id,
     name,
+    sharedActivities: {
+      dailyDungeonRemaining: DAILY_DUNGEON_SHARED_MAX,
+      dailyDungeonTicketStored: 0,
+      weeklyRemaining: 12,
+      abyssLowerRemaining: 20,
+      abyssMiddleRemaining: 5,
+    },
+    breezePlan: {
+      shopAodePurchaseUsed: 0,
+      shopUnknownChallengeTicketUsed: 0,
+      shopExpeditionChoiceBoxUsed: 0,
+      shopNightmareInstantUsed: 0,
+      shopAbyssReplenishUsed: 0,
+      transformAodeUsed: 0,
+    },
   };
 }
 
@@ -327,7 +328,10 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string,
     },
     aodePlan: {
       shopAodePurchaseUsed: 0,
-      shopDailyDungeonTicketPurchaseUsed: 0,
+      shopUnknownChallengeTicketUsed: 0,
+      shopExpeditionChoiceBoxUsed: 0,
+      shopNightmareInstantUsed: 0,
+      shopAbyssReplenishUsed: 0,
       transformAodeUsed: 0,
     },
     missions: {
@@ -341,9 +345,7 @@ export function createDefaultCharacter(name: string, nowIso: string, id: string,
       nightmareTicketBonus: 0,
       awakeningRemaining: 3,
       awakeningTicketBonus: 0,
-      suppressionRemaining: 3,
-      suppressionTicketBonus: 0,
-      dailyDungeonRemaining: 7,
+      dailyDungeonRemaining: DAILY_DUNGEON_SHARED_MAX,
       dailyDungeonTicketStored: 0,
       expeditionRemaining: EXPEDITION_REWARD_MAX,
       expeditionTicketBonus: 0,

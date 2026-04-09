@@ -11,7 +11,6 @@ export type TaskId =
   | "abyss_middle"
   | "nightmare"
   | "awakening"
-  | "suppression"
   | "daily_dungeon"
   | "sanctum_raid";
 
@@ -34,8 +33,6 @@ export interface ActivityState {
   nightmareTicketBonus: number;
   awakeningRemaining: number;
   awakeningTicketBonus: number;
-  suppressionRemaining: number;
-  suppressionTicketBonus: number;
   dailyDungeonRemaining: number;
   dailyDungeonTicketStored: number;
   expeditionRemaining: number;
@@ -65,7 +62,6 @@ export type MissionCounterKey = keyof MissionState;
 export type ActivityCounterKey =
   | "nightmareRemaining"
   | "awakeningRemaining"
-  | "suppressionRemaining"
   | "dailyDungeonRemaining"
   | "expeditionRemaining"
   | "expeditionBossRemaining"
@@ -79,22 +75,43 @@ export type ActivityCounterKey =
 export type ActivityTicketKey =
   | "nightmareTicketBonus"
   | "awakeningTicketBonus"
-  | "suppressionTicketBonus"
   | "dailyDungeonTicketStored"
   | "miniGameTicketBonus"
   | "expeditionTicketBonus"
   | "transcendenceTicketBonus";
+
+export interface AccountSharedActivityState {
+  dailyDungeonRemaining: number;
+  dailyDungeonTicketStored: number;
+  weeklyRemaining: number;
+  abyssLowerRemaining: number;
+  abyssMiddleRemaining: number;
+}
+
+export interface AccountBreezePlanState {
+  shopAodePurchaseUsed: number;
+  shopUnknownChallengeTicketUsed: number;
+  shopExpeditionChoiceBoxUsed: number;
+  shopNightmareInstantUsed: number;
+  shopAbyssReplenishUsed: number;
+  transformAodeUsed: number;
+}
 
 export interface AccountState {
   id: string;
   name: string;
   regionTag?: string;
   extraAodeCharacterId?: string;
+  sharedActivities: AccountSharedActivityState;
+  breezePlan: AccountBreezePlanState;
 }
 
 export interface AodeEnergyPlanState {
   shopAodePurchaseUsed: number;
-  shopDailyDungeonTicketPurchaseUsed: number;
+  shopUnknownChallengeTicketUsed: number;
+  shopExpeditionChoiceBoxUsed: number;
+  shopNightmareInstantUsed: number;
+  shopAbyssReplenishUsed: number;
   transformAodeUsed: number;
 }
 
@@ -127,7 +144,6 @@ export interface AppSettings {
   transcendenceRunCap: number | null;
   nightmareRunCap: number | null;
   awakeningRunCap: number | null;
-  suppressionRunCap: number | null;
   expeditionWarnThreshold: number;
   transcendenceWarnThreshold: number;
   priorityWeightAode: number;
@@ -678,6 +694,5 @@ export interface CharacterSummary {
   hasWeeklyMissionLeft: boolean;
   canRunNightmare: boolean;
   canRunAwakening: boolean;
-  canRunSuppression: boolean;
   pendingLabels: string[];
 }

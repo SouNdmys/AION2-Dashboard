@@ -41,6 +41,41 @@ describe("store/store-domain-snapshot", () => {
     expect(state.characters[0].activities.dailyDungeonTicketStored).toBe(3);
   });
 
+  it("derives shared weekly mission pools from character snapshot and mirrors them back", () => {
+    const state = normalizeAppState({
+      version: 8,
+      settings: {},
+      accounts: [{ id: "acc-1", name: "账号1" }],
+      characters: [
+        {
+          id: "char-1",
+          accountId: "acc-1",
+          name: "角色1",
+          missions: {
+            dailyRemaining: 5,
+            weeklyRemaining: 9,
+            abyssLowerRemaining: 13,
+            abyssMiddleRemaining: 4,
+          },
+        },
+        {
+          id: "char-2",
+          accountId: "acc-1",
+          name: "角色2",
+        },
+      ],
+      history: [],
+    });
+
+    expect(state.accounts[0].sharedActivities.weeklyRemaining).toBe(9);
+    expect(state.accounts[0].sharedActivities.abyssLowerRemaining).toBe(13);
+    expect(state.accounts[0].sharedActivities.abyssMiddleRemaining).toBe(4);
+    expect(state.characters[0].missions.weeklyRemaining).toBe(9);
+    expect(state.characters[1].missions.weeklyRemaining).toBe(9);
+    expect(state.characters[1].missions.abyssLowerRemaining).toBe(13);
+    expect(state.characters[1].missions.abyssMiddleRemaining).toBe(4);
+  });
+
   it("keeps only valid history entries with before or beforeDelta", () => {
     const state = normalizeAppState({
       version: 6,

@@ -1,4 +1,12 @@
 import { getNextUnifiedCorridorRefresh } from "../../../../../shared/time";
+import {
+  ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
+  AODE_CONVERT_SERVER_LIMIT,
+  AODE_SHOP_SERVER_LIMIT,
+  EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
+  NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+  UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
+} from "../../../../../shared/constants";
 import type { AccountState, AppState, CharacterState } from "../../../../../shared/types";
 import { MAX_CHARACTERS_PER_ACCOUNT, type CorridorDraft } from "../dashboard-types";
 import { toInt } from "../dashboard-utils";
@@ -223,8 +231,10 @@ export async function applyCorridorCompletionFromSettingsAction(params: ApplyCor
 interface SaveShopPlanParams {
   selectedCharacterId: string | null;
   shopAodePurchaseUsedInput: string;
-  shopDailyDungeonTicketPurchaseUsedInput: string;
-  purchaseLimit: number;
+  shopUnknownChallengeTicketUsedInput: string;
+  shopExpeditionChoiceBoxUsedInput: string;
+  shopNightmareInstantUsedInput: string;
+  shopAbyssReplenishUsedInput: string;
   appActions: AppActions;
   sync: SyncRunner;
   onError: (message: string) => void;
@@ -234,32 +244,62 @@ export async function saveShopPlanAction(params: SaveShopPlanParams): Promise<vo
   const {
     selectedCharacterId,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
-    purchaseLimit,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     appActions,
     sync,
     onError,
   } = params;
   if (!selectedCharacterId) return;
   const shopAodePurchaseUsed = toInt(shopAodePurchaseUsedInput);
-  const shopDailyDungeonTicketPurchaseUsed = toInt(shopDailyDungeonTicketPurchaseUsedInput);
+  const shopUnknownChallengeTicketUsed = toInt(shopUnknownChallengeTicketUsedInput);
+  const shopExpeditionChoiceBoxUsed = toInt(shopExpeditionChoiceBoxUsedInput);
+  const shopNightmareInstantUsed = toInt(shopNightmareInstantUsedInput);
+  const shopAbyssReplenishUsed = toInt(shopAbyssReplenishUsedInput);
   if (
     shopAodePurchaseUsed === null ||
-    shopDailyDungeonTicketPurchaseUsed === null ||
+    shopUnknownChallengeTicketUsed === null ||
+    shopExpeditionChoiceBoxUsed === null ||
+    shopNightmareInstantUsed === null ||
+    shopAbyssReplenishUsed === null ||
     shopAodePurchaseUsed < 0 ||
-    shopDailyDungeonTicketPurchaseUsed < 0
+    shopUnknownChallengeTicketUsed < 0 ||
+    shopExpeditionChoiceBoxUsed < 0 ||
+    shopNightmareInstantUsed < 0 ||
+    shopAbyssReplenishUsed < 0
   ) {
     onError("微风商店次数必须是大于等于 0 的整数");
     return;
   }
-  if (shopAodePurchaseUsed > purchaseLimit || shopDailyDungeonTicketPurchaseUsed > purchaseLimit) {
-    onError(`超出本角色上限：微风商店每项最多 ${purchaseLimit}`);
+  if (shopAodePurchaseUsed > AODE_SHOP_SERVER_LIMIT) {
+    onError(`奥德能量(刻印) 每周最多 ${AODE_SHOP_SERVER_LIMIT}`);
+    return;
+  }
+  if (shopUnknownChallengeTicketUsed > UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT) {
+    onError(`未知键队挑战券(刻印) 每周最多 ${UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT}`);
+    return;
+  }
+  if (shopExpeditionChoiceBoxUsed > EXPEDITION_CHOICE_BOX_SERVER_LIMIT) {
+    onError(`远征/超越挑战券选择箱(刻印) 每周最多 ${EXPEDITION_CHOICE_BOX_SERVER_LIMIT}`);
+    return;
+  }
+  if (shopNightmareInstantUsed > NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT) {
+    onError(`立即完成券: 恶梦(刻印) 每周最多 ${NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT}`);
+    return;
+  }
+  if (shopAbyssReplenishUsed > ABYSS_REPLENISH_TICKET_SERVER_LIMIT) {
+    onError(`深渊重镇补充券(刻印) 每周最多 ${ABYSS_REPLENISH_TICKET_SERVER_LIMIT}`);
     return;
   }
   await sync(
     appActions.updateAodePlan(selectedCharacterId, {
       shopAodePurchaseUsed,
-      shopDailyDungeonTicketPurchaseUsed,
+      shopUnknownChallengeTicketUsed,
+      shopExpeditionChoiceBoxUsed,
+      shopNightmareInstantUsed,
+      shopAbyssReplenishUsed,
     }),
     "已保存微风商店记录",
   );
@@ -268,46 +308,27 @@ export async function saveShopPlanAction(params: SaveShopPlanParams): Promise<vo
 interface SaveTransformPlanParams {
   selectedCharacterId: string | null;
   transformAodeUsedInput: string;
-  convertLimit: number;
   appActions: AppActions;
   sync: SyncRunner;
   onError: (message: string) => void;
 }
 
 export async function saveTransformPlanAction(params: SaveTransformPlanParams): Promise<void> {
-  const { selectedCharacterId, transformAodeUsedInput, convertLimit, appActions, sync, onError } = params;
+  const { selectedCharacterId, transformAodeUsedInput, appActions, sync, onError } = params;
   if (!selectedCharacterId) return;
   const transformAodeUsed = toInt(transformAodeUsedInput);
   if (transformAodeUsed === null || transformAodeUsed < 0) {
-    onError("变换次数必须是大于等于 0 的整数");
+    onError("物资兑换次数必须是大于等于 0 的整数");
     return;
   }
-  if (transformAodeUsed > convertLimit) {
-    onError(`超出本角色上限：变换最多 ${convertLimit}`);
+  if (transformAodeUsed > AODE_CONVERT_SERVER_LIMIT) {
+    onError(`物资兑换最多 ${AODE_CONVERT_SERVER_LIMIT}`);
     return;
   }
   await sync(
     appActions.updateAodePlan(selectedCharacterId, {
       transformAodeUsed,
     }),
-    "已保存变换记录",
-  );
-}
-
-interface AssignExtraAodeCharacterParams {
-  selectedCharacterId: string | null;
-  assignExtra: boolean;
-  appActions: AppActions;
-  sync: SyncRunner;
-}
-
-export async function assignExtraAodeCharacterAction(params: AssignExtraAodeCharacterParams): Promise<void> {
-  const { selectedCharacterId, assignExtra, appActions, sync } = params;
-  if (!selectedCharacterId) return;
-  await sync(
-    appActions.updateAodePlan(selectedCharacterId, {
-      assignExtra,
-    }),
-    assignExtra ? "已设为本账号微风商店额外角色" : "已取消本角色额外资格",
+    "已保存物资兑换记录",
   );
 }

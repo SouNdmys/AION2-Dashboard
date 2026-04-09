@@ -37,9 +37,15 @@ interface DashboardCharacterMainPanelProps {
   selectedAccountExtraCharacterName: string | null;
   selectedShopAodePurchaseRemaining: number;
   selectedShopDailyDungeonTicketPurchaseRemaining: number;
+  selectedShopExpeditionChoiceBoxRemaining: number;
+  selectedShopNightmareInstantRemaining: number;
+  selectedShopAbyssReplenishRemaining: number;
   selectedTransformAodeRemaining: number;
   shopAodePurchaseUsedInput: string;
-  shopDailyDungeonTicketPurchaseUsedInput: string;
+  shopUnknownChallengeTicketUsedInput: string;
+  shopExpeditionChoiceBoxUsedInput: string;
+  shopNightmareInstantUsedInput: string;
+  shopAbyssReplenishUsedInput: string;
   transformAodeUsedInput: string;
   onSwitchToOverview: () => void;
   onRenameNameChange: (value: string) => void;
@@ -56,10 +62,12 @@ interface DashboardCharacterMainPanelProps {
   onWeeklyTranscendenceCompletedInputChange: (value: string) => void;
   onSaveWeeklyCompletions: () => void;
   onShopAodePurchaseUsedInputChange: (value: string) => void;
-  onShopDailyDungeonTicketPurchaseUsedInputChange: (value: string) => void;
+  onShopUnknownChallengeTicketUsedInputChange: (value: string) => void;
+  onShopExpeditionChoiceBoxUsedInputChange: (value: string) => void;
+  onShopNightmareInstantUsedInputChange: (value: string) => void;
+  onShopAbyssReplenishUsedInputChange: (value: string) => void;
   onTransformAodeUsedInputChange: (value: string) => void;
   onSaveShopPlan: () => void;
-  onAssignExtraAodeCharacter: (enabled: boolean) => void;
   onSaveTransformPlan: () => void;
 }
 
@@ -96,9 +104,15 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     selectedAccountExtraCharacterName,
     selectedShopAodePurchaseRemaining,
     selectedShopDailyDungeonTicketPurchaseRemaining,
+    selectedShopExpeditionChoiceBoxRemaining,
+    selectedShopNightmareInstantRemaining,
+    selectedShopAbyssReplenishRemaining,
     selectedTransformAodeRemaining,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     onSwitchToOverview,
     onRenameNameChange,
@@ -115,10 +129,12 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
     onWeeklyTranscendenceCompletedInputChange,
     onSaveWeeklyCompletions,
     onShopAodePurchaseUsedInputChange,
-    onShopDailyDungeonTicketPurchaseUsedInputChange,
+    onShopUnknownChallengeTicketUsedInputChange,
+    onShopExpeditionChoiceBoxUsedInputChange,
+    onShopNightmareInstantUsedInputChange,
+    onShopAbyssReplenishUsedInputChange,
     onTransformAodeUsedInputChange,
     onSaveShopPlan,
-    onAssignExtraAodeCharacter,
     onSaveTransformPlan,
   } = props;
 
@@ -178,15 +194,23 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
         selectedAccountExtraCharacterName={selectedAccountExtraCharacterName}
         selectedShopAodePurchaseRemaining={selectedShopAodePurchaseRemaining}
         selectedShopDailyDungeonTicketPurchaseRemaining={selectedShopDailyDungeonTicketPurchaseRemaining}
+        selectedShopExpeditionChoiceBoxRemaining={selectedShopExpeditionChoiceBoxRemaining}
+        selectedShopNightmareInstantRemaining={selectedShopNightmareInstantRemaining}
+        selectedShopAbyssReplenishRemaining={selectedShopAbyssReplenishRemaining}
         selectedTransformAodeRemaining={selectedTransformAodeRemaining}
         shopAodePurchaseUsedInput={shopAodePurchaseUsedInput}
-        shopDailyDungeonTicketPurchaseUsedInput={shopDailyDungeonTicketPurchaseUsedInput}
+        shopUnknownChallengeTicketUsedInput={shopUnknownChallengeTicketUsedInput}
+        shopExpeditionChoiceBoxUsedInput={shopExpeditionChoiceBoxUsedInput}
+        shopNightmareInstantUsedInput={shopNightmareInstantUsedInput}
+        shopAbyssReplenishUsedInput={shopAbyssReplenishUsedInput}
         transformAodeUsedInput={transformAodeUsedInput}
         onShopAodePurchaseUsedInputChange={onShopAodePurchaseUsedInputChange}
-        onShopDailyDungeonTicketPurchaseUsedInputChange={onShopDailyDungeonTicketPurchaseUsedInputChange}
+        onShopUnknownChallengeTicketUsedInputChange={onShopUnknownChallengeTicketUsedInputChange}
+        onShopExpeditionChoiceBoxUsedInputChange={onShopExpeditionChoiceBoxUsedInputChange}
+        onShopNightmareInstantUsedInputChange={onShopNightmareInstantUsedInputChange}
+        onShopAbyssReplenishUsedInputChange={onShopAbyssReplenishUsedInputChange}
         onTransformAodeUsedInputChange={onTransformAodeUsedInputChange}
         onSaveShopPlan={onSaveShopPlan}
-        onAssignExtraAodeCharacter={onAssignExtraAodeCharacter}
         onSaveTransformPlan={onSaveTransformPlan}
       />
     </article>

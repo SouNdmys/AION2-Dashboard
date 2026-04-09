@@ -37,7 +37,7 @@ interface DialogHandlers {
   openSetCompletedDialog: (task: TaskDefinition) => void;
   openEnergyDialog: () => void;
   openTaskEditDialog: (
-    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game",
+    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "daily_dungeon" | "mini_game",
   ) => void;
   openSanctumEditDialog: () => void;
   onSyncCorridorStatus: () => void;
@@ -114,7 +114,7 @@ export function createDashboardDialogHandlers(params: CreateDashboardDialogHandl
   }
 
   function openTaskEditDialog(
-    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game",
+    taskId: "expedition" | "transcendence" | "nightmare" | "awakening" | "daily_dungeon" | "mini_game",
   ): void {
     openTaskEditDialogAction({
       selectedCharacter,

@@ -1,9 +1,11 @@
 import {
+  ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
+  AODE_CONVERT_SERVER_LIMIT,
   AODE_POINT_PER_OPERATION,
-  AODE_WEEKLY_BASE_CONVERT_MAX,
-  AODE_WEEKLY_BASE_PURCHASE_MAX,
-  AODE_WEEKLY_EXTRA_CONVERT_MAX,
-  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
+  AODE_SHOP_SERVER_LIMIT,
+  EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
+  NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+  UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
 } from "../../../../../shared/constants";
 import { getTotalEnergy } from "../../../../../shared/engine";
 import type { CharacterState } from "../../../../../shared/types";
@@ -21,15 +23,23 @@ interface DashboardCharacterResourcePanelsProps {
   selectedAccountExtraCharacterName: string | null;
   selectedShopAodePurchaseRemaining: number;
   selectedShopDailyDungeonTicketPurchaseRemaining: number;
+  selectedShopExpeditionChoiceBoxRemaining: number;
+  selectedShopNightmareInstantRemaining: number;
+  selectedShopAbyssReplenishRemaining: number;
   selectedTransformAodeRemaining: number;
   shopAodePurchaseUsedInput: string;
-  shopDailyDungeonTicketPurchaseUsedInput: string;
+  shopUnknownChallengeTicketUsedInput: string;
+  shopExpeditionChoiceBoxUsedInput: string;
+  shopNightmareInstantUsedInput: string;
+  shopAbyssReplenishUsedInput: string;
   transformAodeUsedInput: string;
   onShopAodePurchaseUsedInputChange: (value: string) => void;
-  onShopDailyDungeonTicketPurchaseUsedInputChange: (value: string) => void;
+  onShopUnknownChallengeTicketUsedInputChange: (value: string) => void;
+  onShopExpeditionChoiceBoxUsedInputChange: (value: string) => void;
+  onShopNightmareInstantUsedInputChange: (value: string) => void;
+  onShopAbyssReplenishUsedInputChange: (value: string) => void;
   onTransformAodeUsedInputChange: (value: string) => void;
   onSaveShopPlan: () => void;
-  onAssignExtraAodeCharacter: (enabled: boolean) => void;
   onSaveTransformPlan: () => void;
 }
 
@@ -38,20 +48,25 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
     busy,
     selected,
     onOpenEnergyDialog,
-    selectedAodeLimits,
-    selectedIsAodeExtra,
-    selectedAccountExtraCharacterName,
     selectedShopAodePurchaseRemaining,
     selectedShopDailyDungeonTicketPurchaseRemaining,
+    selectedShopExpeditionChoiceBoxRemaining,
+    selectedShopNightmareInstantRemaining,
+    selectedShopAbyssReplenishRemaining,
     selectedTransformAodeRemaining,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     onShopAodePurchaseUsedInputChange,
-    onShopDailyDungeonTicketPurchaseUsedInputChange,
+    onShopUnknownChallengeTicketUsedInputChange,
+    onShopExpeditionChoiceBoxUsedInputChange,
+    onShopNightmareInstantUsedInputChange,
+    onShopAbyssReplenishUsedInputChange,
     onTransformAodeUsedInputChange,
     onSaveShopPlan,
-    onAssignExtraAodeCharacter,
     onSaveTransformPlan,
   } = props;
 
@@ -112,69 +127,69 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
             <p className="panel-kicker !tracking-[0.08em]">Breeze Shop</p>
             <h3 className="panel-title !mt-1 !text-sm">微风商店记录</h3>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="toolbar-meta task-meta-line">
-              <span>奥德 {selected.aodePlan.shopAodePurchaseUsed}/{selectedAodeLimits.purchaseLimit}</span>
-              <span>副本券 {selected.aodePlan.shopDailyDungeonTicketPurchaseUsed}/{selectedAodeLimits.purchaseLimit}</span>
-              <span>资格 {selectedIsAodeExtra ? "额外+8" : "基础"}</span>
-            </div>
-            <div className="toolbar-actions">
-              <div className="data-pill !px-2.5 !py-1.5 !text-xs">奥德剩余 {selectedShopAodePurchaseRemaining}</div>
-              <div className="data-pill !px-2.5 !py-1.5 !text-xs">副本券剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}</div>
-            </div>
+          <p className="summary-note mt-1">按伺服器统一上限记录本周已购买数量，切角色时显示的是同一份记录。</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">奥德能量(刻印) 剩余 {selectedShopAodePurchaseRemaining}/{AODE_SHOP_SERVER_LIMIT}</span>
+              <select className="field-control" value={shopAodePurchaseUsedInput} onChange={(event) => onShopAodePurchaseUsedInputChange(event.target.value)} disabled={busy}>
+                {buildCountOptions(0, AODE_SHOP_SERVER_LIMIT, shopAodePurchaseUsedInput).map((value) => (
+                  <option key={`shop-aode-${value}`} value={value}>奥德能量(刻印) 已购 {value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">未知键队挑战券(刻印) 剩余 {selectedShopDailyDungeonTicketPurchaseRemaining}/{UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT}</span>
+              <select className="field-control" value={shopUnknownChallengeTicketUsedInput} onChange={(event) => onShopUnknownChallengeTicketUsedInputChange(event.target.value)} disabled={busy}>
+                {buildCountOptions(0, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT, shopUnknownChallengeTicketUsedInput).map((value) => (
+                  <option key={`shop-unknown-${value}`} value={value}>未知键队挑战券 已购 {value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">远征/超越挑战券选择箱 剩余 {selectedShopExpeditionChoiceBoxRemaining}/{EXPEDITION_CHOICE_BOX_SERVER_LIMIT}</span>
+              <select className="field-control" value={shopExpeditionChoiceBoxUsedInput} onChange={(event) => onShopExpeditionChoiceBoxUsedInputChange(event.target.value)} disabled={busy}>
+                {buildCountOptions(0, EXPEDITION_CHOICE_BOX_SERVER_LIMIT, shopExpeditionChoiceBoxUsedInput).map((value) => (
+                  <option key={`shop-expedition-box-${value}`} value={value}>远征/超越箱 已购 {value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-slate-500">立即完成券: 恶梦 剩余 {selectedShopNightmareInstantRemaining}/{NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT}</span>
+              <select className="field-control" value={shopNightmareInstantUsedInput} onChange={(event) => onShopNightmareInstantUsedInputChange(event.target.value)} disabled={busy}>
+                {buildCountOptions(0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT, shopNightmareInstantUsedInput).map((value) => (
+                  <option key={`shop-nightmare-${value}`} value={value}>恶梦完成券 已购 {value}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 md:col-span-2">
+              <span className="text-xs text-slate-500">深渊重镇补充券(刻印) 剩余 {selectedShopAbyssReplenishRemaining}/{ABYSS_REPLENISH_TICKET_SERVER_LIMIT}</span>
+              <select className="field-control" value={shopAbyssReplenishUsedInput} onChange={(event) => onShopAbyssReplenishUsedInputChange(event.target.value)} disabled={busy}>
+                {buildCountOptions(0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT, shopAbyssReplenishUsedInput).map((value) => (
+                  <option key={`shop-abyss-${value}`} value={value}>深渊重镇补充券 已购 {value}</option>
+                ))}
+              </select>
+            </label>
           </div>
-          <p className="summary-note mt-0.5">基础每周每项 {AODE_WEEKLY_BASE_PURCHASE_MAX} 次，额外角色每项 +{AODE_WEEKLY_EXTRA_PURCHASE_MAX} 次。</p>
-          {!selectedIsAodeExtra && selectedAccountExtraCharacterName ? (
-            <p className="banner-warning mt-1 rounded-lg px-3 py-2 text-xs">当前账号额外角色：{selectedAccountExtraCharacterName}</p>
-          ) : null}
-          <div className="toolbar-grid mt-2.5 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.9fr)_auto_auto]">
-            <select
-              className="field-control"
-              value={shopAodePurchaseUsedInput}
-              onChange={(event) => onShopAodePurchaseUsedInputChange(event.target.value)}
-              disabled={busy}
-            >
-              {buildCountOptions(0, selectedAodeLimits.purchaseLimit, shopAodePurchaseUsedInput).map((value) => (
-                <option key={`shop-aode-${value}`} value={value}>
-                  奥德购买 {value}
-                </option>
-              ))}
-            </select>
-            <select
-              className="field-control"
-              value={shopDailyDungeonTicketPurchaseUsedInput}
-              onChange={(event) => onShopDailyDungeonTicketPurchaseUsedInputChange(event.target.value)}
-              disabled={busy}
-            >
-              {buildCountOptions(0, selectedAodeLimits.purchaseLimit, shopDailyDungeonTicketPurchaseUsedInput).map((value) => (
-                <option key={`shop-ticket-${value}`} value={value}>
-                  副本券购买 {value}
-                </option>
-              ))}
-            </select>
+          <div className="mt-3 flex justify-end">
             <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveShopPlan} disabled={busy}>
-              保存记录
-            </button>
-            <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={() => onAssignExtraAodeCharacter(!selectedIsAodeExtra)} disabled={busy}>
-              {selectedIsAodeExtra ? "取消额外" : "设为额外"}
+              保存微风记录
             </button>
           </div>
         </section>
 
         <section className="toolbar-card h-full">
           <div>
-            <p className="panel-kicker !tracking-[0.08em]">Transform</p>
-            <h3 className="panel-title !mt-1 !text-sm">变换记录</h3>
+            <p className="panel-kicker !tracking-[0.08em]">Convert</p>
+            <h3 className="panel-title !mt-1 !text-sm">奥德兑换记录</h3>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="toolbar-meta task-meta-line">
-              <span>已用 {selected.aodePlan.transformAodeUsed}/{selectedAodeLimits.convertLimit}</span>
+              <span>已用 {selected.aodePlan.transformAodeUsed}/{AODE_CONVERT_SERVER_LIMIT}</span>
               <span>剩余 {selectedTransformAodeRemaining}</span>
               <span>单次 {AODE_POINT_PER_OPERATION} 奥德</span>
             </div>
             <div className="toolbar-actions">
-              <div className="data-pill !px-2.5 !py-1.5 !text-xs">基础每周 {AODE_WEEKLY_BASE_CONVERT_MAX} 次</div>
-              <div className="data-pill !px-2.5 !py-1.5 !text-xs">额外角色 +{AODE_WEEKLY_EXTRA_CONVERT_MAX} 次</div>
+              <div className="data-pill !px-2.5 !py-1.5 !text-xs">伺服器每周 {AODE_CONVERT_SERVER_LIMIT} 次</div>
             </div>
           </div>
           <div className="toolbar-grid mt-2.5 md:grid-cols-[minmax(0,0.9fr)_auto]">
@@ -184,14 +199,14 @@ export function DashboardCharacterResourcePanels(props: DashboardCharacterResour
               onChange={(event) => onTransformAodeUsedInputChange(event.target.value)}
               disabled={busy}
             >
-              {buildCountOptions(0, selectedAodeLimits.convertLimit, transformAodeUsedInput).map((value) => (
+              {buildCountOptions(0, AODE_CONVERT_SERVER_LIMIT, transformAodeUsedInput).map((value) => (
                 <option key={`transform-aode-${value}`} value={value}>
-                  变换次数 {value}
+                  兑换次数 {value}
                 </option>
               ))}
             </select>
             <button className="task-btn task-btn-soft task-btn-compact px-4" onClick={onSaveTransformPlan} disabled={busy}>
-              保存记录
+              保存兑换记录
             </button>
           </div>
         </section>

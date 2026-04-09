@@ -14,7 +14,6 @@ function createState(): AppState {
       transcendenceRunCap: null,
       nightmareRunCap: null,
       awakeningRunCap: null,
-      suppressionRunCap: null,
       expeditionWarnThreshold: 1,
       transcendenceWarnThreshold: 1,
       priorityWeightAode: 1,

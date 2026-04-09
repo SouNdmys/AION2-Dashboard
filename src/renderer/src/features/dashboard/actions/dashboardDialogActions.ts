@@ -7,7 +7,7 @@ type DialogAppActions = NonNullable<Window["aionApi"]>;
 type SyncRunner = (action: Promise<AppState>, successMessage?: string) => Promise<boolean>;
 type OpenDialog = (dialog: DialogState) => void;
 type ResetDialogError = () => void;
-type TaskEditId = "expedition" | "transcendence" | "nightmare" | "awakening" | "suppression" | "daily_dungeon" | "mini_game";
+type TaskEditId = "expedition" | "transcendence" | "nightmare" | "awakening" | "daily_dungeon" | "mini_game";
 
 interface ConfirmDashboardDialogParams {
   dialog: DialogState;
@@ -225,13 +225,6 @@ export async function confirmDashboardDialog(params: ConfirmDashboardDialogParam
           miniGameTicketBonus: bonus,
         }),
       );
-    } else {
-      ok = await sync(
-        appActions.updateRaidCounts(selected.id, {
-          suppressionRemaining: remaining,
-          suppressionTicketBonus: bonus,
-        }),
-      );
     }
     if (ok) {
       onDialogClose();
@@ -437,8 +430,8 @@ function buildTaskEditDialog(selected: CharacterState, taskId: TaskEditId): Dial
       kind: "task_edit",
       taskId,
       title: "每日副本",
-      remainingLabel: "基础次数",
-      bonusLabel: "券库存",
+      remainingLabel: "伺服器基础次数",
+      bonusLabel: "伺服器券库存",
       remaining: String(selected.activities.dailyDungeonRemaining),
       bonus: String(selected.activities.dailyDungeonTicketStored),
     };
@@ -456,12 +449,12 @@ function buildTaskEditDialog(selected: CharacterState, taskId: TaskEditId): Dial
   }
   return {
     kind: "task_edit",
-    taskId,
-    title: "讨伐战",
+    taskId: "mini_game",
+    title: "小游戏",
     remainingLabel: "基础次数",
     bonusLabel: "券次数",
-    remaining: String(selected.activities.suppressionRemaining),
-    bonus: String(selected.activities.suppressionTicketBonus),
+    remaining: String(selected.activities.miniGameRemaining),
+    bonus: String(selected.activities.miniGameTicketBonus),
   };
 }
 

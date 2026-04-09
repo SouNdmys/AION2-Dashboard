@@ -193,8 +193,6 @@ export const IPC_INVOKE_SPECS = {
         nightmareTicketBonus?: number;
         awakeningRemaining?: number;
         awakeningTicketBonus?: number;
-        suppressionRemaining?: number;
-        suppressionTicketBonus?: number;
         dailyDungeonRemaining?: number;
         dailyDungeonTicketStored?: number;
         miniGameRemaining?: number;
@@ -216,8 +214,6 @@ export const IPC_INVOKE_SPECS = {
       nightmareTicketBonus?: number;
       awakeningRemaining?: number;
       awakeningTicketBonus?: number;
-      suppressionRemaining?: number;
-      suppressionTicketBonus?: number;
       dailyDungeonRemaining?: number;
       dailyDungeonTicketStored?: number;
       miniGameRemaining?: number;
@@ -238,17 +234,21 @@ export const IPC_INVOKE_SPECS = {
       characterId: string,
       payload: {
         shopAodePurchaseUsed?: number;
-        shopDailyDungeonTicketPurchaseUsed?: number;
+        shopUnknownChallengeTicketUsed?: number;
+        shopExpeditionChoiceBoxUsed?: number;
+        shopNightmareInstantUsed?: number;
+        shopAbyssReplenishUsed?: number;
         transformAodeUsed?: number;
-        assignExtra?: boolean;
       },
     ],
     {
       characterId: string;
       shopAodePurchaseUsed?: number;
-      shopDailyDungeonTicketPurchaseUsed?: number;
+      shopUnknownChallengeTicketUsed?: number;
+      shopExpeditionChoiceBoxUsed?: number;
+      shopNightmareInstantUsed?: number;
+      shopAbyssReplenishUsed?: number;
       transformAodeUsed?: number;
-      assignExtra?: boolean;
     },
     AppState
   >(IPC_CHANNELS.updateAodePlan, (characterId, payload) => ({ characterId, ...payload })),

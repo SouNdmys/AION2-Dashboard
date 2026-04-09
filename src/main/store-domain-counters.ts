@@ -1,5 +1,7 @@
-import type { AppSettings, CharacterState } from "../shared/types";
+import { DAILY_DUNGEON_SHARED_MAX } from "../shared/constants";
+import type { AccountState, AppSettings, CharacterState } from "../shared/types";
 import { getEffectiveActivityCap } from "./store-domain-settings";
+import { syncAccountSharedStateToCharacters } from "./store-domain-snapshot";
 
 export interface UpdateRaidCountsPayload {
   expeditionRemaining?: number;
@@ -12,8 +14,6 @@ export interface UpdateRaidCountsPayload {
   nightmareTicketBonus?: number;
   awakeningRemaining?: number;
   awakeningTicketBonus?: number;
-  suppressionRemaining?: number;
-  suppressionTicketBonus?: number;
   dailyDungeonRemaining?: number;
   dailyDungeonTicketStored?: number;
   miniGameRemaining?: number;
@@ -33,18 +33,46 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function applyRaidCountsUpdate(
+  accounts: AccountState[],
   characters: CharacterState[],
   settings: AppSettings,
   characterId: string,
   payload: UpdateRaidCountsPayload,
-): CharacterState[] {
-  const expeditionCap = getEffectiveActivityCap(settings.expeditionRunCap, 21);
-  const transcendenceCap = getEffectiveActivityCap(settings.transcendenceRunCap, 14);
+): { accounts: AccountState[]; characters: CharacterState[] } {
+  const target = characters.find((item) => item.id === characterId);
+  if (!target) {
+    return { accounts, characters };
+  }
+
+  const expeditionCap = getEffectiveActivityCap(settings.expeditionRunCap, 14);
+  const transcendenceCap = getEffectiveActivityCap(settings.transcendenceRunCap, 7);
   const nightmareCap = getEffectiveActivityCap(settings.nightmareRunCap, 14);
   const awakeningCap = getEffectiveActivityCap(settings.awakeningRunCap, 3);
-  const suppressionCap = getEffectiveActivityCap(settings.suppressionRunCap, 3);
 
-  return characters.map((item) => {
+  let nextAccounts = accounts;
+  if (typeof payload.dailyDungeonRemaining === "number" || typeof payload.dailyDungeonTicketStored === "number") {
+    nextAccounts = accounts.map((account) => {
+      if (account.id !== target.accountId) {
+        return account;
+      }
+      return {
+        ...account,
+        sharedActivities: {
+          ...account.sharedActivities,
+          dailyDungeonRemaining:
+            typeof payload.dailyDungeonRemaining === "number"
+              ? clamp(payload.dailyDungeonRemaining, 0, DAILY_DUNGEON_SHARED_MAX)
+              : account.sharedActivities.dailyDungeonRemaining,
+          dailyDungeonTicketStored:
+            typeof payload.dailyDungeonTicketStored === "number"
+              ? clamp(payload.dailyDungeonTicketStored, 0, 30)
+              : account.sharedActivities.dailyDungeonTicketStored,
+        },
+      };
+    });
+  }
+
+  const nextCharacters = characters.map((item) => {
     if (item.id !== characterId) {
       return item;
     }
@@ -93,22 +121,6 @@ export function applyRaidCountsUpdate(
           typeof payload.awakeningTicketBonus === "number"
             ? clamp(payload.awakeningTicketBonus, 0, 999)
             : item.activities.awakeningTicketBonus,
-        suppressionRemaining:
-          typeof payload.suppressionRemaining === "number"
-            ? clamp(payload.suppressionRemaining, 0, suppressionCap)
-            : item.activities.suppressionRemaining,
-        suppressionTicketBonus:
-          typeof payload.suppressionTicketBonus === "number"
-            ? clamp(payload.suppressionTicketBonus, 0, 999)
-            : item.activities.suppressionTicketBonus,
-        dailyDungeonRemaining:
-          typeof payload.dailyDungeonRemaining === "number"
-            ? clamp(payload.dailyDungeonRemaining, 0, 999)
-            : item.activities.dailyDungeonRemaining,
-        dailyDungeonTicketStored:
-          typeof payload.dailyDungeonTicketStored === "number"
-            ? clamp(payload.dailyDungeonTicketStored, 0, 30)
-            : item.activities.dailyDungeonTicketStored,
         miniGameRemaining:
           typeof payload.miniGameRemaining === "number"
             ? clamp(payload.miniGameRemaining, 0, 14)
@@ -132,6 +144,11 @@ export function applyRaidCountsUpdate(
       },
     };
   });
+
+  return {
+    accounts: nextAccounts,
+    characters: syncAccountSharedStateToCharacters(nextAccounts, nextCharacters),
+  };
 }
 
 export function applyWeeklyCompletionsUpdate(

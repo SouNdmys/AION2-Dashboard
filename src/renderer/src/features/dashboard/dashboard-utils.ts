@@ -1,8 +1,6 @@
 import {
-  AODE_WEEKLY_BASE_CONVERT_MAX,
-  AODE_WEEKLY_BASE_PURCHASE_MAX,
-  AODE_WEEKLY_EXTRA_CONVERT_MAX,
-  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
+  AODE_CONVERT_SERVER_LIMIT,
+  AODE_SHOP_SERVER_LIMIT,
 } from "../../../../shared/constants";
 import type { AppSettings, AppState, TaskActionKind, TaskDefinition } from "../../../../shared/types";
 import type { CorridorDraft, PriorityTone, PriorityWeightKey, SettingsDraft } from "./dashboard-types";
@@ -79,7 +77,6 @@ export function buildSettingsDraft(settings: AppSettings): SettingsDraft {
     transcendenceRunCap: settings.transcendenceRunCap === null ? "" : String(settings.transcendenceRunCap),
     nightmareRunCap: settings.nightmareRunCap === null ? "" : String(settings.nightmareRunCap),
     awakeningRunCap: settings.awakeningRunCap === null ? "" : String(settings.awakeningRunCap),
-    suppressionRunCap: settings.suppressionRunCap === null ? "" : String(settings.suppressionRunCap),
     expeditionWarnThreshold: String(settings.expeditionWarnThreshold),
     transcendenceWarnThreshold: String(settings.transcendenceWarnThreshold),
     priorityWeightAode: String(settings.priorityWeightAode),
@@ -107,15 +104,13 @@ export function getCharacterAodeLimits(state: AppState, characterId: string): { 
   const character = state.characters.find((item) => item.id === characterId);
   if (!character) {
     return {
-      purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX,
-      convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX,
+      purchaseLimit: AODE_SHOP_SERVER_LIMIT,
+      convertLimit: AODE_CONVERT_SERVER_LIMIT,
     };
   }
-  const account = state.accounts.find((item) => item.id === character.accountId);
-  const isExtra = account?.extraAodeCharacterId === character.id;
   return {
-    purchaseLimit: AODE_WEEKLY_BASE_PURCHASE_MAX + (isExtra ? AODE_WEEKLY_EXTRA_PURCHASE_MAX : 0),
-    convertLimit: AODE_WEEKLY_BASE_CONVERT_MAX + (isExtra ? AODE_WEEKLY_EXTRA_CONVERT_MAX : 0),
+    purchaseLimit: AODE_SHOP_SERVER_LIMIT,
+    convertLimit: AODE_CONVERT_SERVER_LIMIT,
   };
 }
 

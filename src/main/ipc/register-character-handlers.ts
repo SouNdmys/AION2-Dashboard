@@ -162,8 +162,6 @@ export function registerCharacterIpcHandlers(): void {
       nightmareTicketBonus: readOptionalNumber(body, "nightmareTicketBonus", channel),
       awakeningRemaining: readOptionalNumber(body, "awakeningRemaining", channel),
       awakeningTicketBonus: readOptionalNumber(body, "awakeningTicketBonus", channel),
-      suppressionRemaining: readOptionalNumber(body, "suppressionRemaining", channel),
-      suppressionTicketBonus: readOptionalNumber(body, "suppressionTicketBonus", channel),
       dailyDungeonRemaining: readOptionalNumber(body, "dailyDungeonRemaining", channel),
       dailyDungeonTicketStored: readOptionalNumber(body, "dailyDungeonTicketStored", channel),
       miniGameRemaining: readOptionalNumber(body, "miniGameRemaining", channel),
@@ -186,9 +184,11 @@ export function registerCharacterIpcHandlers(): void {
     const body = readObjectPayload(payload, channel);
     return updateAodePlan(readString(body, "characterId", channel), {
       shopAodePurchaseUsed: readOptionalNumber(body, "shopAodePurchaseUsed", channel),
-      shopDailyDungeonTicketPurchaseUsed: readOptionalNumber(body, "shopDailyDungeonTicketPurchaseUsed", channel),
+      shopUnknownChallengeTicketUsed: readOptionalNumber(body, "shopUnknownChallengeTicketUsed", channel),
+      shopExpeditionChoiceBoxUsed: readOptionalNumber(body, "shopExpeditionChoiceBoxUsed", channel),
+      shopNightmareInstantUsed: readOptionalNumber(body, "shopNightmareInstantUsed", channel),
+      shopAbyssReplenishUsed: readOptionalNumber(body, "shopAbyssReplenishUsed", channel),
       transformAodeUsed: readOptionalNumber(body, "transformAodeUsed", channel),
-      assignExtra: readOptionalBoolean(body, "assignExtra", channel),
     });
   });
 }

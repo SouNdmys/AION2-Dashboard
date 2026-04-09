@@ -53,7 +53,6 @@ export function normalizeAppSettings(raw: unknown): AppSettings {
     transcendenceRunCap: toOptionalCap(entity?.transcendenceRunCap, DEFAULT_SETTINGS.transcendenceRunCap),
     nightmareRunCap: toOptionalCap(entity?.nightmareRunCap, DEFAULT_SETTINGS.nightmareRunCap),
     awakeningRunCap: toOptionalCap(entity?.awakeningRunCap, DEFAULT_SETTINGS.awakeningRunCap),
-    suppressionRunCap: toOptionalCap(entity?.suppressionRunCap, DEFAULT_SETTINGS.suppressionRunCap),
     expeditionWarnThreshold: toPositiveInteger(entity?.expeditionWarnThreshold, DEFAULT_SETTINGS.expeditionWarnThreshold),
     transcendenceWarnThreshold: toPositiveInteger(
       entity?.transcendenceWarnThreshold,
@@ -104,7 +103,6 @@ export function applyConfiguredActivityCaps(character: CharacterState, settings:
         getEffectiveActivityCap(settings.nightmareRunCap, NIGHTMARE_MAX),
       ),
       awakeningRemaining: clamp(character.activities.awakeningRemaining, 0, getEffectiveActivityCap(settings.awakeningRunCap, 3)),
-      suppressionRemaining: clamp(character.activities.suppressionRemaining, 0, getEffectiveActivityCap(settings.suppressionRunCap, 3)),
     },
   };
 }

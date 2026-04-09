@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS } from "../shared/constants";
+import { DEFAULT_SETTINGS, createDefaultAccount } from "../shared/constants";
 import type { AppState, CharacterState } from "../shared/types";
 import {
   buildAppStateMutationSignature,
@@ -16,21 +16,26 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
     isStarred: false,
     avatarSeed: "seed",
     energy: { baseCurrent: 100, bonusCurrent: 0, baseCap: 1000, bonusCap: 2000 },
-    aodePlan: { shopAodePurchaseUsed: 0, shopDailyDungeonTicketPurchaseUsed: 0, transformAodeUsed: 0 },
+    aodePlan: {
+      shopAodePurchaseUsed: 0,
+      shopUnknownChallengeTicketUsed: 0,
+      shopExpeditionChoiceBoxUsed: 0,
+      shopNightmareInstantUsed: 0,
+      shopAbyssReplenishUsed: 0,
+      transformAodeUsed: 0,
+    },
     missions: { dailyRemaining: 5, weeklyRemaining: 12, abyssLowerRemaining: 20, abyssMiddleRemaining: 5 },
     activities: {
       nightmareRemaining: 14,
       nightmareTicketBonus: 0,
       awakeningRemaining: 3,
       awakeningTicketBonus: 0,
-      suppressionRemaining: 3,
-      suppressionTicketBonus: 0,
-      dailyDungeonRemaining: 7,
+      dailyDungeonRemaining: 14,
       dailyDungeonTicketStored: 0,
-      expeditionRemaining: 21,
+      expeditionRemaining: 14,
       expeditionTicketBonus: 0,
       expeditionBossRemaining: 35,
-      transcendenceRemaining: 14,
+      transcendenceRemaining: 7,
       transcendenceTicketBonus: 0,
       transcendenceBossRemaining: 28,
       sanctumRaidRemaining: 2,
@@ -60,7 +65,6 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
         abyss_middle: 0,
         nightmare: 0,
         awakening: 0,
-        suppression: 0,
         daily_dungeon: 0,
         sanctum_raid: 0,
       },
@@ -71,11 +75,11 @@ function character(id: string, name: string, accountId = "acc-1"): CharacterStat
 
 function appState(characters: CharacterState[]): AppState {
   return {
-    version: 6,
+    version: 8,
     selectedAccountId: "acc-1",
     selectedCharacterId: characters[0]?.id ?? null,
     settings: DEFAULT_SETTINGS,
-    accounts: [{ id: "acc-1", name: "账号1" }],
+    accounts: [createDefaultAccount("账号1", "acc-1")],
     characters,
     history: [],
   };

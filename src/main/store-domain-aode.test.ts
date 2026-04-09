@@ -1,29 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
-  AODE_WEEKLY_BASE_CONVERT_MAX,
-  AODE_WEEKLY_BASE_PURCHASE_MAX,
-  AODE_WEEKLY_EXTRA_CONVERT_MAX,
-  AODE_WEEKLY_EXTRA_PURCHASE_MAX,
+  AODE_CONVERT_SERVER_LIMIT,
+  AODE_SHOP_SERVER_LIMIT,
+  ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
+  EXPEDITION_CHOICE_BOX_SERVER_LIMIT,
+  NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT,
+  UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT,
+  createDefaultAccount,
   createDefaultCharacter,
 } from "../shared/constants";
 import type { AccountState, CharacterState } from "../shared/types";
 import { applyAodePlanUpdate, resolveAodeLimitsForCharacter } from "./store-domain-aode";
 
+function account(id: string): AccountState {
+  return createDefaultAccount(`账号-${id}`, id);
+}
+
 function character(id: string, accountId: string): CharacterState {
-  const created = createDefaultCharacter(`角色-${id}`, "2026-02-26T00:00:00.000Z", id, accountId);
-  return {
-    ...created,
-    aodePlan: {
-      shopAodePurchaseUsed: 999,
-      shopDailyDungeonTicketPurchaseUsed: 999,
-      transformAodeUsed: 999,
-    },
-  };
+  return createDefaultCharacter(`角色-${id}`, "2026-02-26T00:00:00.000Z", id, accountId);
 }
 
 describe("store/store-domain-aode", () => {
-  it("updates target character payload and re-clamps account peers by limits", () => {
-    const accounts: AccountState[] = [{ id: "acc-1", name: "账号1" }];
+  it("updates shared breeze plan for the whole account and syncs to characters", () => {
+    const accounts = [account("acc-1")];
     const characters = [character("char-a", "acc-1"), character("char-b", "acc-1")];
 
     const result = applyAodePlanUpdate({
@@ -31,39 +30,28 @@ describe("store/store-domain-aode", () => {
       characters,
       characterId: "char-a",
       payload: {
-        shopAodePurchaseUsed: 1_000,
-        shopDailyDungeonTicketPurchaseUsed: 50,
-        transformAodeUsed: 1_000,
-        assignExtra: true,
+        shopAodePurchaseUsed: 999,
+        shopUnknownChallengeTicketUsed: 999,
+        shopExpeditionChoiceBoxUsed: 999,
+        shopNightmareInstantUsed: 999,
+        shopAbyssReplenishUsed: 999,
+        transformAodeUsed: 999,
       },
     });
 
-    expect(result.accounts[0].extraAodeCharacterId).toBe("char-a");
-    const target = result.characters.find((item) => item.id === "char-a");
-    const peer = result.characters.find((item) => item.id === "char-b");
-    expect(target?.aodePlan.shopAodePurchaseUsed).toBe(AODE_WEEKLY_BASE_PURCHASE_MAX + AODE_WEEKLY_EXTRA_PURCHASE_MAX);
-    expect(target?.aodePlan.shopDailyDungeonTicketPurchaseUsed).toBe(
-      AODE_WEEKLY_BASE_PURCHASE_MAX + AODE_WEEKLY_EXTRA_PURCHASE_MAX,
-    );
-    expect(target?.aodePlan.transformAodeUsed).toBe(AODE_WEEKLY_BASE_CONVERT_MAX + AODE_WEEKLY_EXTRA_CONVERT_MAX);
-    expect(peer?.aodePlan.shopAodePurchaseUsed).toBe(AODE_WEEKLY_BASE_PURCHASE_MAX);
-    expect(peer?.aodePlan.transformAodeUsed).toBe(AODE_WEEKLY_BASE_CONVERT_MAX);
+    expect(result.accounts[0].breezePlan.shopAodePurchaseUsed).toBe(AODE_SHOP_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.shopUnknownChallengeTicketUsed).toBe(UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.shopExpeditionChoiceBoxUsed).toBe(EXPEDITION_CHOICE_BOX_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.shopNightmareInstantUsed).toBe(NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.shopAbyssReplenishUsed).toBe(ABYSS_REPLENISH_TICKET_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.transformAodeUsed).toBe(AODE_CONVERT_SERVER_LIMIT);
+    expect(result.characters[0].aodePlan.shopExpeditionChoiceBoxUsed).toBe(EXPEDITION_CHOICE_BOX_SERVER_LIMIT);
+    expect(result.characters[1].aodePlan.shopNightmareInstantUsed).toBe(NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT);
   });
 
-  it("removes extra assignment only when target was current extra", () => {
-    const accounts: AccountState[] = [{ id: "acc-1", name: "账号1", extraAodeCharacterId: "char-a" }];
-    const characters = [character("char-a", "acc-1"), character("char-b", "acc-1")];
-
-    const result = applyAodePlanUpdate({
-      accounts,
-      characters,
-      characterId: "char-a",
-      payload: { assignExtra: false },
-    });
-
-    expect(result.accounts[0].extraAodeCharacterId).toBeUndefined();
-    const limits = resolveAodeLimitsForCharacter(result.accounts, result.characters[0]);
-    expect(limits.purchaseLimit).toBe(AODE_WEEKLY_BASE_PURCHASE_MAX);
-    expect(limits.convertLimit).toBe(AODE_WEEKLY_BASE_CONVERT_MAX);
+  it("resolves unified server limits", () => {
+    const limits = resolveAodeLimitsForCharacter();
+    expect(limits.purchaseLimit).toBe(AODE_SHOP_SERVER_LIMIT);
+    expect(limits.convertLimit).toBe(AODE_CONVERT_SERVER_LIMIT);
   });
 });

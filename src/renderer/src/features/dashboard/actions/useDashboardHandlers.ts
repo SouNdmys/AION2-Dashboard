@@ -39,10 +39,11 @@ interface UseDashboardHandlersParams {
   renameInput: string;
   profileClassTagInput: string;
   profileGearScoreInput: string;
-  selectedAodePurchaseLimit: number;
-  selectedAodeConvertLimit: number;
   shopAodePurchaseUsedInput: string;
-  shopDailyDungeonTicketPurchaseUsedInput: string;
+  shopUnknownChallengeTicketUsedInput: string;
+  shopExpeditionChoiceBoxUsedInput: string;
+  shopNightmareInstantUsedInput: string;
+  shopAbyssReplenishUsedInput: string;
   transformAodeUsedInput: string;
   setBusy: (busy: boolean) => void;
   setError: (message: string | null) => void;
@@ -97,10 +98,11 @@ export function useDashboardHandlers(params: UseDashboardHandlersParams): Dashbo
     renameInput,
     profileClassTagInput,
     profileGearScoreInput,
-    selectedAodePurchaseLimit,
-    selectedAodeConvertLimit,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     setBusy,
     setError,
@@ -190,10 +192,11 @@ export function useDashboardHandlers(params: UseDashboardHandlersParams): Dashbo
     profileClassTagInput,
     profileGearScoreInput,
     corridorDraft,
-    selectedAodePurchaseLimit,
-    selectedAodeConvertLimit,
     shopAodePurchaseUsedInput,
-    shopDailyDungeonTicketPurchaseUsedInput,
+    shopUnknownChallengeTicketUsedInput,
+    shopExpeditionChoiceBoxUsedInput,
+    shopNightmareInstantUsedInput,
+    shopAbyssReplenishUsedInput,
     transformAodeUsedInput,
     appActions,
     sync,
