@@ -22,8 +22,6 @@ interface DashboardCharacterModePanelsProps {
   state: AppState;
   selected: CharacterState;
   groupedTasks: Record<TaskDefinition["category"], TaskDefinition[]>;
-  sanctumRaidTask?: TaskDefinition;
-  sanctumBoxTask?: TaskDefinition;
   onOpenSetCompletedDialog: (task: TaskDefinition) => void;
   onOpenCompleteDialog: (taskId: TaskId, title: string) => void;
   onOpenUseTicketDialog: (taskId: TaskId, title: string) => void;
@@ -54,8 +52,6 @@ export function DashboardCharacterModePanels(props: DashboardCharacterModePanels
     state,
     selected,
     groupedTasks,
-    sanctumRaidTask,
-    sanctumBoxTask,
     onOpenSetCompletedDialog,
     onOpenCompleteDialog,
     onOpenUseTicketDialog,
@@ -89,8 +85,6 @@ export function DashboardCharacterModePanels(props: DashboardCharacterModePanels
         state={state}
         selected={selected}
         groupedTasks={groupedTasks}
-        sanctumRaidTask={sanctumRaidTask}
-        sanctumBoxTask={sanctumBoxTask}
         onOpenSetCompletedDialog={onOpenSetCompletedDialog}
         onOpenCompleteDialog={onOpenCompleteDialog}
         onOpenUseTicketDialog={onOpenUseTicketDialog}

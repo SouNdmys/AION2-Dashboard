@@ -5,6 +5,7 @@ export type TaskId =
   | "mini_game"
   | "spirit_invasion"
   | "sanctum_box"
+  | "sanctum_purify_box"
   | "daily_mission"
   | "weekly_order"
   | "abyss_lower"
@@ -12,7 +13,8 @@ export type TaskId =
   | "nightmare"
   | "awakening"
   | "daily_dungeon"
-  | "sanctum_raid";
+  | "sanctum_raid"
+  | "sanctum_purify_raid";
 
 export interface EnergyState {
   baseCurrent: number;
@@ -41,8 +43,12 @@ export interface ActivityState {
   transcendenceRemaining: number;
   transcendenceTicketBonus: number;
   transcendenceBossRemaining: number;
-  sanctumRaidRemaining: number;
-  sanctumBoxRemaining: number;
+  sanctumRaidChallengeRemaining: number;
+  sanctumRaidChallengeBonus: number;
+  sanctumRaidBoxRemaining: number;
+  sanctumRaidBoxBonus: number;
+  sanctumPurifyChallengeRemaining: number;
+  sanctumPurifyBoxRemaining: number;
   miniGameRemaining: number;
   miniGameTicketBonus: number;
   spiritInvasionRemaining: number;
@@ -67,8 +73,10 @@ export type ActivityCounterKey =
   | "expeditionBossRemaining"
   | "transcendenceRemaining"
   | "transcendenceBossRemaining"
-  | "sanctumRaidRemaining"
-  | "sanctumBoxRemaining"
+  | "sanctumRaidChallengeRemaining"
+  | "sanctumRaidBoxRemaining"
+  | "sanctumPurifyChallengeRemaining"
+  | "sanctumPurifyBoxRemaining"
   | "miniGameRemaining"
   | "spiritInvasionRemaining";
 
@@ -78,7 +86,9 @@ export type ActivityTicketKey =
   | "dailyDungeonTicketStored"
   | "miniGameTicketBonus"
   | "expeditionTicketBonus"
-  | "transcendenceTicketBonus";
+  | "transcendenceTicketBonus"
+  | "sanctumRaidChallengeBonus"
+  | "sanctumRaidBoxBonus";
 
 export interface AccountSharedActivityState {
   dailyDungeonRemaining: number;
@@ -94,6 +104,7 @@ export interface AccountBreezePlanState {
   shopExpeditionChoiceBoxUsed: number;
   shopNightmareInstantUsed: number;
   shopAbyssReplenishUsed: number;
+  shopAbyssReplenishAssignedCharacterId?: string | null;
   transformAodeUsed: number;
 }
 

@@ -198,8 +198,12 @@ export const IPC_INVOKE_SPECS = {
         miniGameRemaining?: number;
         miniGameTicketBonus?: number;
         spiritInvasionRemaining?: number;
-        sanctumRaidRemaining?: number;
-        sanctumBoxRemaining?: number;
+        sanctumRaidChallengeRemaining?: number;
+        sanctumRaidChallengeBonus?: number;
+        sanctumRaidBoxRemaining?: number;
+        sanctumRaidBoxBonus?: number;
+        sanctumPurifyChallengeRemaining?: number;
+        sanctumPurifyBoxRemaining?: number;
       },
     ],
     {
@@ -219,8 +223,12 @@ export const IPC_INVOKE_SPECS = {
       miniGameRemaining?: number;
       miniGameTicketBonus?: number;
       spiritInvasionRemaining?: number;
-      sanctumRaidRemaining?: number;
-      sanctumBoxRemaining?: number;
+      sanctumRaidChallengeRemaining?: number;
+      sanctumRaidChallengeBonus?: number;
+      sanctumRaidBoxRemaining?: number;
+      sanctumRaidBoxBonus?: number;
+      sanctumPurifyChallengeRemaining?: number;
+      sanctumPurifyBoxRemaining?: number;
     },
     AppState
   >(IPC_CHANNELS.updateRaidCounts, (characterId, payload) => ({ characterId, ...payload })),

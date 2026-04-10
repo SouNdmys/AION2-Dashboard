@@ -31,7 +31,15 @@ export type DialogState =
       boss?: string;
       bossLabel?: string;
     }
-  | { kind: "sanctum_edit"; raidRemaining: string; boxRemaining: string };
+  | {
+      kind: "sanctum_edit";
+      raidChallengeRemaining: string;
+      raidChallengeBonus: string;
+      raidBoxRemaining: string;
+      raidBoxBonus: string;
+      purifyChallengeRemaining: string;
+      purifyBoxRemaining: string;
+    };
 
 export interface SettingsDraft {
   expeditionGoldPerRun: string;

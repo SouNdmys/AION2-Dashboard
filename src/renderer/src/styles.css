@@ -411,16 +411,22 @@ select {
 
 .task-card {
   border-radius: 1.1rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.86);
-  padding: 0.76rem 0.84rem;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 249, 245, 0.96)),
+    radial-gradient(circle at 0% 0%, rgba(17, 24, 39, 0.02), transparent 28%);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.035);
+  padding: 0.9rem 0.95rem;
 }
 
 .task-section {
   border-radius: 1.35rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(251, 251, 248, 0.92);
-  padding: 0.72rem 0.82rem;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background:
+    linear-gradient(180deg, rgba(251, 251, 248, 0.94), rgba(247, 247, 243, 0.96)),
+    radial-gradient(circle at 0% 0%, rgba(15, 143, 111, 0.02), transparent 30%);
+  box-shadow: 0 12px 26px rgba(17, 24, 39, 0.03);
+  padding: 0.9rem 0.95rem;
 }
 
 .task-meta-line {
@@ -438,8 +444,8 @@ select {
 
 .task-card-note {
   color: var(--text-muted);
-  font-size: 0.68rem;
-  line-height: 1.35;
+  font-size: 0.7rem;
+  line-height: 1.45;
 }
 
 .task-action-row {
@@ -457,8 +463,8 @@ select {
 }
 
 .task-card-actions {
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-  padding-top: 0.65rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.06);
+  padding-top: 0.72rem;
 }
 
 .task-progress-pill {
@@ -466,11 +472,88 @@ select {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(247, 247, 243, 0.94);
-  padding: 0.25rem 0.6rem;
-  font-size: 0.72rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(247, 247, 243, 0.96);
+  padding: 0.28rem 0.68rem;
+  font-size: 0.71rem;
+  font-weight: 560;
   color: var(--text-secondary);
+}
+
+.character-page-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 248, 244, 0.985)),
+    radial-gradient(circle at 0% 0%, rgba(15, 143, 111, 0.035), transparent 30%);
+  box-shadow: 0 18px 42px rgba(17, 24, 39, 0.05);
+}
+
+.character-hero-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 248, 244, 0.985)),
+    radial-gradient(circle at 0% 20%, rgba(15, 143, 111, 0.05), transparent 26%);
+}
+
+.character-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.resource-band {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background:
+    linear-gradient(180deg, rgba(251, 251, 248, 0.96), rgba(247, 247, 243, 0.97)),
+    radial-gradient(circle at 0% 0%, rgba(15, 143, 111, 0.03), transparent 28%);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.03);
+  padding: 0.9rem 0.95rem;
+}
+
+.resource-band-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.resource-band-title {
+  font-size: 0.92rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.resource-band-subtitle {
+  margin-top: 0.18rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.task-section-title {
+  font-size: 0.88rem;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.task-section-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.28rem 0.62rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.task-title-strong {
+  font-size: 0.92rem;
+  font-weight: 640;
+  letter-spacing: -0.012em;
+  color: var(--text-primary);
 }
 
 .toolbar-card {
@@ -1346,6 +1429,10 @@ select option {
 }
 
 @media (min-width: 1280px) {
+  .character-summary-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .character-hero-meta {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -1387,6 +1474,10 @@ select option {
 }
 
 @media (max-width: 520px) {
+  .character-summary-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .character-hero-meta {
     grid-template-columns: minmax(0, 1fr);
   }

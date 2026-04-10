@@ -143,7 +143,7 @@ export function DashboardCharacterMainPanel(props: DashboardCharacterMainPanelPr
   }
 
   return (
-    <article className="glass-panel rounded-3xl p-5">
+    <article className="character-page-shell glass-panel rounded-3xl p-5">
       <DashboardCharacterHeaderPanel
         visible={true}
         busy={busy}

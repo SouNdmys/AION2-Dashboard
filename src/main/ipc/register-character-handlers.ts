@@ -167,8 +167,12 @@ export function registerCharacterIpcHandlers(): void {
       miniGameRemaining: readOptionalNumber(body, "miniGameRemaining", channel),
       miniGameTicketBonus: readOptionalNumber(body, "miniGameTicketBonus", channel),
       spiritInvasionRemaining: readOptionalNumber(body, "spiritInvasionRemaining", channel),
-      sanctumRaidRemaining: readOptionalNumber(body, "sanctumRaidRemaining", channel),
-      sanctumBoxRemaining: readOptionalNumber(body, "sanctumBoxRemaining", channel),
+      sanctumRaidChallengeRemaining: readOptionalNumber(body, "sanctumRaidChallengeRemaining", channel),
+      sanctumRaidChallengeBonus: readOptionalNumber(body, "sanctumRaidChallengeBonus", channel),
+      sanctumRaidBoxRemaining: readOptionalNumber(body, "sanctumRaidBoxRemaining", channel),
+      sanctumRaidBoxBonus: readOptionalNumber(body, "sanctumRaidBoxBonus", channel),
+      sanctumPurifyChallengeRemaining: readOptionalNumber(body, "sanctumPurifyChallengeRemaining", channel),
+      sanctumPurifyBoxRemaining: readOptionalNumber(body, "sanctumPurifyBoxRemaining", channel),
     });
   });
   registerIpcHandler(IPC_CHANNELS.updateWeeklyCompletions, (_event, payload: unknown) => {

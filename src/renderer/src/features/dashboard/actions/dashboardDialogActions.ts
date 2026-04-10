@@ -233,16 +233,37 @@ export async function confirmDashboardDialog(params: ConfirmDashboardDialogParam
   }
 
   if (dialog.kind === "sanctum_edit") {
-    const raidRemaining = toInt(dialog.raidRemaining);
-    const boxRemaining = toInt(dialog.boxRemaining);
-    if (raidRemaining === null || boxRemaining === null || raidRemaining < 0 || boxRemaining < 0) {
+    const raidChallengeRemaining = toInt(dialog.raidChallengeRemaining);
+    const raidChallengeBonus = toInt(dialog.raidChallengeBonus);
+    const raidBoxRemaining = toInt(dialog.raidBoxRemaining);
+    const raidBoxBonus = toInt(dialog.raidBoxBonus);
+    const purifyChallengeRemaining = toInt(dialog.purifyChallengeRemaining);
+    const purifyBoxRemaining = toInt(dialog.purifyBoxRemaining);
+    if (
+      raidChallengeRemaining === null ||
+      raidChallengeBonus === null ||
+      raidBoxRemaining === null ||
+      raidBoxBonus === null ||
+      purifyChallengeRemaining === null ||
+      purifyBoxRemaining === null ||
+      raidChallengeRemaining < 0 ||
+      raidChallengeBonus < 0 ||
+      raidBoxRemaining < 0 ||
+      raidBoxBonus < 0 ||
+      purifyChallengeRemaining < 0 ||
+      purifyBoxRemaining < 0
+    ) {
       onDialogError("请输入有效的圣域次数");
       return;
     }
     const ok = await sync(
       appActions.updateRaidCounts(selected.id, {
-        sanctumRaidRemaining: raidRemaining,
-        sanctumBoxRemaining: boxRemaining,
+        sanctumRaidChallengeRemaining: raidChallengeRemaining,
+        sanctumRaidChallengeBonus: raidChallengeBonus,
+        sanctumRaidBoxRemaining: raidBoxRemaining,
+        sanctumRaidBoxBonus: raidBoxBonus,
+        sanctumPurifyChallengeRemaining: purifyChallengeRemaining,
+        sanctumPurifyBoxRemaining: purifyBoxRemaining,
       }),
     );
     if (ok) {
@@ -461,8 +482,12 @@ function buildTaskEditDialog(selected: CharacterState, taskId: TaskEditId): Dial
 function buildSanctumEditDialog(selected: CharacterState): DialogState {
   return {
     kind: "sanctum_edit",
-    raidRemaining: String(selected.activities.sanctumRaidRemaining),
-    boxRemaining: String(selected.activities.sanctumBoxRemaining),
+    raidChallengeRemaining: String(selected.activities.sanctumRaidChallengeRemaining),
+    raidChallengeBonus: String(selected.activities.sanctumRaidChallengeBonus),
+    raidBoxRemaining: String(selected.activities.sanctumRaidBoxRemaining),
+    raidBoxBonus: String(selected.activities.sanctumRaidBoxBonus),
+    purifyChallengeRemaining: String(selected.activities.sanctumPurifyChallengeRemaining),
+    purifyBoxRemaining: String(selected.activities.sanctumPurifyBoxRemaining),
   };
 }
 

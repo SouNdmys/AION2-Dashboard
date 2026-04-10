@@ -302,8 +302,6 @@ export function App(): JSX.Element {
     setDragOverCharacterId(null);
   }, [overviewSortKey]);
 
-  const sanctumRaidTask = taskById.get("sanctum_raid");
-  const sanctumBoxTask = taskById.get("sanctum_box");
   const showRightSidebar = viewMode === "dashboard";
   const appGridClass = showRightSidebar
     ? sidebarCollapsed
@@ -661,8 +659,6 @@ export function App(): JSX.Element {
             state={state}
             selected={selected}
             groupedTasks={groupedTasks}
-            sanctumRaidTask={sanctumRaidTask}
-            sanctumBoxTask={sanctumBoxTask}
             onOpenSetCompletedDialog={openSetCompletedDialog}
             onOpenCompleteDialog={openCompleteDialog}
             onOpenUseTicketDialog={openUseTicketDialog}

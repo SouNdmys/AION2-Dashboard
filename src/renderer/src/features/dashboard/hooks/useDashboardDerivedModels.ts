@@ -106,10 +106,15 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const transcendenceBossCurrent = item.activities.transcendenceBossRemaining;
             const transcendenceBossTotal = 28;
 
-            const sanctumRaidCurrent = item.activities.sanctumRaidRemaining;
-            const sanctumRaidTotal = 2;
-            const sanctumBoxCurrent = item.activities.sanctumBoxRemaining;
-            const sanctumBoxTotal = 2;
+            const sanctumRaidChallengeCurrent =
+              item.activities.sanctumRaidChallengeRemaining + item.activities.sanctumRaidChallengeBonus;
+            const sanctumRaidChallengeTotal = 4 + item.activities.sanctumRaidChallengeBonus;
+            const sanctumRaidBoxCurrent = item.activities.sanctumRaidBoxRemaining + item.activities.sanctumRaidBoxBonus;
+            const sanctumRaidBoxTotal = 2 + item.activities.sanctumRaidBoxBonus;
+            const sanctumPurifyChallengeCurrent = item.activities.sanctumPurifyChallengeRemaining;
+            const sanctumPurifyChallengeTotal = 4;
+            const sanctumPurifyBoxCurrent = item.activities.sanctumPurifyBoxRemaining;
+            const sanctumPurifyBoxTotal = 2;
 
             const dailyDungeonCurrent = account.sharedActivities.dailyDungeonRemaining + account.sharedActivities.dailyDungeonTicketStored;
             const dailyDungeonTotal = DAILY_DUNGEON_SHARED_MAX + account.sharedActivities.dailyDungeonTicketStored;
@@ -152,9 +157,12 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
             const aodeShopNightmareInstantRemaining = Math.max(0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT - aodeShopNightmareInstantUsed);
             const aodeShopAbyssReplenishRemaining = Math.max(0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT - aodeShopAbyssReplenishUsed);
             const aodeTransformAodeRemaining = Math.max(0, aodeLimits.convertLimit - aodeTransformAodeUsed);
-            const dungeonReadyBuckets = [expeditionCurrent, transcendenceCurrent, sanctumRaidCurrent, sanctumBoxCurrent].filter(
-              (value) => value > 0,
-            ).length;
+            const dungeonReadyBuckets = [
+              expeditionCurrent,
+              transcendenceCurrent,
+              sanctumRaidChallengeCurrent + sanctumRaidBoxCurrent,
+              sanctumPurifyChallengeCurrent + sanctumPurifyBoxCurrent,
+            ].filter((value) => value > 0).length;
             const weeklyReadyBuckets = [
               dailyDungeonCurrent,
               nightmareCurrent,
@@ -178,10 +186,14 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
               transcendenceTotal,
               transcendenceBossCurrent,
               transcendenceBossTotal,
-              sanctumRaidCurrent,
-              sanctumRaidTotal,
-              sanctumBoxCurrent,
-              sanctumBoxTotal,
+              sanctumRaidChallengeCurrent,
+              sanctumRaidChallengeTotal,
+              sanctumRaidBoxCurrent,
+              sanctumRaidBoxTotal,
+              sanctumPurifyChallengeCurrent,
+              sanctumPurifyChallengeTotal,
+              sanctumPurifyBoxCurrent,
+              sanctumPurifyBoxTotal,
               dailyDungeonCurrent,
               dailyDungeonTotal,
               nightmareCurrent,
@@ -308,7 +320,13 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
   }, [overviewRows, overviewTaskFilter, overviewAccountFilter, overviewRegionFilter, overviewSortKey]);
 
   const groupedTasks = useMemo(() => {
-    const base = TASK_DEFINITIONS.filter((task) => task.id !== "sanctum_raid" && task.id !== "sanctum_box").reduce(
+    const base = TASK_DEFINITIONS.filter(
+      (task) =>
+        task.id !== "sanctum_raid" &&
+        task.id !== "sanctum_box" &&
+        task.id !== "sanctum_purify_raid" &&
+        task.id !== "sanctum_purify_box",
+    ).reduce(
       (acc, task) => {
         if (!acc[task.category]) {
           acc[task.category] = [];
@@ -417,7 +435,11 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
         );
       }
 
-      const sanctumPending = entry.sanctumRaidCurrent + entry.sanctumBoxCurrent;
+      const sanctumPending =
+        entry.sanctumRaidChallengeCurrent +
+        entry.sanctumRaidBoxCurrent +
+        entry.sanctumPurifyChallengeCurrent +
+        entry.sanctumPurifyBoxCurrent;
       if (sanctumPending > 0) {
         pushItem(
           entry,
@@ -426,7 +448,7 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
           1000 + sanctumPending,
           "high",
           "sanctum",
-          `卢德莱 ${entry.sanctumRaidCurrent}/2，侵蚀净化所 ${entry.sanctumBoxCurrent}/2`,
+          `卢德莱 挑战 ${formatCounter(entry.sanctumRaidChallengeCurrent, entry.sanctumRaidChallengeTotal)} · 开箱 ${formatCounter(entry.sanctumRaidBoxCurrent, entry.sanctumRaidBoxTotal)}；侵蚀净化所 挑战 ${formatCounter(entry.sanctumPurifyChallengeCurrent, entry.sanctumPurifyChallengeTotal)} · 开箱 ${formatCounter(entry.sanctumPurifyBoxCurrent, entry.sanctumPurifyBoxTotal)}`,
         );
       }
 
@@ -480,7 +502,7 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
         pushItem(entry, "shop-aode-weekly-due", "商店-奥德（周刷新前）", 980 + entry.aodeShopAodePurchaseRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopAodePurchaseRemaining, entry.aodeShopPurchaseLimit)}`);
       }
       if (weeklyCriticalWindow && entry.aodeShopUnknownChallengeTicketRemaining > 0) {
-        pushItem(entry, "shop-unknown-ticket-weekly-due", "商店-未知键队券（周刷新前）", 978 + entry.aodeShopUnknownChallengeTicketRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopUnknownChallengeTicketRemaining, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT)}`);
+        pushItem(entry, "shop-unknown-ticket-weekly-due", "商店-未知缝隙挑战券（周刷新前）", 978 + entry.aodeShopUnknownChallengeTicketRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopUnknownChallengeTicketRemaining, UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT)}`);
       }
       if (weeklyCriticalWindow && entry.aodeShopExpeditionChoiceBoxRemaining > 0) {
         pushItem(entry, "shop-expedition-box-weekly-due", "商店-远征/超越箱（周刷新前）", 977 + entry.aodeShopExpeditionChoiceBoxRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopExpeditionChoiceBoxRemaining, EXPEDITION_CHOICE_BOX_SERVER_LIMIT)}`);
@@ -489,7 +511,7 @@ export function useDashboardDerivedModels(params: UseDashboardDerivedModelsParam
         pushItem(entry, "shop-nightmare-ticket-weekly-due", "商店-恶梦完成券（周刷新前）", 975 + entry.aodeShopNightmareInstantRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopNightmareInstantRemaining, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT)}`);
       }
       if (weeklyCriticalWindow && entry.aodeShopAbyssReplenishRemaining > 0) {
-        pushItem(entry, "shop-abyss-refill-weekly-due", "商店-深渊重镇补充券（周刷新前）", 974 + entry.aodeShopAbyssReplenishRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeShopAbyssReplenishRemaining, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)}`);
+        pushItem(entry, "shop-abyss-refill-weekly-due", "商店-深渊重铸补充券（周刷新前）", 974 + entry.aodeShopAbyssReplenishRemaining, "high", "weekly", `卢德莱补充券剩余 ${formatCounter(entry.aodeShopAbyssReplenishRemaining, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)}`);
       }
       if (weeklyCriticalWindow && entry.aodeTransformAodeRemaining > 0) {
         pushItem(entry, "transform-aode-weekly-due", "变换-奥德（周刷新前）", 976 + entry.aodeTransformAodeRemaining, "high", "weekly", `剩余可用 ${formatCounter(entry.aodeTransformAodeRemaining, entry.aodeTransformLimit)}`);

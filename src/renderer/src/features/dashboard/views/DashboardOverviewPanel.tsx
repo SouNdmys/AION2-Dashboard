@@ -15,10 +15,14 @@ export interface DashboardOverviewRow {
   expeditionTotal: number;
   transcendenceCurrent: number;
   transcendenceTotal: number;
-  sanctumRaidCurrent: number;
-  sanctumRaidTotal: number;
-  sanctumBoxCurrent: number;
-  sanctumBoxTotal: number;
+  sanctumRaidChallengeCurrent: number;
+  sanctumRaidChallengeTotal: number;
+  sanctumRaidBoxCurrent: number;
+  sanctumRaidBoxTotal: number;
+  sanctumPurifyChallengeCurrent: number;
+  sanctumPurifyChallengeTotal: number;
+  sanctumPurifyBoxCurrent: number;
+  sanctumPurifyBoxTotal: number;
   dailyDungeonCurrent: number;
   dailyDungeonTotal: number;
   nightmareCurrent: number;
@@ -108,7 +112,16 @@ const OVERVIEW_ROW_TONE_CLASS: Record<OverviewMetricGroupKey, string> = {
 };
 
 function getOverviewMetricGroupKey(metricKey: string): OverviewMetricGroupKey {
-  if (["sanctum_raid", "sanctum_box", "corridor_lower", "corridor_middle"].includes(metricKey)) {
+  if (
+    [
+      "sanctum_raid_challenge",
+      "sanctum_raid_box",
+      "sanctum_purify_challenge",
+      "sanctum_purify_box",
+      "corridor_lower",
+      "corridor_middle",
+    ].includes(metricKey)
+  ) {
     return "urgent";
   }
   if (["expedition", "transcendence"].includes(metricKey)) {
@@ -148,8 +161,10 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
   return [
     { key: "expedition", label: "远征", current: entry.expeditionCurrent, total: entry.expeditionTotal, urgent: false },
     { key: "transcendence", label: "超越", current: entry.transcendenceCurrent, total: entry.transcendenceTotal, urgent: false },
-    { key: "sanctum_raid", label: "卢德莱", current: entry.sanctumRaidCurrent, total: entry.sanctumRaidTotal, urgent: true },
-    { key: "sanctum_box", label: "侵蚀净化所", current: entry.sanctumBoxCurrent, total: entry.sanctumBoxTotal, urgent: true },
+    { key: "sanctum_raid_challenge", label: "卢德莱挑战", current: entry.sanctumRaidChallengeCurrent, total: entry.sanctumRaidChallengeTotal, urgent: true },
+    { key: "sanctum_raid_box", label: "卢德莱开箱", current: entry.sanctumRaidBoxCurrent, total: entry.sanctumRaidBoxTotal, urgent: true },
+    { key: "sanctum_purify_challenge", label: "侵蚀净化所挑战", current: entry.sanctumPurifyChallengeCurrent, total: entry.sanctumPurifyChallengeTotal, urgent: true },
+    { key: "sanctum_purify_box", label: "侵蚀净化所开箱", current: entry.sanctumPurifyBoxCurrent, total: entry.sanctumPurifyBoxTotal, urgent: true },
     { key: "daily_dungeon", label: "每日副本", current: entry.dailyDungeonCurrent, total: entry.dailyDungeonTotal, urgent: isWeeklyCriticalWindow },
     { key: "nightmare", label: "恶梦", current: entry.nightmareCurrent, total: entry.nightmareTotal, urgent: false },
     { key: "awakening", label: "觉醒", current: entry.awakeningCurrent, total: entry.awakeningTotal, urgent: isWeeklyCriticalWindow },
@@ -164,7 +179,7 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
     { key: "shop_aode", label: "商店-奥德", current: entry.aodeShopAodePurchaseRemaining, total: entry.aodeShopPurchaseLimit, urgent: isWeeklyCriticalWindow },
     {
       key: "shop_unknown_ticket",
-      label: "商店-未知键队券",
+      label: "商店-未知缝隙券",
       current: entry.aodeShopUnknownChallengeTicketRemaining,
       total: 21,
       urgent: isWeeklyCriticalWindow,
@@ -185,7 +200,7 @@ function buildOverviewMetricChips(entry: DashboardOverviewRow, isWeeklyCriticalW
     },
     {
       key: "shop_abyss_ticket",
-      label: "商店-深渊重镇券",
+      label: "商店-深渊重铸券",
       current: entry.aodeShopAbyssReplenishRemaining,
       total: 1,
       urgent: isWeeklyCriticalWindow,

@@ -250,33 +250,91 @@ export function DashboardDialogModal(props: DashboardDialogModalProps): JSX.Elem
           <>
             <h4 className="text-base font-semibold">圣域手动设定</h4>
             <p className="mt-2 text-xs text-slate-300">
-              说明: 卢德莱与侵蚀净化所都按独立周本处理，两个圣域本周各剩余多少次就填多少（上限都是 2）。
+              说明: 卢德莱与侵蚀净化所都拆成挑战/开箱两条次数；卢德莱补充券会额外带来 1 次挑战和 1 次开箱。
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <select
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                value={dialog.raidRemaining}
-                onChange={(event) => onDialogChange({ ...dialog, raidRemaining: event.target.value })}
-                disabled={busy}
-              >
-                {buildCountOptions(0, 2, dialog.raidRemaining).map((value) => (
-                  <option key={`dialog-sanctum-raid-${value}`} value={value}>
-                    卢德莱 {value}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
-                value={dialog.boxRemaining}
-                onChange={(event) => onDialogChange({ ...dialog, boxRemaining: event.target.value })}
-                disabled={busy}
-              >
-                {buildCountOptions(0, 2, dialog.boxRemaining).map((value) => (
-                  <option key={`dialog-sanctum-box-${value}`} value={value}>
-                    侵蚀净化所 {value}
-                  </option>
-                ))}
-              </select>
+            <div className="mt-3 space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold tracking-wide text-slate-200">圣域：卢德莱</p>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.raidChallengeRemaining}
+                    onChange={(event) => onDialogChange({ ...dialog, raidChallengeRemaining: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 4, dialog.raidChallengeRemaining).map((value) => (
+                      <option key={`dialog-sanctum-raid-challenge-${value}`} value={value}>
+                        挑战 {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.raidChallengeBonus}
+                    onChange={(event) => onDialogChange({ ...dialog, raidChallengeBonus: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 1, dialog.raidChallengeBonus).map((value) => (
+                      <option key={`dialog-sanctum-raid-challenge-bonus-${value}`} value={value}>
+                        挑战补充 {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.raidBoxRemaining}
+                    onChange={(event) => onDialogChange({ ...dialog, raidBoxRemaining: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 2, dialog.raidBoxRemaining).map((value) => (
+                      <option key={`dialog-sanctum-raid-box-${value}`} value={value}>
+                        开箱 {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.raidBoxBonus}
+                    onChange={(event) => onDialogChange({ ...dialog, raidBoxBonus: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 1, dialog.raidBoxBonus).map((value) => (
+                      <option key={`dialog-sanctum-raid-box-bonus-${value}`} value={value}>
+                        开箱补充 {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold tracking-wide text-slate-200">圣域：侵蚀净化所</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.purifyChallengeRemaining}
+                    onChange={(event) => onDialogChange({ ...dialog, purifyChallengeRemaining: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 4, dialog.purifyChallengeRemaining).map((value) => (
+                      <option key={`dialog-sanctum-purify-challenge-${value}`} value={value}>
+                        挑战 {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-xl border border-white/20 bg-black/25 px-3 py-2 text-sm outline-none focus:border-cyan-300/60"
+                    value={dialog.purifyBoxRemaining}
+                    onChange={(event) => onDialogChange({ ...dialog, purifyBoxRemaining: event.target.value })}
+                    disabled={busy}
+                  >
+                    {buildCountOptions(0, 2, dialog.purifyBoxRemaining).map((value) => (
+                      <option key={`dialog-sanctum-purify-box-${value}`} value={value}>
+                        开箱 {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </>
         ) : null}

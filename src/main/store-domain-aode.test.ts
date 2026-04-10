@@ -44,9 +44,13 @@ describe("store/store-domain-aode", () => {
     expect(result.accounts[0].breezePlan.shopExpeditionChoiceBoxUsed).toBe(EXPEDITION_CHOICE_BOX_SERVER_LIMIT);
     expect(result.accounts[0].breezePlan.shopNightmareInstantUsed).toBe(NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT);
     expect(result.accounts[0].breezePlan.shopAbyssReplenishUsed).toBe(ABYSS_REPLENISH_TICKET_SERVER_LIMIT);
+    expect(result.accounts[0].breezePlan.shopAbyssReplenishAssignedCharacterId).toBe("char-a");
     expect(result.accounts[0].breezePlan.transformAodeUsed).toBe(AODE_CONVERT_SERVER_LIMIT);
     expect(result.characters[0].aodePlan.shopExpeditionChoiceBoxUsed).toBe(EXPEDITION_CHOICE_BOX_SERVER_LIMIT);
     expect(result.characters[1].aodePlan.shopNightmareInstantUsed).toBe(NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT);
+    expect(result.characters[0].activities.sanctumRaidChallengeBonus).toBe(1);
+    expect(result.characters[0].activities.sanctumRaidBoxBonus).toBe(1);
+    expect(result.characters[1].activities.sanctumRaidChallengeBonus).toBe(0);
   });
 
   it("resolves unified server limits", () => {

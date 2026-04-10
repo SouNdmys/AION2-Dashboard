@@ -193,14 +193,38 @@ function normalizeCharacter(raw: unknown, fallbackName: string, fallbackAccountI
         typeof activitiesRaw?.transcendenceBossRemaining === "number"
           ? clamp(activitiesRaw.transcendenceBossRemaining, 0, 28)
           : base.activities.transcendenceBossRemaining,
-      sanctumRaidRemaining:
-        typeof activitiesRaw?.sanctumRaidRemaining === "number"
-          ? clamp(activitiesRaw.sanctumRaidRemaining, 0, 2)
-          : base.activities.sanctumRaidRemaining,
-      sanctumBoxRemaining:
-        typeof activitiesRaw?.sanctumBoxRemaining === "number"
-          ? clamp(activitiesRaw.sanctumBoxRemaining, 0, 2)
-          : base.activities.sanctumBoxRemaining,
+      sanctumRaidChallengeRemaining:
+        typeof activitiesRaw?.sanctumRaidChallengeRemaining === "number"
+          ? clamp(activitiesRaw.sanctumRaidChallengeRemaining, 0, 4)
+          : typeof activitiesRaw?.sanctumRaidRemaining === "number"
+            ? clamp(activitiesRaw.sanctumRaidRemaining, 0, 4)
+            : base.activities.sanctumRaidChallengeRemaining,
+      sanctumRaidChallengeBonus:
+        typeof activitiesRaw?.sanctumRaidChallengeBonus === "number"
+          ? clamp(activitiesRaw.sanctumRaidChallengeBonus, 0, 1)
+          : 0,
+      sanctumRaidBoxRemaining:
+        typeof activitiesRaw?.sanctumRaidBoxRemaining === "number"
+          ? clamp(activitiesRaw.sanctumRaidBoxRemaining, 0, 2)
+          : typeof activitiesRaw?.sanctumRaidRemaining === "number"
+            ? clamp(activitiesRaw.sanctumRaidRemaining, 0, 2)
+            : base.activities.sanctumRaidBoxRemaining,
+      sanctumRaidBoxBonus:
+        typeof activitiesRaw?.sanctumRaidBoxBonus === "number"
+          ? clamp(activitiesRaw.sanctumRaidBoxBonus, 0, 1)
+          : 0,
+      sanctumPurifyChallengeRemaining:
+        typeof activitiesRaw?.sanctumPurifyChallengeRemaining === "number"
+          ? clamp(activitiesRaw.sanctumPurifyChallengeRemaining, 0, 4)
+          : typeof activitiesRaw?.sanctumBoxRemaining === "number"
+            ? clamp(activitiesRaw.sanctumBoxRemaining, 0, 4)
+            : base.activities.sanctumPurifyChallengeRemaining,
+      sanctumPurifyBoxRemaining:
+        typeof activitiesRaw?.sanctumPurifyBoxRemaining === "number"
+          ? clamp(activitiesRaw.sanctumPurifyBoxRemaining, 0, 2)
+          : typeof activitiesRaw?.sanctumBoxRemaining === "number"
+            ? clamp(activitiesRaw.sanctumBoxRemaining, 0, 2)
+            : base.activities.sanctumPurifyBoxRemaining,
       miniGameRemaining:
         typeof activitiesRaw?.miniGameRemaining === "number"
           ? clamp(activitiesRaw.miniGameRemaining, 0, 14)
@@ -327,6 +351,11 @@ function normalizeAccount(raw: unknown, index: number): AccountState {
         typeof breezePlanRaw?.shopAbyssReplenishUsed === "number"
           ? clamp(Math.floor(breezePlanRaw.shopAbyssReplenishUsed), 0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)
           : 0,
+      shopAbyssReplenishAssignedCharacterId:
+        typeof breezePlanRaw?.shopAbyssReplenishAssignedCharacterId === "string" &&
+        breezePlanRaw.shopAbyssReplenishAssignedCharacterId.trim()
+          ? breezePlanRaw.shopAbyssReplenishAssignedCharacterId.trim()
+          : null,
       transformAodeUsed:
         typeof breezePlanRaw?.transformAodeUsed === "number"
           ? clamp(Math.floor(breezePlanRaw.transformAodeUsed), 0, AODE_CONVERT_SERVER_LIMIT)
@@ -416,6 +445,16 @@ export function syncAccountSharedStateFromCharacters(accounts: AccountState[], c
           0,
           ABYSS_REPLENISH_TICKET_SERVER_LIMIT,
         ),
+        shopAbyssReplenishAssignedCharacterId:
+          firstCharacter.aodePlan.shopAbyssReplenishUsed > 0 &&
+          account.breezePlan.shopAbyssReplenishAssignedCharacterId &&
+          characters.some(
+            (character) =>
+              character.accountId === account.id &&
+              character.id === account.breezePlan.shopAbyssReplenishAssignedCharacterId,
+          )
+            ? account.breezePlan.shopAbyssReplenishAssignedCharacterId
+            : null,
         transformAodeUsed: clamp(firstCharacter.aodePlan.transformAodeUsed, 0, AODE_CONVERT_SERVER_LIMIT),
       },
     };

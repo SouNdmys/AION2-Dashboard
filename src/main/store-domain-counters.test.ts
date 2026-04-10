@@ -32,8 +32,12 @@ describe("store/store-domain-counters", () => {
       dailyDungeonTicketStored: 999,
       miniGameRemaining: 999,
       spiritInvasionRemaining: 999,
-      sanctumRaidRemaining: 999,
-      sanctumBoxRemaining: 999,
+      sanctumRaidChallengeRemaining: 999,
+      sanctumRaidChallengeBonus: 999,
+      sanctumRaidBoxRemaining: 999,
+      sanctumRaidBoxBonus: 999,
+      sanctumPurifyChallengeRemaining: 999,
+      sanctumPurifyBoxRemaining: 999,
     });
 
     expect(next.characters[0].activities.expeditionRemaining).toBe(10);
@@ -44,8 +48,12 @@ describe("store/store-domain-counters", () => {
     expect(next.characters[0].activities.dailyDungeonTicketStored).toBe(30);
     expect(next.characters[0].activities.miniGameRemaining).toBe(14);
     expect(next.characters[0].activities.spiritInvasionRemaining).toBe(7);
-    expect(next.characters[0].activities.sanctumRaidRemaining).toBe(2);
-    expect(next.characters[0].activities.sanctumBoxRemaining).toBe(2);
+    expect(next.characters[0].activities.sanctumRaidChallengeRemaining).toBe(4);
+    expect(next.characters[0].activities.sanctumRaidChallengeBonus).toBe(1);
+    expect(next.characters[0].activities.sanctumRaidBoxRemaining).toBe(2);
+    expect(next.characters[0].activities.sanctumRaidBoxBonus).toBe(1);
+    expect(next.characters[0].activities.sanctumPurifyChallengeRemaining).toBe(4);
+    expect(next.characters[0].activities.sanctumPurifyBoxRemaining).toBe(2);
   });
 
   it("keeps non-target character unchanged except shared daily dungeon mirroring", () => {

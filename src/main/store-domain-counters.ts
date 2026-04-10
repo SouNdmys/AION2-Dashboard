@@ -19,8 +19,12 @@ export interface UpdateRaidCountsPayload {
   miniGameRemaining?: number;
   miniGameTicketBonus?: number;
   spiritInvasionRemaining?: number;
-  sanctumRaidRemaining?: number;
-  sanctumBoxRemaining?: number;
+  sanctumRaidChallengeRemaining?: number;
+  sanctumRaidChallengeBonus?: number;
+  sanctumRaidBoxRemaining?: number;
+  sanctumRaidBoxBonus?: number;
+  sanctumPurifyChallengeRemaining?: number;
+  sanctumPurifyBoxRemaining?: number;
 }
 
 export interface UpdateWeeklyCompletionsPayload {
@@ -133,14 +137,30 @@ export function applyRaidCountsUpdate(
           typeof payload.spiritInvasionRemaining === "number"
             ? clamp(payload.spiritInvasionRemaining, 0, 7)
             : item.activities.spiritInvasionRemaining,
-        sanctumRaidRemaining:
-          typeof payload.sanctumRaidRemaining === "number"
-            ? clamp(payload.sanctumRaidRemaining, 0, 2)
-            : item.activities.sanctumRaidRemaining,
-        sanctumBoxRemaining:
-          typeof payload.sanctumBoxRemaining === "number"
-            ? clamp(payload.sanctumBoxRemaining, 0, 2)
-            : item.activities.sanctumBoxRemaining,
+        sanctumRaidChallengeRemaining:
+          typeof payload.sanctumRaidChallengeRemaining === "number"
+            ? clamp(payload.sanctumRaidChallengeRemaining, 0, 4)
+            : item.activities.sanctumRaidChallengeRemaining,
+        sanctumRaidChallengeBonus:
+          typeof payload.sanctumRaidChallengeBonus === "number"
+            ? clamp(payload.sanctumRaidChallengeBonus, 0, 1)
+            : item.activities.sanctumRaidChallengeBonus,
+        sanctumRaidBoxRemaining:
+          typeof payload.sanctumRaidBoxRemaining === "number"
+            ? clamp(payload.sanctumRaidBoxRemaining, 0, 2)
+            : item.activities.sanctumRaidBoxRemaining,
+        sanctumRaidBoxBonus:
+          typeof payload.sanctumRaidBoxBonus === "number"
+            ? clamp(payload.sanctumRaidBoxBonus, 0, 1)
+            : item.activities.sanctumRaidBoxBonus,
+        sanctumPurifyChallengeRemaining:
+          typeof payload.sanctumPurifyChallengeRemaining === "number"
+            ? clamp(payload.sanctumPurifyChallengeRemaining, 0, 4)
+            : item.activities.sanctumPurifyChallengeRemaining,
+        sanctumPurifyBoxRemaining:
+          typeof payload.sanctumPurifyBoxRemaining === "number"
+            ? clamp(payload.sanctumPurifyBoxRemaining, 0, 2)
+            : item.activities.sanctumPurifyBoxRemaining,
       },
     };
   });

@@ -8,8 +8,6 @@ interface DashboardCharacterTasksPanelProps {
   state: AppState;
   selected: CharacterState;
   groupedTasks: Record<TaskDefinition["category"], TaskDefinition[]>;
-  sanctumRaidTask?: TaskDefinition;
-  sanctumBoxTask?: TaskDefinition;
   onOpenSetCompletedDialog: (task: TaskDefinition) => void;
   onOpenCompleteDialog: (taskId: TaskId, title: string) => void;
   onOpenUseTicketDialog: (taskId: TaskId, title: string) => void;
@@ -26,8 +24,6 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
     state,
     selected,
     groupedTasks,
-    sanctumRaidTask,
-    sanctumBoxTask,
     onOpenSetCompletedDialog,
     onOpenCompleteDialog,
     onOpenUseTicketDialog,
@@ -43,12 +39,12 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
       {(Object.keys(groupedTasks) as TaskDefinition["category"][]).map((category) => (
         <article key={category} className="task-section space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-            <h3 className="text-sm font-semibold tracking-wide text-slate-900">{category}任务</h3>
+            <h3 className="task-section-title">{category}任务</h3>
             <div className="flex items-center gap-2">
-              <span className="summary-note">
-                {(groupedTasks[category] ?? []).length + (category === "副本" && sanctumRaidTask && sanctumBoxTask ? 2 : 0)} 项
+              <span className="task-section-meta">
+                {(groupedTasks[category] ?? []).length + (category === "副本" ? 2 : 0)} 项
               </span>
-              {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
+              {category === "副本" ? (
                 <button className="pill-btn" onClick={onOpenSanctumEditDialog} disabled={busy}>
                   圣域设定
                 </button>
@@ -80,7 +76,7 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                 <div key={task.id} className="task-card">
                   <div className="task-card-header">
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold">{task.title}</h3>
+                      <h3 className="task-title-strong">{task.title}</h3>
                       <p className="mt-1 task-meta-line">{taskSummary.join(" · ")}</p>
                     </div>
                     <span className="task-progress-pill shrink-0">
@@ -131,21 +127,33 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                 </div>
               );
             })}
-            {category === "副本" && sanctumRaidTask && sanctumBoxTask ? (
+            {category === "副本" ? (
               <>
                 <div className="task-card">
                   <div className="task-card-header">
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold">{sanctumRaidTask.title}</h3>
-                      <p className="mt-1 task-meta-line">消耗 80 奥德</p>
+                      <h3 className="task-title-strong">圣域：卢德莱</h3>
+                      <p className="mt-1 task-meta-line">挑战 4 次 · 开箱 2 次 · 开箱消耗 80 奥德</p>
                     </div>
-                    <span className="task-progress-pill shrink-0">剩余 {selected.activities.sanctumRaidRemaining}/2</span>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <span className="task-progress-pill shrink-0">
+                        挑战 {selected.activities.sanctumRaidChallengeRemaining + selected.activities.sanctumRaidChallengeBonus}/
+                        {4 + selected.activities.sanctumRaidChallengeBonus}
+                      </span>
+                      <span className="task-progress-pill shrink-0">
+                        开箱 {selected.activities.sanctumRaidBoxRemaining + selected.activities.sanctumRaidBoxBonus}/
+                        {2 + selected.activities.sanctumRaidBoxBonus}
+                      </span>
+                    </div>
                   </div>
-                  <p className="task-card-note mt-2">{sanctumRaidTask.description}</p>
+                  <p className="task-card-note mt-2">深渊重铸补充券会额外给卢德莱 +1 次挑战和 +1 次开箱，补充次数只会落在一个角色身上。</p>
                   <div className="task-card-actions mt-2.5">
                     <div className="task-action-row">
-                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_raid", sanctumRaidTask.title)} disabled={busy}>
-                        圣域完成
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[112px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_raid", "圣域：卢德莱（挑战）")} disabled={busy}>
+                        挑战完成
+                      </button>
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_box", "圣域：卢德莱（开箱）")} disabled={busy}>
+                        开箱完成(80奥德)
                       </button>
                     </div>
                   </div>
@@ -153,16 +161,26 @@ export function DashboardCharacterTasksPanel(props: DashboardCharacterTasksPanel
                 <div className="task-card">
                   <div className="task-card-header">
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold">{sanctumBoxTask.title}</h3>
-                      <p className="mt-1 task-meta-line">消耗 80 奥德</p>
+                      <h3 className="task-title-strong">圣域：侵蚀净化所</h3>
+                      <p className="mt-1 task-meta-line">挑战 4 次 · 开箱 2 次 · 开箱消耗 80 奥德</p>
                     </div>
-                    <span className="task-progress-pill shrink-0">剩余 {selected.activities.sanctumBoxRemaining}/2</span>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <span className="task-progress-pill shrink-0">
+                        挑战 {selected.activities.sanctumPurifyChallengeRemaining}/4
+                      </span>
+                      <span className="task-progress-pill shrink-0">
+                        开箱 {selected.activities.sanctumPurifyBoxRemaining}/2
+                      </span>
+                    </div>
                   </div>
-                  <p className="task-card-note mt-2">{sanctumBoxTask.description}</p>
+                  <p className="task-card-note mt-2">侵蚀净化所不吃卢德莱补充券，本周按固定挑战/开箱次数处理。</p>
                   <div className="task-card-actions mt-2.5">
                     <div className="task-action-row">
-                      <button className="task-btn task-btn-soft task-btn-compact w-full" onClick={() => onOpenCompleteDialog("sanctum_box", sanctumBoxTask.title)} disabled={busy}>
-                        圣域完成
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[112px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_purify_raid", "圣域：侵蚀净化所（挑战）")} disabled={busy}>
+                        挑战完成
+                      </button>
+                      <button className="task-btn task-btn-soft task-btn-compact min-w-[132px] flex-1" onClick={() => onOpenCompleteDialog("sanctum_purify_box", "圣域：侵蚀净化所（开箱）")} disabled={busy}>
+                        开箱完成(80奥德)
                       </button>
                     </div>
                   </div>

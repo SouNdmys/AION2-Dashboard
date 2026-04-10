@@ -269,8 +269,12 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
     next.activities.awakeningRemaining = 3;
     next.activities.awakeningTicketBonus = 0;
     next.activities.dailyDungeonRemaining = 14;
-    next.activities.sanctumRaidRemaining = 2;
-    next.activities.sanctumBoxRemaining = 2;
+    next.activities.sanctumRaidChallengeRemaining = 4;
+    next.activities.sanctumRaidChallengeBonus = 0;
+    next.activities.sanctumRaidBoxRemaining = 2;
+    next.activities.sanctumRaidBoxBonus = 0;
+    next.activities.sanctumPurifyChallengeRemaining = 4;
+    next.activities.sanctumPurifyBoxRemaining = 2;
     next.activities.expeditionBossRemaining = EXPEDITION_BOSS_MAX;
     next.activities.transcendenceBossRemaining = TRANSCENDENCE_BOSS_MAX;
     next.aodePlan.shopAodePurchaseUsed = 0;
@@ -312,6 +316,8 @@ export function refreshCharacterState(character: CharacterState, now = new Date(
   next.activities.miniGameTicketBonus = clamp(next.activities.miniGameTicketBonus, 0, 999);
   next.activities.expeditionTicketBonus = clamp(next.activities.expeditionTicketBonus, 0, 999);
   next.activities.transcendenceTicketBonus = clamp(next.activities.transcendenceTicketBonus, 0, 999);
+  next.activities.sanctumRaidChallengeBonus = clamp(next.activities.sanctumRaidChallengeBonus, 0, 1);
+  next.activities.sanctumRaidBoxBonus = clamp(next.activities.sanctumRaidBoxBonus, 0, 1);
 
   return next;
 }

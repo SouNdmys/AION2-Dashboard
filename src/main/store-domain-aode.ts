@@ -47,6 +47,21 @@ export function applyAodePlanUpdate(input: ApplyAodePlanUpdateInput): ApplyAodeP
     throw new Error("角色不存在");
   }
 
+  const currentAccount = input.accounts.find((account) => account.id === target.accountId);
+  const previousShopAbyssReplenishUsed = currentAccount?.breezePlan.shopAbyssReplenishUsed ?? 0;
+  const previousAssignedCharacterId = currentAccount?.breezePlan.shopAbyssReplenishAssignedCharacterId ?? null;
+  const nextShopAbyssReplenishUsed =
+    typeof input.payload.shopAbyssReplenishUsed === "number"
+      ? clamp(Math.floor(input.payload.shopAbyssReplenishUsed), 0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)
+      : previousShopAbyssReplenishUsed;
+  const nextAssignedCharacterId = nextShopAbyssReplenishUsed > 0 ? input.characterId : null;
+  const previousAssignedCharacter =
+    previousAssignedCharacterId === null
+      ? null
+      : input.characters.find((item) => item.accountId === target.accountId && item.id === previousAssignedCharacterId) ?? null;
+  const transferRaidChallengeBonus = previousAssignedCharacter?.activities.sanctumRaidChallengeBonus ?? 0;
+  const transferRaidBoxBonus = previousAssignedCharacter?.activities.sanctumRaidBoxBonus ?? 0;
+
   const nextAccounts = input.accounts.map((account) => {
     if (account.id !== target.accountId) {
       return account;
@@ -70,10 +85,8 @@ export function applyAodePlanUpdate(input: ApplyAodePlanUpdateInput): ApplyAodeP
           typeof input.payload.shopNightmareInstantUsed === "number"
             ? clamp(Math.floor(input.payload.shopNightmareInstantUsed), 0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT)
             : clamp(account.breezePlan.shopNightmareInstantUsed, 0, NIGHTMARE_INSTANT_TICKET_SERVER_LIMIT),
-        shopAbyssReplenishUsed:
-          typeof input.payload.shopAbyssReplenishUsed === "number"
-            ? clamp(Math.floor(input.payload.shopAbyssReplenishUsed), 0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT)
-            : clamp(account.breezePlan.shopAbyssReplenishUsed, 0, ABYSS_REPLENISH_TICKET_SERVER_LIMIT),
+        shopAbyssReplenishUsed: nextShopAbyssReplenishUsed,
+        shopAbyssReplenishAssignedCharacterId: nextAssignedCharacterId,
         transformAodeUsed:
           typeof input.payload.transformAodeUsed === "number"
             ? clamp(Math.floor(input.payload.transformAodeUsed), 0, AODE_CONVERT_SERVER_LIMIT)
@@ -82,8 +95,44 @@ export function applyAodePlanUpdate(input: ApplyAodePlanUpdateInput): ApplyAodeP
     };
   });
 
+  const nextCharacters = input.characters.map((character) => {
+    if (character.accountId !== target.accountId) {
+      return character;
+    }
+
+    let sanctumRaidChallengeBonus = character.activities.sanctumRaidChallengeBonus;
+    let sanctumRaidBoxBonus = character.activities.sanctumRaidBoxBonus;
+
+    if (previousAssignedCharacterId && character.id === previousAssignedCharacterId && previousAssignedCharacterId !== nextAssignedCharacterId) {
+      sanctumRaidChallengeBonus = 0;
+      sanctumRaidBoxBonus = 0;
+    }
+
+    if (nextShopAbyssReplenishUsed === 0) {
+      sanctumRaidChallengeBonus = 0;
+      sanctumRaidBoxBonus = 0;
+    } else if (character.id === nextAssignedCharacterId) {
+      if (previousShopAbyssReplenishUsed === 0) {
+        sanctumRaidChallengeBonus = 1;
+        sanctumRaidBoxBonus = 1;
+      } else if (previousAssignedCharacterId !== nextAssignedCharacterId) {
+        sanctumRaidChallengeBonus = transferRaidChallengeBonus;
+        sanctumRaidBoxBonus = transferRaidBoxBonus;
+      }
+    }
+
+    return {
+      ...character,
+      activities: {
+        ...character.activities,
+        sanctumRaidChallengeBonus,
+        sanctumRaidBoxBonus,
+      },
+    };
+  });
+
   return {
     accounts: nextAccounts,
-    characters: syncAccountSharedStateToCharacters(nextAccounts, input.characters),
+    characters: syncAccountSharedStateToCharacters(nextAccounts, nextCharacters),
   };
 }

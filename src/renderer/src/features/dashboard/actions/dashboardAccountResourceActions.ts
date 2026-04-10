@@ -278,7 +278,7 @@ export async function saveShopPlanAction(params: SaveShopPlanParams): Promise<vo
     return;
   }
   if (shopUnknownChallengeTicketUsed > UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT) {
-    onError(`未知键队挑战券(刻印) 每周最多 ${UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT}`);
+    onError(`未知缝隙挑战券(刻印) 每周最多 ${UNKNOWN_CHALLENGE_TICKET_SERVER_LIMIT}`);
     return;
   }
   if (shopExpeditionChoiceBoxUsed > EXPEDITION_CHOICE_BOX_SERVER_LIMIT) {
@@ -290,7 +290,7 @@ export async function saveShopPlanAction(params: SaveShopPlanParams): Promise<vo
     return;
   }
   if (shopAbyssReplenishUsed > ABYSS_REPLENISH_TICKET_SERVER_LIMIT) {
-    onError(`深渊重镇补充券(刻印) 每周最多 ${ABYSS_REPLENISH_TICKET_SERVER_LIMIT}`);
+    onError(`深渊重铸补充券(刻印) 每周最多 ${ABYSS_REPLENISH_TICKET_SERVER_LIMIT}`);
     return;
   }
   await sync(
