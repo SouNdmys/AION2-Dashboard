@@ -287,7 +287,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
           <h3 className="panel-title !text-xl">角色概览总览</h3>
         </div>
         <div className="toolbar-inline">
-          <span className="pill-btn pill-static">角色 {overviewRowsFiltered.length}</span>
+          <span className="pill-btn pill-static !px-3">角色 {overviewRowsFiltered.length}</span>
           <span className="summary-note">先扫一眼优先项，再决定进入哪个角色</span>
         </div>
       </div>
@@ -299,7 +299,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
             <h4 className="panel-title !mt-1 !text-sm">快速录入</h4>
           </div>
           <div className="toolbar-inline">
-            <span className="pill-btn pill-static">{overviewSortKey === "manual" ? "支持拖拽排序" : "当前为智能排序"}</span>
+            <span className="pill-btn pill-static !px-3">{overviewSortKey === "manual" ? "支持拖拽排序" : "当前为智能排序"}</span>
             <span className="summary-note">录入优先留在总览，避免频繁切页。</span>
           </div>
         </div>
@@ -487,7 +487,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                   </div>
                 ) : null}
                 {visibleGroups.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                     {visibleGroups.map((groupKey) => (
                       <section key={`${entry.character.id}-${groupKey}`} className={OVERVIEW_GROUP_PANEL_CLASS[groupKey]}>
                         <div className="flex items-center justify-between gap-2">

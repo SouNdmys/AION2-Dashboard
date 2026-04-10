@@ -163,16 +163,26 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
 
   return (
     <article className="order-1 glass-panel rounded-[30px] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="section-card-heading">
         <div>
           <p className="panel-kicker">Craft Assistant</p>
           <h4 className="panel-title !mt-1">做装模拟器</h4>
           <p className="panel-subtitle">选择配方后直接运行模拟；修改材料价格与库存会立即参与结果计算，点击材料名可联动查看历史价格与市场分析。</p>
         </div>
+        <div className="toolbar-inline">
+          <span className="pill-btn pill-static !px-3">{simulation ? `${simulation.outputItemName} x${simulation.totalOutputQuantity}` : "等待选择配方"}</span>
+          <span className="pill-btn pill-static !px-3">{simulation ? `制作 ${simulation.runs} 次` : "输入后可直接运行"}</span>
+        </div>
       </div>
       {message ? <p className="banner-positive mt-4 rounded-xl px-3 py-2 text-xs">{message}</p> : null}
       {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
       <div className="section-card mt-4">
+        <div className="section-card-heading">
+          <div>
+            <p className="section-card-title">Recipe Setup</p>
+            <p className="section-card-lead">先选配方与售价，再进入材料规划。</p>
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <select
             className="field-control"
@@ -230,7 +240,11 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
       {simulation ? (
         <div className="section-card mt-4 text-xs">
           <div>
-            <p className="text-[11px] font-medium text-slate-500">材料明细与库存修正（{simulation.materialRows.length} 项）</p>
+            <div className="table-title-row">
+              <p className="section-card-title">Material Planner</p>
+              <span className="pill-btn pill-static !px-3">材料 {simulation.materialRows.length} 项</span>
+            </div>
+            <p className="section-card-lead">材料明细与库存修正</p>
             <div className="surface-table mt-2 max-h-64 overflow-auto">
               <table className="w-full text-left">
                 <thead>
@@ -306,27 +320,28 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
           ) : null}
 
           <div className="soft-card p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="section-card-heading">
               <div>
-                <p className="text-[11px] font-medium text-slate-500">材料缺口与采购清单</p>
+                <p className="section-card-title">Purchase Plan</p>
+                <p className="section-card-lead">材料缺口与采购清单</p>
                 <p className="mt-1 inline-note">先看缺多少，再决定是否补价或直接采购。点击材料名仍可联动到市场工具。</p>
               </div>
               <button className="task-btn task-btn-soft task-btn-compact px-3" onClick={() => void handleCopyPurchaseList()} disabled={busy || missingItemCount === 0}>
                 复制采购清单
               </button>
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">缺料种类</p>
-                <p className="mt-1 text-sm text-slate-900">{missingItemCount} 项</p>
+            <div className="metric-grid-refined mt-3">
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">缺料种类</p>
+                <p className="metric-card-refined-value">{missingItemCount} 项</p>
               </div>
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">总缺口数量</p>
-                <p className="mt-1 text-sm text-slate-900">{missingTotalQuantity}</p>
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">总缺口数量</p>
+                <p className="metric-card-refined-value">{missingTotalQuantity}</p>
               </div>
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">预计采购成本</p>
-                <p className={`mt-1 text-sm ${missingRowsUnknownPriceCount > 0 ? "tone-warning" : "text-slate-900"}`}>{purchaseListCostLabel}</p>
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">预计采购成本</p>
+                <p className={`metric-card-refined-value ${missingRowsUnknownPriceCount > 0 ? "tone-warning" : ""}`}>{purchaseListCostLabel}</p>
               </div>
             </div>
             {copyMessage ? <p className="mt-2 inline-note">{copyMessage}</p> : null}
@@ -376,10 +391,10 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
           </div>
 
           <div className="soft-card p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="section-card-heading">
               <div>
-                <p className="text-[11px] text-slate-500">模拟结论</p>
-                <p className={`mt-1 text-base font-semibold ${recommendationTone}`}>{recommendationLabel}</p>
+                <p className="section-card-title">Recommendation</p>
+                <p className={`section-card-lead ${recommendationTone}`}>{recommendationLabel}</p>
                 <p className="mt-1 text-[11px] text-slate-500">
                   {simulation.outputItemName} x {simulation.totalOutputQuantity} | 制作 {simulation.runs} 次
                 </p>
@@ -394,24 +409,24 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             <p className="mt-2 inline-note">{recommendationDetail}</p>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">材料成本</p>
-              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.requiredMaterialCost)}</p>
+          <div className="metric-grid-refined mt-2">
+            <div className="metric-card-refined">
+              <p className="metric-card-refined-label">材料成本</p>
+              <p className="metric-card-refined-value">{formatGold(simulation.requiredMaterialCost)}</p>
             </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">税后收入</p>
-              <p className="mt-1 text-sm text-slate-900">{formatGold(simulation.netRevenueAfterTax)}</p>
+            <div className="metric-card-refined">
+              <p className="metric-card-refined-label">税后收入</p>
+              <p className="metric-card-refined-value">{formatGold(simulation.netRevenueAfterTax)}</p>
             </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">净利润</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfit ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
+            <div className="metric-card-refined">
+              <p className="metric-card-refined-label">净利润</p>
+              <p className={`metric-card-refined-value ${(simulation.estimatedProfit ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
                 {formatGold(simulation.estimatedProfit)}
               </p>
             </div>
-            <div className="data-pill">
-              <p className="text-[11px] text-slate-500">利润率</p>
-              <p className={`mt-1 text-sm ${(simulation.estimatedProfitRate ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
+            <div className="metric-card-refined">
+              <p className="metric-card-refined-label">利润率</p>
+              <p className={`metric-card-refined-value ${(simulation.estimatedProfitRate ?? 0) > 0 ? "tone-positive" : "tone-danger"}`}>
                 {toPercent(simulation.estimatedProfitRate)}
               </p>
             </div>
@@ -423,9 +438,10 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
             <div className="data-pill">产物总量: {simulation.totalOutputQuantity}</div>
           </div>
           <div className="mt-3 soft-card p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="section-card-heading">
               <div>
-                <p className="text-[11px] font-medium text-slate-500">金价换算辅助</p>
+                <p className="section-card-title">RMB Ratio</p>
+                <p className="section-card-lead">金价换算辅助</p>
                 <p className="mt-1 inline-note">按你的收金比例估算，补齐当前材料缺口大约还要收多少 RMB。</p>
               </div>
             </div>
@@ -451,21 +467,21 @@ export function WorkshopSimulationPanel(props: WorkshopSimulationPanelProps): JS
                 disabled={busy}
                 placeholder="交易行税后修正 %"
               />
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">税后 1 元可到手</p>
-                <p className="mt-1 text-sm text-slate-900">
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">税后 1 元可到手</p>
+                <p className="metric-card-refined-value">
                   {netGoldPerRmb === null ? "--" : `${goldValueFormatter.format(netGoldPerRmb)} 万金币`}
                 </p>
               </div>
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">税后 1 万基纳约合</p>
-                <p className="mt-1 text-sm text-slate-900">
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">税后 1 万基纳约合</p>
+                <p className="metric-card-refined-value">
                   {netRmbPerTenThousandGold === null ? "--" : `¥${currencyFormatter.format(netRmbPerTenThousandGold)}`}
                 </p>
               </div>
-              <div className="data-pill">
-                <p className="text-[11px] text-slate-500">补齐缺口约需 RMB</p>
-                <p className={`mt-1 text-sm ${estimatedRmbForMissingPurchase === null ? "tone-warning" : "text-slate-900"}`}>
+              <div className="metric-card-refined">
+                <p className="metric-card-refined-label">补齐缺口约需 RMB</p>
+                <p className={`metric-card-refined-value ${estimatedRmbForMissingPurchase === null ? "tone-warning" : ""}`}>
                   {estimatedRmbForMissingPurchase === null ? "--" : `¥${currencyFormatter.format(estimatedRmbForMissingPurchase)}`}
                 </p>
               </div>
