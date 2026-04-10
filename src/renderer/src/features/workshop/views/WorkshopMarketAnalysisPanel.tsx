@@ -163,11 +163,11 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
     .slice(0, 4);
 
   return (
-    <details className="order-3 group glass-panel rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
+    <details className="order-3 group tool-module rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
       <summary className="details-summary">
         <div>
-          <h4 className="text-sm font-semibold">市场分析器</h4>
-          <p className="mt-1 summary-note">近期价格、结论摘要与价格曲线。</p>
+          <h4 className="tool-module-title">市场分析器</h4>
+          <p className="tool-module-subtitle">近期价格、结论摘要与价格曲线。</p>
         </div>
         <span className="pill-btn">
           <span className="group-open:hidden">展开</span>
@@ -214,23 +214,23 @@ export function WorkshopMarketAnalysisPanel(props: WorkshopMarketAnalysisPanelPr
         </div>
       {filteredHistoryItems.length === 0 ? <p className="banner-warning mt-2 rounded-xl px-3 py-2 text-xs">当前搜索条件下没有可查询物品。</p> : null}
 
-      <div className="mt-3 grid grid-cols-1 gap-2 text-xs md:grid-cols-2 xl:grid-cols-4">
-        <div className="data-pill">
+      <div className="tool-metric-grid mt-3 text-xs">
+        <div className="data-pill data-pill-strong">
           <p className="text-[11px] text-slate-500">伺服器最近价格</p>
           <p className="mt-1 text-sm text-slate-900">{formatGold(historyServerResult?.latestPrice ?? null)}</p>
           <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestServerCapturedAt)}</p>
         </div>
-        <div className="data-pill">
+        <div className="data-pill data-pill-strong">
           <p className="text-[11px] text-slate-500">世界最近价格</p>
           <p className="mt-1 text-sm text-slate-900">{formatGold(historyWorldResult?.latestPrice ?? null)}</p>
           <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(latestWorldCapturedAt)}</p>
         </div>
-        <div className="data-pill">
+        <div className="data-pill data-pill-strong">
           <p className="text-[11px] text-slate-500">趋势方向</p>
           <p className={`mt-1 text-sm ${trendSummaryClass}`}>{trendSummaryLabel}</p>
           <p className="mt-1 text-[11px] text-slate-400">{currentSignalSummary}</p>
         </div>
-        <div className="data-pill">
+        <div className="data-pill data-pill-strong">
           <p className="text-[11px] text-slate-500">异常提醒</p>
           <p className={`mt-1 text-sm ${suspectCount > 0 ? "tone-danger" : "text-slate-900"}`}>{anomalySummary}</p>
           <p className="mt-1 text-[11px] text-slate-400">当前样本 {historyPointCount}</p>

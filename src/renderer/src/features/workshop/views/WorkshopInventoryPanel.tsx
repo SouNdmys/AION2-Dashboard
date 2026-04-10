@@ -101,11 +101,11 @@ export function WorkshopInventoryPanel(props: WorkshopInventoryPanelProps): JSX.
   } = props;
 
   return (
-      <details className="order-4 group glass-panel rounded-2xl p-4">
+      <details className="order-4 group tool-module rounded-2xl p-4">
         <summary className="details-summary">
           <div>
-          <h4 className="text-sm font-semibold">库存管理</h4>
-          <p className="mt-1 summary-note">价格修正、库存录入与逆向推荐。</p>
+          <h4 className="tool-module-title">库存管理</h4>
+          <p className="tool-module-subtitle">价格修正、库存录入与逆向推荐。</p>
           </div>
           <span className="pill-btn">
             <span className="group-open:hidden">展开</span>

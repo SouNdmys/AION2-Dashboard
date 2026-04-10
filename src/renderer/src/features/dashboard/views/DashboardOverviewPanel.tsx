@@ -453,14 +453,14 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
               onDragOver={(event) => onOverviewCardDragOver(event, entry.character.id)}
               onDrop={(event) => onOverviewCardDrop(event, entry.character.id)}
               onDragEnd={onOverviewCardDragEnd}
-              className={`soft-card rounded-3xl p-4 text-left transition ${
+              className={`overview-card-shell soft-card rounded-3xl p-4 text-left transition ${
                 dragging ? "border-[rgba(15,143,111,0.38)] opacity-65" : dragOver ? "border-[rgba(15,143,111,0.28)] bg-[rgba(15,143,111,0.05)]" : ""
               } ${dragEnabled ? "cursor-move" : ""}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[0.95rem] font-semibold tracking-[-0.01em]">{entry.character.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="overview-card-title">{entry.character.name}</p>
+                  <p className="overview-card-account">
                     {entry.account.name}
                     {entry.account.regionTag ? ` (${entry.account.regionTag})` : " (未设置大区)"}
                   </p>
@@ -478,7 +478,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
               </div>
               <div className="mt-3 space-y-3">
                 {spotlightMetric && spotlightGroupKey ? (
-                  <div className="rounded-2xl border border-[rgba(15,23,42,0.06)] bg-white/72 px-3 py-2.5">
+                  <div className="overview-spotlight">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={OVERVIEW_GROUP_CHIP_CLASS[spotlightGroupKey]}>{OVERVIEW_GROUP_LABELS[spotlightGroupKey]}</span>
                       <span className="text-sm font-medium text-slate-900">当前最需要处理：{spotlightMetric.label}</span>
@@ -516,7 +516,7 @@ export function DashboardOverviewPanel(props: DashboardOverviewPanelProps): JSX.
                     <span className="summary-note">当前主要项目已基本清空，可直接进入角色确认细节。</span>
                   </div>
                 )}
-                <div className="rounded-2xl border border-[rgba(15,23,42,0.06)] bg-white/70 px-3 py-2">
+                <div className="overview-footer-strip">
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span className="summary-note">副本 {entry.dungeonReadyBuckets}</span>
                     <span className="summary-note">周常 {entry.weeklyReadyBuckets}</span>

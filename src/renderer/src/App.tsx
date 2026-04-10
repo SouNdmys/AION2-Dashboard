@@ -408,15 +408,19 @@ export function App(): JSX.Element {
 
   if (startupPhase !== "ready") {
     return (
-      <main className="min-h-screen p-8 text-slate-900">
-        <div className="glass-panel mx-auto mt-20 max-w-md rounded-[28px] p-7 text-center">
-          <p className="panel-kicker text-center">AION 2 Dashboard</p>
-          <h1 className="mt-2 text-xl font-semibold text-slate-900">
-            {startupPhase === "installing-update" ? "正在安装更新" : "启动中"}
+      <main className="launch-shell text-slate-900">
+        <div className="launch-card">
+          <div className="launch-status">
+            <span className="launch-orb" />
+            <span>{startupPhase === "installing-update" ? "Silent Update" : "Startup"}</span>
+          </div>
+          <p className="panel-kicker mt-5">AION2 Dashboard</p>
+          <h1 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.02em] text-slate-900">
+            {startupPhase === "installing-update" ? "正在安装更新" : "正在准备工作台"}
           </h1>
           <p className="mt-3 text-sm text-slate-700">{startupMessage}</p>
           {startupDetail ? <p className="mt-2 text-xs text-slate-500">{startupDetail}</p> : null}
-          {buildInfo?.version ? <p className="mt-4 text-[11px] text-slate-400">当前版本 v{buildInfo.version}</p> : null}
+          {buildInfo?.version ? <p className="mt-5 text-[11px] text-slate-400">当前版本 v{buildInfo.version}</p> : null}
           {error ? (
             <>
               <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p>
@@ -432,9 +436,13 @@ export function App(): JSX.Element {
 
   if (!state || !settingsDraft) {
     return (
-      <main className="min-h-screen p-8 text-slate-900">
-        <div className="glass-panel mx-auto mt-20 max-w-md rounded-[28px] p-7 text-center">
-          <p className="text-sm text-slate-700">正在加载 AION 2 Dashboard...</p>
+      <main className="launch-shell text-slate-900">
+        <div className="launch-card text-center">
+          <div className="launch-status">
+            <span className="launch-orb" />
+            <span>Loading</span>
+          </div>
+          <p className="mt-5 text-sm text-slate-700">正在加载 AION2 Dashboard...</p>
           {error ? <p className="banner-danger mt-3 rounded-xl px-3 py-2 text-xs">{error}</p> : null}
         </div>
       </main>

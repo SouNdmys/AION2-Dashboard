@@ -330,11 +330,11 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
   }
 
   return (
-    <details className="group glass-panel rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
+    <details className="group tool-module rounded-2xl p-4" open={panelOpen} onToggle={(event) => setPanelOpen(event.currentTarget.open)}>
       <summary className="details-summary">
         <div>
-          <h3 className="text-sm font-semibold tracking-wide">历史价格管理</h3>
-          <p className="mt-1 summary-note">历史快照修正与一键清理。</p>
+          <h3 className="tool-module-title">历史价格管理</h3>
+          <p className="tool-module-subtitle">历史快照修正与一键清理。</p>
         </div>
         <span className="pill-btn">
           <span className="group-open:hidden">展开</span>
@@ -342,7 +342,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
         </span>
       </summary>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="tool-module-headline mt-3">
         <div className="summary-note">用于误操作修正。删除后会立即影响行情与制作模拟。</div>
         <div className="flex items-center gap-2">
           <button
@@ -358,7 +358,7 @@ export function WorkshopSidebarHistoryCard(props: WorkshopSidebarHistoryCardProp
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-2">
+      <div className="tool-panel mt-3 grid grid-cols-1 gap-2">
         <select
           className="field-control-sm min-w-0"
           value={mainCategory}

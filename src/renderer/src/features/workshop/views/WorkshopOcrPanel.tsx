@@ -90,11 +90,11 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
   } = props;
 
   return (
-    <details className="order-2 group glass-panel rounded-2xl p-4">
+    <details className="order-2 group tool-module rounded-2xl p-4">
       <summary className="details-summary">
         <div>
-          <h4 className="text-sm font-semibold">OCR抓价器</h4>
-          <p className="mt-1 summary-note">自动抓价、巡航与可视化校准。</p>
+          <h4 className="tool-module-title">OCR抓价器</h4>
+          <p className="tool-module-subtitle">自动抓价、巡航与可视化校准。</p>
         </div>
         <span className="pill-btn">
           <span className="group-open:hidden">展开</span>
@@ -130,7 +130,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
           </button>
         </div>
         <p className="mt-1 text-[11px] text-slate-500">`1200` 表示按下热键后先等待 `1.2` 秒再截图；想提速可先试 `300~800`。</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+        <div className="tool-metric-grid mt-2">
           <div className="data-pill">状态: {ocrHotkeyState?.enabled ? (ocrHotkeyState.registered ? "已启用" : "注册失败") : "未启用"}</div>
           <div className="data-pill">快捷键: {ocrHotkeyState?.shortcut ?? "--"}</div>
           <div className="data-pill">延迟: {ocrCaptureDelayMs || "--"} ms</div>
@@ -200,7 +200,7 @@ export function WorkshopOcrPanel(props: WorkshopOcrPanelProps): JSX.Element {
                 停止巡航
               </button>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+            <div className="tool-metric-grid mt-2">
               <div className="data-pill">间隔: {ocrAutoRunState?.intervalSeconds ?? "--"} s</div>
               <div className="data-pill">下一次: {ocrAutoRunCountdownSeconds === null ? "--" : `${ocrAutoRunCountdownSeconds}s`}</div>
               <div className="data-pill">浮窗: {ocrAutoRunState?.showOverlay ? "开" : "关"}</div>
