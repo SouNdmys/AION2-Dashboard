@@ -16,8 +16,8 @@ export const WEEKLY_RESET_HOUR = 5;
 export const AODE_ENERGY_SCHEDULE_HOURS = [2, 5, 8, 11, 14, 17, 20, 23] as const;
 export const EXPEDITION_SCHEDULE_HOURS = [5, 13, 21] as const;
 export const TRANSCENDENCE_SCHEDULE_HOURS = [5, 17] as const;
-export const CORRIDOR_UNIFIED_REFRESH_HOUR = 21;
-export const CORRIDOR_UNIFIED_REFRESH_DAYS = [2, 4, 6] as const;
+export const CORRIDOR_UNIFIED_REFRESH_HOUR = 22;
+export const CORRIDOR_UNIFIED_REFRESH_DAYS = [3, 6] as const;
 
 export const EXPEDITION_REWARD_MAX = 14;
 export const EXPEDITION_BOSS_MAX = 35;

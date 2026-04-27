@@ -178,7 +178,7 @@ export function DashboardSettingsPanel(props: DashboardSettingsPanelProps): JSX.
         <section className="section-card">
           <p className="panel-kicker !tracking-[0.08em]">Corridor</p>
           <h4 className="panel-title !mt-1 !text-sm">深渊回廊参数</h4>
-          <p className="summary-note mt-2">统一在周二、周四、周六 21:00 刷新，这里录入当前账号本轮回廊总上限和当前角色完成次数。</p>
+          <p className="summary-note mt-2">统一在周三、周六 22:00 刷新，这里录入当前账号本轮回廊总上限和当前角色完成次数。</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <p className="text-xs text-slate-300">下层上限</p>

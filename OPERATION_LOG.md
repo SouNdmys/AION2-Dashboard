@@ -1,5 +1,20 @@
 # AION2 Dashboard - 操作日志
 
+## 2026-04-27
+
+### v2.2.6 回廊刷新时间热修
+- 深渊回廊刷新规则更新：
+  - 旧规则：`周二 / 周四 / 周六 21:00`
+  - 新规则：`周三 / 周六 22:00`
+- 同步更新范围：
+  - `src/shared/constants.ts` 中的回廊统一刷新日与小时常量
+  - `src/shared/time.test.ts` 中的回廊时间断言
+  - 设置页“深渊回廊参数”说明文案
+- 本次校验：
+  - `npm run typecheck` 通过
+  - `npm run test:unit` 通过
+  - `npm run test:smoke` 通过
+
 ## 2026-04-10
 
 ### v2.2.5 UI 收尾 + 圣域规则热修

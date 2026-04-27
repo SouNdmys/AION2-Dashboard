@@ -54,9 +54,9 @@ describe("shared/time", () => {
   });
 
   it("returns next unified corridor refresh window", () => {
-    const fromWednesday = at(2026, 2, 25, 10, 0, 0);
+    const fromWednesdayBeforeReset = at(2026, 2, 25, 21, 30, 0);
     const fromSaturdayLate = at(2026, 2, 28, 22, 0, 0);
-    expect(getNextUnifiedCorridorRefresh(fromWednesday)).toEqual(at(2026, 2, 26, 21, 0, 0));
-    expect(getNextUnifiedCorridorRefresh(fromSaturdayLate)).toEqual(at(2026, 3, 3, 21, 0, 0));
+    expect(getNextUnifiedCorridorRefresh(fromWednesdayBeforeReset)).toEqual(at(2026, 2, 25, 22, 0, 0));
+    expect(getNextUnifiedCorridorRefresh(fromSaturdayLate)).toEqual(at(2026, 3, 4, 22, 0, 0));
   });
 });
